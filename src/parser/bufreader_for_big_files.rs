@@ -45,7 +45,13 @@ impl Iterator for BufReaderMl {
 
         self.reader
             .read_line(buf)
-            .map(|u| if u == 0 { None } else { Some(Rc::clone(&self.buf)) })
+            .map(|u| {
+                if u == 0 {
+                    None
+                } else {
+                    Some(Rc::clone(&self.buf))
+                }
+            })
             .transpose()
     }
 }
