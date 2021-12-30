@@ -1,7 +1,7 @@
 pub mod lexer;
 use lexer::{lex_line, TId};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use rug::{Complete, Integer};
 
@@ -9,7 +9,7 @@ pub mod bufreader_for_big_files;
 use bufreader_for_big_files::BufReaderMl;
 
 use crate::data_structure::{
-    Ddnnf, Node, NodeType,
+    Ddnnf, Node,
     NodeType::{And, False, Literal, Or, True},
 };
 
@@ -19,12 +19,14 @@ use crate::data_structure::{
 /// # Examples
 ///
 /// ```
-/// mod parser;
-/// use crate::parser::build_ddnnf_tree;
+/// extern crate ddnnf_lib;
+/// use ddnnf_lib::parser;
+/// use ddnnf_lib::data_structure::Ddnnf;
+/// 
+/// let file_path = "example_input/automotive01.dimacs.nnf";
 ///
-/// let file_path = "example_input/automotive.dimacs.nnf"
-///
-/// let ddnnf: Ddnnf = build_ddnnf_tree(file_path);
+/// let ddnnf: Ddnnf = parser::build_ddnnf_tree(file_path);
+/// let ddnnfx: Ddnnf = parser::build_ddnnf_tree_with_extras(file_path);
 /// ```
 ///
 /// # Panics
@@ -182,31 +184,4 @@ pub fn parse_queries_file(path: &str) -> Vec<Vec<i32>> {
         parsed_queries.push(res);
     }
     parsed_queries
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn token_parsing_test() {
-        let mut ddnnf: Ddnnf = build_ddnnf_tree("example_input/test.dimacs.nnf");
-
-        assert_eq!(ddnnf.number_of_variables, 5);
-
-        let or_node = ddnnf.nodes.pop().unwrap();
-        let or_node_childs = or_node.children.unwrap();
-
-        assert_eq!(or_node_childs.len().clone(), 2_usize);
-        assert_eq!(or_node.node_type, NodeType::Or);
-        assert_eq!(or_node.count, Integer::from(5));
-
-        assert_eq!(ddnnf.nodes[or_node_childs[0]].node_type, NodeType::And);
-        assert_eq!(ddnnf.nodes[or_node_childs[1]].node_type, NodeType::Literal);
-
-        let and_node_childs = ddnnf.nodes.pop().unwrap().children.unwrap();
-        assert_eq!(and_node_childs.len(), 4_usize);
-        assert_eq!(ddnnf.nodes[and_node_childs[0]].node_type, NodeType::Literal);
-        assert_eq!(ddnnf.nodes[and_node_childs[1]].node_type, NodeType::Or);
-    }
 }

@@ -4,26 +4,42 @@
 
 We use rug for the computations. Make sure to install everything mentioned [here](crates.io/crates/rug) to use rug and our software.
 
-## build the binary:
+## build the binaries:
 
+### the preprocessor (prepo)
 ```properties
-sh:~$ cargo build --release
+sh:~$ cargo build --release --bin prepo
+```
+
+### dknife
+```properties
+sh:~$ cargo build --release --bin dknife
 ```
 
 ## usage:
-Simply execute the binary with the -h or --help flag
+Simply execute the binaries with the -h, --help flag or no parameter at all
 ```properties
-sh:~$ ./d-dnnf_reasoner -h
+sh:~$ ./prepo -h
+sh:~$ ./dknife -h
 ```
 
 ## run tests:
 ```properties
 sh:~$ cargo test
 ```
-or  (can be a bit faster than the option above in execution time)
+
+Test coverage can be determined with tarpaulin. tarpaulin is not included in rustup.
+
+usage:
+1) install tarpaulin
+2) run tests and save results as .html
+3) open the report with a browser (here we use google-chrome)
 ```properties
-sh:~$ cargo test --release
+sh:~$ cargo install cargo-tarpaulin
+sh:~$ cargo tarpaulin -o Html
+sh:~$ google-chrome tarpaulin-report.html
 ```
+
 
 ## create documentation and open it in browser
 Just public functions, enums, structs are documented and also just those of the parser module

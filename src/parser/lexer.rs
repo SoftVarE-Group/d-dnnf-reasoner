@@ -43,31 +43,31 @@ pub type TId = TokenIdentifier;
 /// # Examples
 ///
 /// ```
-/// mod parser;
-/// use crate::parser::lexer::*;
+/// extern crate ddnnf_lib;
+/// use ddnnf_lib::parser::lexer::*;
 ///
 /// let and_str = "A 3 1 2 3";
 ///
 /// // the output is Ok(("", (And, vec![3, 1, 2]))) but because of multiple missing
 /// // PartialEq Traits we can not directly assert that for equality
-/// assert_eq!(lex_line(and_str).unwrap().1.0, And);
+/// assert_eq!(lex_line(and_str).unwrap().1.0, TId::And);
 /// // note that the order of the childs have changed due to the usage of
 /// // swap_remove() with O(1) instead of remove() with O(n)
 /// assert_eq!(lex_line(and_str).unwrap().1.1, vec![3_usize, 1_usize, 2_usize]);
 ///
 /// let header_str = "nnf 32 13 23";
-/// assert_eq!(lex_header(header_str).unwrap().1.0, Header);
-/// assert_eq!(lex_header(header_str).unwrap().1.1, vec![32_usize, 13_usize, 23_usize]);
+/// assert_eq!(lex_line(header_str).unwrap().1.0, TId::Header);
+/// assert_eq!(lex_line(header_str).unwrap().1.1, vec![32_usize, 13_usize, 23_usize]);
 ///
 /// // same problem with PartialEq for the following
 /// let or_str = "O 10 2 20 24";
-/// assert_eq!(lex_or(or_str), Ok(("", (Or, vec![24, 20]))));
+/// assert_eq!(lex_line(or_str), Ok(("", (TId::Or, vec![10, 20, 24]))));
 ///
 /// let negative_literal_str = "L -3";
-/// assert_eq!(lex_negative_literal(negative_literal_str), Ok(("", (NegativeLiteral, vec![3]))));
+/// assert_eq!(lex_line(negative_literal_str), Ok(("", (TId::NegativeLiteral, vec![3]))));
 ///
 /// let true_str = "A 0";
-/// assert_eq!(lex_true(true_str), Ok(("", (True, vec![]))));
+/// assert_eq!(lex_line(true_str), Ok(("", (TId::True, vec![]))));
 /// ```
 #[inline]
 pub fn lex_line(line: &str) -> IResult<&str, Token> {

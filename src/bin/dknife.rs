@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 //#![warn(clippy::all, clippy::pedantic)]
 
 #[global_allocator]
@@ -10,20 +8,15 @@ extern crate clap;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 
 extern crate colour;
-use colour::{blue_ln, green, green_ln, red_ln, yellow_ln};
-
-use rug::Integer;
+use colour::{green, yellow_ln};
 
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-mod parser;
-use crate::parser::{build_ddnnf_tree_with_extras, parse_features, parse_queries_file};
+use std::time::Instant;
 
-mod data_structure;
-use crate::data_structure::{get_counter, Ddnnf};
-
-use std::{collections::HashSet, time::Instant};
+use ddnnf_lib::parser as dparser;
+use ddnnf_lib::data_structure::{Ddnnf};
 
 fn main() {
     let matches = App::new("dknife")
@@ -81,7 +74,7 @@ fn main() {
 
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
-    let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(matches.value_of("FILE PATH").unwrap());
+    let mut ddnnf: Ddnnf = dparser::build_ddnnf_tree_with_extras(matches.value_of("FILE PATH").unwrap());
     let elapsed_time = time.elapsed().as_secs_f32();
 
     println!(
@@ -98,7 +91,7 @@ fn main() {
     );
 
     if matches.is_present("FEATURE/S") {
-        let features: Vec<i32> = parse_features(matches.values_of_lossy("FEATURE/S"));
+        let features: Vec<i32> = dparser::parse_features(matches.values_of_lossy("FEATURE/S"));
         ddnnf.execute_query(features);
     }
 
@@ -122,7 +115,7 @@ fn main() {
             file_path_in,
             file_path_out,
             elapsed_time,
-            elapsed_time / parse_queries_file(file_path_in).len() as f64
+            elapsed_time / dparser::parse_queries_file(file_path_in).len() as f64
         );
     }
 

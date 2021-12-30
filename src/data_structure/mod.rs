@@ -1,19 +1,18 @@
 use rug::{Assign, Complete, Integer};
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    thread,
+    collections::{HashMap, HashSet},
     error::Error,
     fs::File,
     io::{BufWriter, Write},
-    sync::{Arc, Mutex},
-    thread,
-    time::Instant,
+    time::Instant
 };
 
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{self};
 use workctl::WorkQueue;
 
-use crate::parser::parse_queries_file;
+use crate::parser::{self};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum NodeType {
@@ -28,7 +27,7 @@ use NodeType::{And, False, Literal, Or, True};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
-    pub marker: bool,
+    marker: bool,
     pub count: Integer,
     pub temp: Integer,
     pub node_type: NodeType,
@@ -88,7 +87,7 @@ impl Node {
     pub fn new_bool(node_type: NodeType) -> Node {
         let count: Integer = match node_type {
             True => Integer::from(1),
-            False => Integer::new(),
+            False => Integer::from(0),
             _ => panic!("NodeType {:?} is not a Bool", node_type),
         };
 
@@ -399,7 +398,7 @@ impl Ddnnf {
             let time = Instant::now();
             let res: Integer = self.card_of_feature_with_marker(*f);
             let elapsed_time = time.elapsed().as_secs_f32();
-            let count = get_counter();
+            let count = unsafe{COUNTER};
 
             println!("Feature count for feature number {:?}: {:#?}", f, res);
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
@@ -412,13 +411,14 @@ impl Ddnnf {
             let time = Instant::now();
             let res: Integer = self.card_of_partial_config_with_marker(&features);
             let elapsed_time = time.elapsed().as_secs_f32();
+            let count = unsafe{COUNTER};
 
             println!(
                 "The cardinality for the partial configuration {:?} is: {:#?}",
                 features, res
             );
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
-                get_counter(), f64::from(get_counter())/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
+                count, f64::from(count)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
             println!(
                 "Elapsed time for a partial configuration in seconds: {:.6}s.",
                 elapsed_time
@@ -438,10 +438,6 @@ impl Ddnnf {
             );
         }
     }
-}
-
-pub fn get_counter() -> u32 {
-    unsafe { COUNTER }
 }
 
 // The Problem:
@@ -467,7 +463,7 @@ impl Ddnnf {
         // Create a MPSC (Multiple Producer, Single Consumer) channel. Every worker
         // is a producer, the main thread is a consumer; the producers put their
         // work into the channel when it's done.
-        let (results_tx, results_rx) = channel();
+        let (results_tx, results_rx) = mpsc::channel();
 
         let mut threads = Vec::new();
 
@@ -552,14 +548,14 @@ impl Ddnnf {
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let work: Vec<Vec<i32>> = parse_queries_file(path_in);
+        let work: Vec<Vec<i32>> = parser::parse_queries_file(path_in);
         let mut queue = WorkQueue::with_capacity(work.len());
 
         for e in work.clone() {
             queue.push_work(e);
         }
 
-        let (results_tx, results_rx) = channel();
+        let (results_tx, results_rx) = mpsc::channel();
 
         let mut threads = Vec::new();
 

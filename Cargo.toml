@@ -1,8 +1,21 @@
 [package]
-name = "dknife"
+name = "ddnnf_reasoning"
 version = "0.1.0"
 authors = ["Heiko Raab <heiko.raab@uni-ulm.de>"]
 edition = "2018"
+license = "GNU LGPL-2.1"
+
+[lib]
+name = "ddnnf_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dknife"
+path = "src/bin/dknife.rs"
+
+[[bin]]
+name = "prepo"
+path = "src/bin/preprocessor.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
