@@ -53,7 +53,7 @@ pub type TId = TokenIdentifier;
 /// assert_eq!(lex_line(and_str).unwrap().1.0, TId::And);
 /// // note that the order of the childs have changed due to the usage of
 /// // swap_remove() with O(1) instead of remove() with O(n)
-/// assert_eq!(lex_line(and_str).unwrap().1.1, vec![3_usize, 1_usize, 2_usize]);
+/// assert_eq!(lex_line(and_str).unwrap().1.1, vec![1_usize, 2_usize, 3_usize]);
 ///
 /// let header_str = "nnf 32 13 23";
 /// assert_eq!(lex_line(header_str).unwrap().1.0, TId::Header);
@@ -149,7 +149,7 @@ fn get_number1_wrapper(kind: TId) -> Box<dyn Fn(&str) -> Result<Token, &str>> {
         // remove the unnecessary numbers of And and Or
         match (kind, r) {
             (And, mut r) => {
-                r.swap_remove(0); //swap_remove() has O(1) because the empty space gets filled with the last element
+                r.remove(0); //swap_remove() has O(1) because the empty space gets filled with the last element
                 Ok((And, r))
             }
             (Or, mut r) => {
@@ -178,6 +178,33 @@ fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
     recognize(many1(pair(char(' '), digit1)))(input)
 }
 
+pub fn serialize_token(token: Token) -> String {
+    match token {
+        (Header, v) => format!("nnf {} {} {}\n", v[0], v[1], v[2]),
+        (And, v) => {
+            let mut s = String::from("A ");
+            s.push_str(&v.len().to_string());
+            s.push(' ');
+
+            for n in 0..v.len() {
+                s.push_str(&v[n].to_string());
+
+                if n != v.len() - 1 {
+                    s.push(' ');
+                } else {
+                    s.push('\n');
+                }
+            }
+            s
+        }
+        (Or, v) => format!("O {} 2 {} {}\n", v[0], v[1], v[2]),
+        (PositiveLiteral, v) => format!("L {}\n", v[0]),
+        (NegativeLiteral, v) => format!("L -{}\n", v[0]),
+        (False, _) => String::from("O 0 0\n"),
+        (True, _) => String::from("A 0\n"),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -191,7 +218,7 @@ mod test {
         assert_eq!(lex_line(and_str).unwrap().1 .0, And);
         assert_eq!(
             lex_line(and_str).unwrap().1 .1,
-            vec![3_usize, 1_usize, 2_usize]
+            vec![1_usize, 2_usize, 3_usize]
         );
 
         assert_eq!(lex_line(or_str).unwrap().1 .0, Or);
@@ -256,5 +283,36 @@ mod test {
         let false_str = "O 0 0";
         assert_eq!(lex_false(false_str).unwrap().1 .0, False);
         assert_eq!(lex_false(false_str).unwrap().1 .1, v);
+    }
+
+    #[test]
+    fn test_serialization() {
+        let header: Token = (Header, vec![10, 20, 30]);
+        let header_s: String = String::from("nnf 10 20 30\n");
+        assert_eq!(serialize_token(header), header_s);
+
+        let and: Token = (And, vec![1, 2, 3, 4, 5]);
+        let and_s: String = String::from("A 5 1 2 3 4 5\n");
+        assert_eq!(serialize_token(and), and_s);
+
+        let or: Token = (Or, vec![42, 1, 2]);
+        let or_s: String = String::from("O 42 2 1 2\n");
+        assert_eq!(serialize_token(or), or_s);
+
+        let p_literal: Token = (PositiveLiteral, vec![4269]);
+        let p_literal_s: String = String::from("L 4269\n");
+        assert_eq!(serialize_token(p_literal), p_literal_s);
+
+        let n_literal: Token = (NegativeLiteral, vec![4269]);
+        let n_literal_s: String = String::from("L -4269\n");
+        assert_eq!(serialize_token(n_literal), n_literal_s);
+
+        let ttrue: Token = (True, vec![]);
+        let ttrue_s: String = String::from("A 0\n");
+        assert_eq!(serialize_token(ttrue), ttrue_s);
+
+        let tfalse: Token = (False, vec![]);
+        let tfalse_s: String = String::from("O 0 0\n");
+        assert_eq!(serialize_token(tfalse), tfalse_s);
     }
 }

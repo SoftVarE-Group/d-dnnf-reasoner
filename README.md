@@ -1,4 +1,4 @@
-# dknife a d-dnnf-reasoner
+# d-dknnife a d-dnnf-reasoner
 
 ## requirements for building
 
@@ -6,21 +6,21 @@ We use rug for the computations. Make sure to install everything mentioned [here
 
 ## build the binaries:
 
-### the preprocessor (prepo)
+### the preprocessor (dhone)
 ```properties
-sh:~$ cargo build --release --bin prepo
+sh:~$ cargo build --release --bin dhone
 ```
 
-### dknife
+### d-dknnife
 ```properties
-sh:~$ cargo build --release --bin dknife
+sh:~$ cargo build --release --bin d-dknnife
 ```
 
 ## usage:
 Simply execute the binaries with the -h, --help flag or no parameter at all
 ```properties
-sh:~$ ./prepo -h
-sh:~$ ./dknife -h
+sh:~$ ./dhone -h
+sh:~$ ./d-dknnife -h
 ```
 
 ## run tests:

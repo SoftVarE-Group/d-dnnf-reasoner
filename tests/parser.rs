@@ -1,7 +1,7 @@
 extern crate ddnnf_lib;
 
+use ddnnf_lib::data_structure::{Ddnnf, NodeType::*};
 use ddnnf_lib::parser;
-use ddnnf_lib::data_structure::{NodeType::*, Ddnnf};
 
 use rug::Integer;
 
@@ -23,6 +23,6 @@ fn token_parsing_test() {
 
     let and_node_childs = ddnnf.nodes.pop().unwrap().children.unwrap();
     assert_eq!(and_node_childs.len(), 2_usize);
-    assert_eq!(ddnnf.nodes[and_node_childs[0]].node_type, And);
-    assert_eq!(ddnnf.nodes[and_node_childs[1]].node_type, Or);
+    assert_eq!(ddnnf.nodes[and_node_childs[0]].node_type, Or);
+    assert_eq!(ddnnf.nodes[and_node_childs[1]].node_type, And);
 }

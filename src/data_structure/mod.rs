@@ -1,18 +1,18 @@
 use rug::{Assign, Complete, Integer};
 
 use std::{
-    thread,
     collections::{HashMap, HashSet},
     error::Error,
     fs::File,
     io::{BufWriter, Write},
-    time::Instant
+    thread,
+    time::Instant,
 };
 
-use std::sync::mpsc::{self};
+use std::sync::mpsc;
 use workctl::WorkQueue;
 
-use crate::parser::{self};
+use crate::parser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub enum NodeType {
@@ -109,6 +109,7 @@ pub struct Ddnnf {
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     pub number_of_variables: u32,
     pub number_of_nodes: usize,
+    pub max_worker: u16,
     pub md: Vec<usize>,
     pub core: HashSet<i32>,
     pub dead: HashSet<i32>,
@@ -126,6 +127,7 @@ impl Ddnnf {
             literals,
             number_of_variables,
             number_of_nodes,
+            max_worker: 4,
             md: Vec::new(),
             core: HashSet::new(),
             dead: HashSet::new(),
@@ -138,21 +140,7 @@ impl Ddnnf {
     fn get_core(&mut self) {
         self.core = (1..self.number_of_variables as i32 + 1)
             .filter(|f| match self.literals.get(&-f) {
-                Some(x) => {
-                    let par = self.nodes[*x].parents.clone();
-                    let mut res = false;
-                    for p in par {
-                        if self.nodes[p].node_type == And {
-                            let chi = self.nodes[p].children.clone();
-                            for c in chi.unwrap() {
-                                if self.nodes[c].node_type == False {
-                                    res = true;
-                                }
-                            }
-                        }
-                    }
-                    res
-                }
+                Some(_) => false,
                 None => true,
             })
             .collect::<HashSet<i32>>()
@@ -161,26 +149,13 @@ impl Ddnnf {
     fn get_dead(&mut self) {
         self.dead = (1..self.number_of_variables as i32 + 1)
             .filter(|f| match self.literals.get(f) {
-                Some(x) => {
-                    let par = self.nodes[*x].parents.clone();
-                    let mut res = false;
-                    for p in par {
-                        if self.nodes[p].node_type == And {
-                            let chi = self.nodes[p].children.clone();
-                            for c in chi.unwrap() {
-                                if self.nodes[c].node_type == False {
-                                    res = true;
-                                }
-                            }
-                        }
-                    }
-                    res
-                }
+                Some(_) => false,
                 None => true,
             })
             .collect::<HashSet<i32>>()
     }
-
+    
+    #[inline]
     fn reduce_query(&mut self, features: &Vec<i32>) -> Vec<i32> {
         features
             .iter()
@@ -199,6 +174,7 @@ impl Ddnnf {
             .collect::<Vec<i32>>()
     }
 
+    #[inline]
     fn query_is_not_sat(&mut self, features: &Vec<i32>) -> bool {
         // if there is an included dead or an excluded core feature
         features.iter().any({
@@ -398,7 +374,7 @@ impl Ddnnf {
             let time = Instant::now();
             let res: Integer = self.card_of_feature_with_marker(*f);
             let elapsed_time = time.elapsed().as_secs_f32();
-            let count = unsafe{COUNTER};
+            let count = unsafe { COUNTER };
 
             println!("Feature count for feature number {:?}: {:#?}", f, res);
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
@@ -411,7 +387,7 @@ impl Ddnnf {
             let time = Instant::now();
             let res: Integer = self.card_of_partial_config_with_marker(&features);
             let elapsed_time = time.elapsed().as_secs_f32();
-            let count = unsafe{COUNTER};
+            let count = unsafe { COUNTER };
 
             println!(
                 "The cardinality for the partial configuration {:?} is: {:#?}",
@@ -453,8 +429,6 @@ impl Ddnnf {
 // We assume that we have MAX_WORKER processor cores which will do work for us.
 // You could use the num_cpus crate to find this for a particular machine.
 
-const MAX_WORKER: u16 = 4;
-
 impl Ddnnf {
     #[inline]
     pub fn card_of_each_feature_to_csv(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
@@ -471,7 +445,7 @@ impl Ddnnf {
             queue.push_work(e as i32); // x..y are all numbers between x and y including x, excluding y
         }
 
-        for _ in 0..MAX_WORKER {
+        for _ in 0..self.max_worker {
             let mut t_queue = queue.clone();
             let t_results_tx = results_tx.clone();
             let mut ddnnf: Ddnnf = self.clone();
@@ -559,7 +533,7 @@ impl Ddnnf {
 
         let mut threads = Vec::new();
 
-        for _ in 0..MAX_WORKER {
+        for _ in 0..self.max_worker {
             let mut t_queue = queue.clone();
             let t_results_tx = results_tx.clone();
             let mut ddnnf: Ddnnf = self.clone();

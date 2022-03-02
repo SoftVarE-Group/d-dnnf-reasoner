@@ -6,10 +6,11 @@
 **/*.rs.bk
 
 # Local files for testing, debugging and analysing the code
-/complete_exa/
-/ideas/
-/in*
-/out*
+.vscode/
+complete_exa/
+ideas/
+in*
+out*
 perf_analyse.sh
 history.txt
 tarpaulin-report.html

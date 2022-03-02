@@ -1,5 +1,5 @@
 pub mod lexer;
-use lexer::{lex_line, TId};
+use lexer::{lex_line, TId, Token};
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use bufreader_for_big_files::BufReaderMl;
 
 use crate::data_structure::{
     Ddnnf, Node,
-    NodeType::{And, False, Literal, Or, True},
+    NodeType::{And, False, Literal, Or, True}
 };
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
@@ -22,7 +22,7 @@ use crate::data_structure::{
 /// extern crate ddnnf_lib;
 /// use ddnnf_lib::parser;
 /// use ddnnf_lib::data_structure::Ddnnf;
-/// 
+///
 /// let file_path = "example_input/automotive01.dimacs.nnf";
 ///
 /// let ddnnf: Ddnnf = parser::build_ddnnf_tree(file_path);
@@ -146,6 +146,21 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
     }
 
     Ddnnf::new(parsed_nodes, literals, header[2] as u32, header[0])
+}
+
+pub fn get_token_stream(path: &str) -> Vec<Token> {
+    let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
+    // we do not know the capacity beforehand without applying semmantics but we know that the file will often be quite big
+    let mut parsed_tokens: Vec<Token> = Vec::with_capacity(10000);
+
+    // opens the file with a BufReaderMl which is similar to a regular BufReader
+    // works off each line of the file data seperatly
+    for line in buf_reader {
+        let line = line.expect("Unable to read line");
+        parsed_tokens.push(lex_line(line.as_ref()).unwrap().1);
+    }
+
+    parsed_tokens
 }
 
 // multiplies the overall_count of all child Nodes of an And Node

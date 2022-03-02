@@ -4,22 +4,23 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 
 extern crate colour;
 use colour::{green, yellow_ln};
 
+use rug::Integer;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use std::process;
 use std::time::Instant;
 
+use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser as dparser;
-use ddnnf_lib::data_structure::{Ddnnf};
 
 fn main() {
-    let matches = App::new("dknife")
+    let matches = App::new("d-dknnife")
     .global_settings(&[AppSettings::ColoredHelp])
     .author(crate_authors!())
     .version(crate_version!())
@@ -58,13 +59,20 @@ fn main() {
         .help("Computes the cardinality of features for the feature model, i.e. the cardinality iff we select one feature for all features. The default file name for the output is the \"out.csv\".")
         .short("c")
         .long("card_of_fs"))
-    .arg(Arg::with_name("HEURISTICS")
+    .arg(Arg::with_name("NUMBER OF THREADS")
         .display_order(5)
+        .requires("FILE PATH")
+        .help("Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
+        .short("n")
+        .long("number_threads")
+        .takes_value(true))
+    .arg(Arg::with_name("HEURISTICS")
+        .display_order(6)
         .requires("FILE PATH")
         .help("Provides information about the type of nodes, their connection and the different paths.")
         .long("heuristics"))
     .arg(Arg::with_name("CUSTOM OUTPUT FILE NAME")
-        .display_order(6)
+        .display_order(7)
         .requires("FILE PATH")
         .help("Allows a custom file name for output file for the cardinality of features and file queries. The appropiate file ending gets added automcaticly.")
         .short("s")
@@ -72,23 +80,41 @@ fn main() {
         .takes_value(true))
     .get_matches();
 
+    if matches.is_present("HEURISTICS") {
+        let mut ddnnf: Ddnnf =
+        dparser::build_ddnnf_tree(matches.value_of("FILE PATH").unwrap());
+        ddnnf.print_all_heuristics();
+        process::exit(0);
+    }
+
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
-    let mut ddnnf: Ddnnf = dparser::build_ddnnf_tree_with_extras(matches.value_of("FILE PATH").unwrap());
+    let mut ddnnf: Ddnnf =
+        dparser::build_ddnnf_tree_with_extras(matches.value_of("FILE PATH").unwrap());
     let elapsed_time = time.elapsed().as_secs_f32();
-
     println!(
         "Ddnnf overall count: {:#?}",
-        ddnnf.nodes[ddnnf.number_of_nodes - 1].count
+        Integer::from(ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone())
     );
-
-    // if you remove the comment below the whole ddnnf gets printed (only usefull for very small inputs)
-    //println!("Ddnnf structure: {:#?}", ddnnf);
 
     println!(
         "Elapsed time for parsing and overall count in seconds: {:.3}s.",
         elapsed_time
     );
+
+    if matches.is_present("NUMBER OF THREADS") {
+        let threads :u16 = match matches.value_of("NUMBER OF THREADS").unwrap().parse::<u16>() {
+            Ok(x) => {
+                if x > 32 {
+                    32
+                } else {
+                    x
+                }
+            },
+            Err(e) => panic!("[Error]: {:?}\nInvalid input for number of threads! Aborting...", e),
+        };
+        ddnnf.max_worker = threads;
+    }
 
     if matches.is_present("FEATURE/S") {
         let features: Vec<i32> = dparser::parse_features(matches.values_of_lossy("FEATURE/S"));
@@ -195,9 +221,5 @@ fn main() {
             elapsed_time,
             elapsed_time / ddnnf.number_of_variables as f64
         );
-    }
-
-    if matches.is_present("HEURISTICS") {
-        ddnnf.print_all_heuristics();
     }
 }

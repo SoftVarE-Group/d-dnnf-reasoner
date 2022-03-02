@@ -8,7 +8,7 @@
 extern crate test;
 
 pub mod parser;
-pub use crate::parser::{build_ddnnf_tree_with_extras, parse_features, parse_queries_file};
+pub use crate::parser::lexer;
 
 pub mod data_structure;
-pub use crate::data_structure::{Ddnnf};
+pub use crate::data_structure::{Ddnnf, Node};

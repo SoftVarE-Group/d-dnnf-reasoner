@@ -1,6 +1,6 @@
 [package]
 name = "ddnnf_reasoning"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Heiko Raab <heiko.raab@uni-ulm.de>"]
 edition = "2018"
 license = "GNU LGPL-2.1"
@@ -10,12 +10,12 @@ name = "ddnnf_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "dknife"
-path = "src/bin/dknife.rs"
+name = "d-dknnife"
+path = "src/bin/d-dknnife.rs"
 
 [[bin]]
-name = "prepo"
-path = "src/bin/preprocessor.rs"
+name = "dhone"
+path = "src/bin/dhone.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -26,14 +26,12 @@ panic = "abort"
 # for performance graphs: debug = true
 
 [dependencies]
-rug = "1.13.0"
-nom = "6.1.2"
-csv = "1.1"
 clap = "2.33.3"
 rustyline = "9.0.0"
 colour = "0.6.0"
-# minimal allocator by Microsoft that turns configurable security features off
 mimalloc = { version = "*", default-features = false }
+rug = "1.13.0"
+nom = "6.1.2"
+csv = "1.1"
 # parallelisation
-#rayon = "1.5"
 workctl = "0.2.0"
