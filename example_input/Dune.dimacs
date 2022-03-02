@@ -1,0 +1,34 @@
+c 1 Precon bool
+c 2 SeqGS bool
+c 3 SeqSOR bool
+c 4 Solver bool
+c 5 CGSolver bool
+c 6 BiCGSTABSolver bool
+c 7 LoopSolver bool
+c 8 GradientSolver bool
+c 9 pre_2 numeric
+c 10 pre_1 numeric
+c 11 pre_0 numeric
+c 12 post_2 numeric
+c 13 post_1 numeric
+c 14 post_0 numeric
+c 15 cells_2 numeric
+c 16 cells_1 numeric
+c 17 cells_0 numeric
+p cnf 17 16
+1 0
+-1 2 3 0
+-2 -3 0
+4 0
+-4 5 6 7 8 0
+-5 -6 0
+-5 -7 0
+-5 -8 0
+-6 -7 0
+-6 -8 0
+-7 -8 0
+-9 -10 -11 0
+-12 -13 -14 0
+-15 -16 0
+-15 -16 -17 0 
+9 10 11 12 13 14 0
