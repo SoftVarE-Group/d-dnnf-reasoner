@@ -6,6 +6,12 @@ We use rug for the computations. Make sure to install everything mentioned on ru
 
 *Rug [...] depends on the [GMP](https://gmplib.org/), [MPFR](https://www.mpfr.org/) and [MPC](https://www.multiprecision.org/mpc/) libraries through the low-level FFI bindings in the [gmp-mpfr-sys crate](https://crates.io/crates/gmp-mpfr-sys), which needs some setup to build; the [gmp-mpfr-sys documentation](https://docs.rs/gmp-mpfr-sys/1.4.7/gmp_mpfr_sys/index.html) has some details on usage under [different os][...].*
 
+To build on GNU/Linux, make sure you have ```diffutils, ggc, m4 and make``` installed on your system. For example on Ubuntu:
+```properties
+sudo apt install diffutils gcc m4 make
+```
+
+
 ## Build the binaries:
 Make sure that the current working directory is the one inlcuding the Cargo.toml file.
 
