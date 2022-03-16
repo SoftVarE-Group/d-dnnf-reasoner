@@ -1,7 +1,7 @@
 [package]
 name = "ddnnf_reasoning"
 version = "0.2.0"
-authors = ["Heiko Raab <heiko.raab@uni-ulm.de>"]
+authors = []
 edition = "2018"
 license = "GNU LGPL-2.1"
 
@@ -10,8 +10,8 @@ name = "ddnnf_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "d-dknnife"
-path = "src/bin/d-dknnife.rs"
+name = "ddnnife"
+path = "src/bin/ddnnife.rs"
 
 [[bin]]
 name = "dhone"
@@ -33,5 +33,5 @@ mimalloc = { version = "*", default-features = false }
 rug = "1.13.0"
 nom = "6.1.2"
 csv = "1.1"
-# parallelisation
-workctl = "0.2.0"
+workctl = "0.2.0" # parallelisation
+file_diff = "1.0.0"

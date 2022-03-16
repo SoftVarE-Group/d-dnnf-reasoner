@@ -15,37 +15,50 @@ use workctl::WorkQueue;
 use crate::parser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
+/// The Type of the Node declares how we handle the computation for the different types of cardinalities
 pub enum NodeType {
+    /// The cardinality of an And node is always the product of its childs
     And,
+    /// The cardinality of an Or node is the sum of its two children
     Or,
+    /// The cardinality is one if not declared otherwise due to some query
     Literal,
+    /// The cardinality is one
     True,
+    /// The cardinality is zero
     False,
 }
 
 use NodeType::{And, False, Literal, Or, True};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Represents all types of Nodes with its different parts
 pub struct Node {
     marker: bool,
+    /// The cardinality of the node for the cardinality of a feature model
     pub count: Integer,
+    /// The cardinality during the different queries
     pub temp: Integer,
     pub node_type: NodeType,
+    /// And and Or nodes hold children
     pub children: Option<Vec<usize>>,
+    /// Every node excpet the root has (multiple) parent nodes
     pub parents: Vec<usize>,
+    /// Literals hold a variable number
     pub var_number: Option<i32>,
 }
 
-static mut COUNTER: u32 = 0;
+static mut COUNTER: u64 = 0;
 
 impl Node {
     #[inline]
-    pub fn new_and(node_type: NodeType, children: Vec<usize>, overall_count: Integer) -> Node {
+    /// Creates a new And node
+    pub fn new_and(children: Vec<usize>, overall_count: Integer) -> Node {
         Node {
             marker: false,
             count: overall_count,
             temp: Integer::from(0),
-            node_type,
+            node_type: And,
             children: Some(children),
             parents: Vec::new(),
             var_number: None,
@@ -53,8 +66,8 @@ impl Node {
     }
 
     #[inline]
+    /// Creates a new Or node
     pub fn new_or(
-        node_type: NodeType,
         var_number: i32,
         children: Vec<usize>,
         overall_count: Integer,
@@ -63,7 +76,7 @@ impl Node {
             marker: false,
             count: overall_count,
             temp: Integer::from(0),
-            node_type,
+            node_type: Or,
             children: Some(children),
             parents: Vec::new(),
             var_number: Some(var_number),
@@ -71,6 +84,7 @@ impl Node {
     }
 
     #[inline]
+    /// Creates a new Literal node
     pub fn new_literal(var_number: i32) -> Node {
         Node {
             marker: false,
@@ -84,6 +98,7 @@ impl Node {
     }
 
     #[inline]
+    /// Creates either a new True or False node
     pub fn new_bool(node_type: NodeType) -> Node {
         let count: Integer = match node_type {
             True => Integer::from(1),
@@ -104,18 +119,25 @@ impl Node {
 }
 
 #[derive(Debug, Clone)]
+/// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
     pub nodes: Vec<Node>,
+    /// Literals for upwards propagation
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     pub number_of_variables: u32,
     pub number_of_nodes: usize,
+    /// The number of threads
     pub max_worker: u16,
+    /// An interim save for the marking algorithm
     pub md: Vec<usize>,
+    /// The core features of the modell corresponding with this ddnnf
     pub core: HashSet<i32>,
+    /// The dead features of the modell
     pub dead: HashSet<i32>,
 }
 
 impl Ddnnf {
+    /// Creates a new ddnnf including dead and core features
     pub fn new(
         nodes: Vec<Node>,
         literals: HashMap<i32, usize>,
@@ -137,26 +159,31 @@ impl Ddnnf {
         ddnnf
     }
 
+    /// Computes all core features
+    /// A feature is a core feature iff there exists only the positiv occurence of that feature
     fn get_core(&mut self) {
-        self.core = (1..self.number_of_variables as i32 + 1)
-            .filter(|f| match self.literals.get(&-f) {
-                Some(_) => false,
-                None => true,
+        self.core = (1..=self.number_of_variables as i32)
+            .filter(|f| {
+                self.literals.get(&f).is_some()
+                    && self.literals.get(&-f).is_none()
             })
             .collect::<HashSet<i32>>()
     }
 
+    /// Computes all dead features
+    /// A feature is a dead feature iff there exists only the negativ occurence of that feature
     fn get_dead(&mut self) {
-        self.dead = (1..self.number_of_variables as i32 + 1)
-            .filter(|f| match self.literals.get(f) {
-                Some(_) => false,
-                None => true,
+        self.dead = (1..=self.number_of_variables as i32)
+            .filter(|f| {
+                self.literals.get(&f).is_none()
+                    && self.literals.get(&-f).is_some()
             })
             .collect::<HashSet<i32>>()
     }
-    
+
     #[inline]
-    fn reduce_query(&mut self, features: &Vec<i32>) -> Vec<i32> {
+    /// Reduces a query by removing included core features and excluded dead features
+    fn reduce_query(&mut self, features: &[i32]) -> Vec<i32> {
         features
             .iter()
             .filter({
@@ -170,12 +197,13 @@ impl Ddnnf {
                     }
                 }
             })
-            .map(|f| *f)
+            .copied()
             .collect::<Vec<i32>>()
     }
 
     #[inline]
-    fn query_is_not_sat(&mut self, features: &Vec<i32>) -> bool {
+    /// Checks if a query is satisfiable. That is not the case if either a core feature is excluded or a dead feature is included
+    fn query_is_not_sat(&mut self, features: &[i32]) -> bool {
         // if there is an included dead or an excluded core feature
         features.iter().any({
             |&f| {
@@ -189,6 +217,7 @@ impl Ddnnf {
     }
 
     #[inline]
+    // Computes the cardinality of a node according to the rules mentioned at the Nodetypes and saves it in tmp
     fn calc_count(&mut self, i: usize) {
         match self.nodes[i].node_type {
             And => {
@@ -203,9 +232,11 @@ impl Ddnnf {
                 .complete()
             }
             Or => {
-                let indizes: &Vec<usize> = self.nodes[i].children.as_ref().unwrap();
-                self.nodes[i].temp =
-                    Integer::from(&self.nodes[indizes[0]].temp + &self.nodes[indizes[1]].temp)
+                let indizes: &Vec<usize> =
+                    self.nodes[i].children.as_ref().unwrap();
+                self.nodes[i].temp = Integer::from(
+                    &self.nodes[indizes[0]].temp + &self.nodes[indizes[1]].temp,
+                )
             }
             False => self.nodes[i].temp.assign(0),
             _ => self.nodes[i].temp.assign(1),
@@ -213,6 +244,25 @@ impl Ddnnf {
     }
 
     #[inline]
+    /// Computes the cardinality of a feature according
+    /// to the rules mentioned at the Nodetypes and returns the result.
+    /// The function does not use the marking approach.
+    /// This function trys to apply optimisations based on core and dead features.
+    ///
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// assert_eq!(Integer::from(3), ddnnf.card_of_feature(3));
+    ///
+    /// ```
     pub fn card_of_feature(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) {
             self.nodes[self.number_of_nodes - 1].count.clone()
@@ -234,7 +284,26 @@ impl Ddnnf {
     }
 
     #[inline]
-    pub fn card_of_partial_config(&mut self, features: &Vec<i32>) -> Integer {
+    /// Computes the cardinality of a partial configuration
+    /// according to the rules mentioned at the Nodetypes and returns the result.
+    /// The function does not use the marking approach.
+    /// This function trys to apply optimisations based on core and dead features.
+    ///
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// assert_eq!(Integer::from(3), ddnnf.card_of_partial_config(&vec![1,3]));
+    ///
+    /// ```
+    pub fn card_of_partial_config(&mut self, features: &[i32]) -> Integer {
         if self.query_is_not_sat(features) {
             Integer::from(0)
         } else {
@@ -254,11 +323,14 @@ impl Ddnnf {
     }
 
     #[inline]
+    // Computes the cardinality of a node using the marking algorithm:
+    // And and Or nodes that base the computation on their child nodes use the
+    // .temp value if the child node is marked and the .count value if not
     fn calc_count_marked_node(&mut self, i: usize) {
         match self.nodes[i].node_type {
             And => {
-                self.nodes[i].temp =
-                    Integer::product(self.nodes[i].children.as_ref().unwrap().iter().map(
+                self.nodes[i].temp = Integer::product(
+                    self.nodes[i].children.as_ref().unwrap().iter().map(
                         |&indize| {
                             if self.nodes[indize].marker {
                                 &self.nodes[indize].temp
@@ -266,23 +338,21 @@ impl Ddnnf {
                                 &self.nodes[indize].count
                             }
                         },
-                    ))
-                    .complete()
+                    ),
+                )
+                .complete()
             }
             Or => {
                 self.nodes[i].temp = Integer::sum(
-                    self.nodes[i]
-                        .children
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|&indize| {
+                    self.nodes[i].children.as_ref().unwrap().iter().map(
+                        |&indize| {
                             if self.nodes[indize].marker {
                                 &self.nodes[indize].temp
                             } else {
                                 &self.nodes[indize].count
                             }
-                        }),
+                        },
+                    ),
                 )
                 .complete()
             }
@@ -292,8 +362,9 @@ impl Ddnnf {
     }
 
     #[inline]
-    fn calc_count_marker(&mut self, indize: Vec<usize>) -> Integer {
-        for i in indize.clone() {
+    // Computes the cardinality of a feature and partial configurations using the marking algorithm
+    fn calc_count_marker(&mut self, indize: &[usize]) -> Integer {
+        for i in indize.to_owned() {
             self.nodes[i].temp.assign(0); // change the value of the node
             self.mark_nodes(i); // go through the path til the root node is marked
         }
@@ -312,7 +383,7 @@ impl Ddnnf {
         for j in 0..self.md.len() {
             self.nodes[self.md[j]].marker = false
         }
-        unsafe { COUNTER = self.md.len() as u32 }
+        unsafe { COUNTER = self.md.len() as u64 }
         self.md.clear();
 
         // the result is propagated through the whole graph up to the root
@@ -320,14 +391,34 @@ impl Ddnnf {
     }
 
     #[inline]
+    /// Computes the cardinality of a feature using the marking algorithm.
+    /// The marking algorithm differs to the standard variation by only reomputing the
+    /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
+    /// are also marked and the .count value if they are not.
+    ///
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// assert_eq!(Integer::from(3), ddnnf.card_of_feature_with_marker(3));
+    ///
+    /// ```
     pub fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) || self.dead.contains(&-feature) {
             self.nodes[self.number_of_nodes - 1].count.clone()
-        } else if self.dead.contains(&feature) || self.core.contains(&-feature) {
+        } else if self.dead.contains(&feature) || self.core.contains(&-feature)
+        {
             Integer::from(0)
         } else {
             match self.literals.get(&-feature).cloned() {
-                Some(i) => self.calc_count_marker(vec![i]),
+                Some(i) => self.calc_count_marker(&vec![i]),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
                 None => self.nodes[self.number_of_nodes - 1].count.clone(),
             }
@@ -335,7 +426,27 @@ impl Ddnnf {
     }
 
     #[inline]
-    pub fn card_of_partial_config_with_marker(&mut self, features: &Vec<i32>) -> Integer {
+    /// Computes the cardinality of a partial configuration using the marking algorithm.
+    /// Works analog to the card_of_feature_with_marker()
+    ///
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// assert_eq!(Integer::from(3), ddnnf.card_of_partial_config_with_marker(&vec![3,1]));
+    ///
+    /// ```
+    pub fn card_of_partial_config_with_marker(
+        &mut self,
+        features: &[i32],
+    ) -> Integer {
         if self.query_is_not_sat(features) {
             Integer::from(0)
         } else {
@@ -350,11 +461,13 @@ impl Ddnnf {
                 }
             }
 
-            self.calc_count_marker(indize)
+            self.calc_count_marker(&indize)
         }
     }
 
     #[inline]
+    // marks the nodes starting from an initial Literal. All parents and parents of parents til
+    // the root nodes get marked
     fn mark_nodes(&mut self, i: usize) {
         self.nodes[i].marker = true;
         self.md.push(i);
@@ -368,24 +481,45 @@ impl Ddnnf {
         }
     }
 
-    pub fn execute_query(&mut self, features: Vec<i32>) {
+    /// Executes a single query. This is used for the interactive mode of ddnnife
+    /// We change between the marking and non-marking approach depending on the number of features
+    /// that are either included or excluded. All configurations <= 10 use the marking approach all
+    /// other the "standard" approach. Results are printed directly on the console together with the needed time.
+    ///
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// ddnnf.execute_query(vec![3,1]); // 3
+    /// ddnnf.execute_query(vec![3]); // also 3
+    ///
+    /// ```
+    pub fn execute_query(&mut self, mut features: Vec<i32>) {
         if features.len() == 1 {
-            let f = &features.clone().pop().unwrap();
+            let f = features.pop().unwrap();
             let time = Instant::now();
-            let res: Integer = self.card_of_feature_with_marker(*f);
+            let res: Integer = self.card_of_feature_with_marker(f);
             let elapsed_time = time.elapsed().as_secs_f32();
             let count = unsafe { COUNTER };
 
             println!("Feature count for feature number {:?}: {:#?}", f, res);
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
-                count, f64::from(count)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
+                count, f64::from(count as u32)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
             println!(
                 "Elapsed time for one feature: {:.6} seconds.\n",
                 elapsed_time
             );
         } else if features.len() <= 10 {
             let time = Instant::now();
-            let res: Integer = self.card_of_partial_config_with_marker(&features);
+            let res: Integer =
+                self.card_of_partial_config_with_marker(&features);
             let elapsed_time = time.elapsed().as_secs_f32();
             let count = unsafe { COUNTER };
 
@@ -394,7 +528,7 @@ impl Ddnnf {
                 features, res
             );
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
-                count, f64::from(count)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
+                count, f64::from(count as u32)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
             println!(
                 "Elapsed time for a partial configuration in seconds: {:.6}s.",
                 elapsed_time
@@ -431,8 +565,31 @@ impl Ddnnf {
 
 impl Ddnnf {
     #[inline]
-    pub fn card_of_each_feature_to_csv(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
-        let mut queue: WorkQueue<i32> = WorkQueue::with_capacity(self.number_of_variables as usize);
+    /// Computes the cardinality of features for all features in a modell.
+    /// The results are saved in the file_path. The .csv ending always gets added to the user input.
+    /// The function exclusively uses the marking based function.
+    /// Here the number of threads influence the speed by using a shared work queue.
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    ///
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/axTLS.dimacs.nnf");
+    /// ddnnf.card_of_each_feature_to_csv("./tests/data/axTLS_features_out.csv")
+    ///      .unwrap_or_default();
+    ///
+    /// ```
+    pub fn card_of_each_feature_to_csv(
+        &mut self,
+        file_path: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut queue: WorkQueue<i32> =
+            WorkQueue::with_capacity(self.number_of_variables as usize);
 
         // Create a MPSC (Multiple Producer, Single Consumer) channel. Every worker
         // is a producer, the main thread is a consumer; the producers put their
@@ -480,7 +637,8 @@ impl Ddnnf {
             threads.push(handle);
         }
 
-        let mut results: Vec<(i32, String)> = Vec::with_capacity(self.number_of_variables as usize);
+        let mut results: Vec<(i32, String)> =
+            Vec::with_capacity(self.number_of_variables as usize);
 
         // Get completed work from the channel while there's work to be done.
         for _ in 0..self.number_of_variables {
@@ -517,6 +675,30 @@ impl Ddnnf {
         Ok(())
     }
 
+    #[inline]
+    /// Computes the cardinality of partial configurations for all queries in path_in.
+    /// The results are saved in the path_out. The .txt ending always gets added to the user input.
+    /// The function uses the marking approach for configurations with <= 10 features. For larger
+    /// queries we use the "standard" approach without marking.
+    /// Here the number of threads influence the speed by using a shared work queue.
+    /// The result can be in a different order for iff multiple threads are used.
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    ///
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("tests/data/axTLS.dimacs.nnf");
+    /// ddnnf.card_multi_queries(
+    ///     "./tests/data/axTLS.config",
+    ///     "./tests/data/axTLS_pc_out.txt",)
+    ///     .unwrap_or_default();
+    ///
+    /// ```
     pub fn card_multi_queries(
         &mut self,
         path_in: &str,
@@ -547,8 +729,9 @@ impl Ddnnf {
                 while let Some(work) = t_queue.pull_work() {
                     // Do some work.
                     let result;
-                    if work.len() <= 10 {
-                        result = ddnnf.card_of_partial_config_with_marker(&work);
+                    if work.len() <= 100 {
+                        result =
+                            ddnnf.card_of_partial_config_with_marker(&work);
                     } else {
                         result = ddnnf.card_of_partial_config(&work);
                     }
@@ -583,11 +766,12 @@ impl Ddnnf {
             match results_rx.recv() {
                 // If the control thread successfully receives, a job was completed.
                 Ok((features, cardinality)) => {
-                    let mut features_str = features
-                        .iter()
-                        .fold(String::new(), |acc, &num| acc + &num.to_string() + " ");
+                    let mut features_str =
+                        features.iter().fold(String::new(), |acc, &num| {
+                            acc + &num.to_string() + " "
+                        });
                     features_str.pop();
-                    let data = &format!("{};{}\n", features_str, cardinality);
+                    let data = &format!("{},{}\n", features_str, cardinality);
                     wtr.write_all(data.as_bytes())?;
                 }
                 // If the control thread is the one left standing, that's pretty
@@ -615,14 +799,18 @@ impl Ddnnf {
 /*---------------------------------HEURISTICS-----------------------------------*/
 
 impl Ddnnf {
-    pub fn print_all_heuristics(&mut self) -> () {
+    /// Computes and prints some heuristics including:
+    /// 1) The distribution of the different types of nodes
+    /// 2) The number of child nodes (averages, ...)
+    /// 3) The length of paths starting from the root to the leafs (averages, ...)
+    pub fn print_all_heuristics(&mut self) {
         self.get_nodetype_numbers();
         self.get_child_number();
         self.get_depths()
     }
 
-    // (number of and nodes, or, positive literal, negative literal, true, false)
-    fn get_nodetype_numbers(&mut self) -> () {
+    // computes the occurences of different node types (number of and nodes, or, positive literal, negative literal, true, false)
+    fn get_nodetype_numbers(&mut self) {
         let mut and_counter = 0;
         let mut or_counter = 0;
         let mut literal_counter = 0;
@@ -649,24 +837,24 @@ impl Ddnnf {
             \t |-> {:?} out of {:?} are False nodes (≈{:.2}% of total)\n",
             and_counter,
             node_count,
-            (and_counter as f64 / node_count as f64) * 100 as f64,
+            (f64::from(and_counter) / node_count as f64) * 100_f64,
             or_counter,
             node_count,
-            (or_counter as f64 / node_count as f64) * 100 as f64,
+            (f64::from(or_counter) / node_count as f64) * 100_f64,
             literal_counter,
             node_count,
-            (literal_counter as f64 / node_count as f64) * 100 as f64,
+            (f64::from(literal_counter) / node_count as f64) * 100_f64,
             true_counter,
             node_count,
-            (true_counter as f64 / node_count as f64) * 100 as f64,
+            (f64::from(true_counter) / node_count as f64) * 100_f64,
             false_counter,
             node_count,
-            (false_counter as f64 / node_count as f64) * 100 as f64
+            (f64::from(false_counter) / node_count as f64) * 100_f64
         );
     }
 
-    // (count of total nodes)
-    fn get_child_number(&mut self) -> () {
+    // computes the number of childs for the differnt nodes (count of total nodes, childs relativ to number of nodes)
+    fn get_child_number(&mut self) {
         let mut total_child_counter: u64 = 0;
         let mut and_child_counter: u64 = 0;
         let mut and_counter = 0;
@@ -681,9 +869,8 @@ impl Ddnnf {
                 }
                 None => continue,
             }
-            match &self.nodes[i].node_type {
-                And => and_counter += 1,
-                _ => (),
+            if self.nodes[i].node_type == And {
+                and_counter += 1
             }
         }
 
@@ -705,7 +892,7 @@ impl Ddnnf {
     // the standard deviation (s_x) is defined as sqrt((1/n) * sum over (length of a path - length of the mean path)² for each path)
     // (lowest, highest, mean, s_x, #paths)
     #[inline]
-    fn get_depths(&mut self) -> () {
+    fn get_depths(&mut self) {
         let mut lowest: u64 = u64::MAX;
         let mut highest: u64 = 0;
         let mut mean: f64 = 0.0;
@@ -743,6 +930,7 @@ impl Ddnnf {
 }
 
 #[inline]
+// computes the depth/length of a path starting from indize to the leaf
 fn get_depth(nodes: &[Node], indize: usize, count: u64) -> Vec<u64> {
     let current: &Node = &nodes[indize];
 
@@ -759,5 +947,59 @@ fn get_depth(nodes: &[Node], indize: usize, count: u64) -> Vec<u64> {
             }
             None => panic!("An inner node does not have child nodes. That should not happen!"),
         }
+    }
+}
+
+// Functions that are currently not used but necessary to collect data regarding marking percentages,...
+// With them we can compute the average, median and stdev.
+// They were used to collect the data about the nodes visited when using the marking algorithm
+#[allow(dead_code)]
+fn average(data: &[u64]) -> f64 {
+    let sum = data.iter().sum::<u64>() as f64;
+    println!("{}", sum);
+    let count = data.len();
+
+    match count {
+        positive if positive > 0 => sum / count as f64,
+        _ => -1.0,
+    }
+}
+
+#[allow(dead_code)]
+fn median(data: &mut [u64]) -> f64 {
+    data.sort_unstable();
+    let size = data.len();
+    if size < 1 {
+        return -1.0;
+    }
+
+    match size {
+        even if even % 2 == 0 => {
+            let fst_med = data[(even / 2) - 1];
+            let snd_med = data[even / 2];
+
+            (fst_med + snd_med) as f64 / 2.0
+        }
+        odd => data[odd / 2] as f64,
+    }
+}
+
+#[allow(dead_code)]
+fn std_deviation(data: &[u64]) -> f64 {
+    match (average(data), data.len()) {
+        (data_mean, count) if count > 0 && data_mean >= 0.0 => {
+            let variance = data
+                .iter()
+                .map(|value| {
+                    let diff = data_mean - (*value as f64);
+
+                    diff * diff
+                })
+                .sum::<f64>()
+                / count as f64;
+
+            variance.sqrt()
+        }
+        _ => -1.0,
     }
 }

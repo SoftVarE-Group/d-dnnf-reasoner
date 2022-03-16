@@ -1,51 +1,87 @@
-# d-dknnife a d-dnnf-reasoner
+# ddnnife a d-dnnf-reasoner
 
-## requirements for building
+## Requirements for building
 
-We use rug for the computations. Make sure to install everything mentioned [here](crates.io/crates/rug) to use rug and our software.
+We use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There is says:
 
-## build the binaries:
+*Rug [...] depends on the [GMP](https://gmplib.org/), [MPFR](https://www.mpfr.org/) and [MPC](https://www.multiprecision.org/mpc/) libraries through the low-level FFI bindings in the [gmp-mpfr-sys crate](https://crates.io/crates/gmp-mpfr-sys), which needs some setup to build; the [gmp-mpfr-sys documentation](https://docs.rs/gmp-mpfr-sys/1.4.7/gmp_mpfr_sys/index.html) has some details on usage under [different os][...].*
 
-### the preprocessor (dhone)
+## Build the binaries:
+Make sure that the current working directory is the one inlcuding the Cargo.toml file.
+
+### Both
 ```properties
-sh:~$ cargo build --release --bin dhone
+cargo build --release
 ```
 
-### d-dknnife
+### The preprocessor (dhone)
 ```properties
-sh:~$ cargo build --release --bin d-dknnife
+cargo build --release --bin dhone
 ```
 
-## usage:
-Simply execute the binaries with the -h, --help flag or no parameter at all
+### ddnnife
 ```properties
-sh:~$ ./dhone -h
-sh:~$ ./d-dknnife -h
+cargo build --release --bin ddnnife
 ```
 
-## run tests:
+## Usage:
+Simply execute the binaries with the -h, --help flag or no parameter at all.
+
+Note: In this and the following code examples we added the ```./target/release/``` directories as prefix because thats where the binaries are placed when building they are built according to the previous chapter and the working directory is not switched.
+
+Help for dhone
 ```properties
-sh:~$ cargo test
+./target/release/dhone -h
+```
+
+and ddnnife
+```properties
+./target/release/d-dknnife -h
+```
+
+### Examples
+Preprocesses the ddnnf: berkeleydb_dsharp.dimacs.nnf which may need preprocessing because it was created with dsharp (in this case it is actually necessary).
+```properties
+./target/release/dhone example_input/berkeleydb_dsharp.dimacs.nnf -s example_input/berkeleydb_prepo.dimacs.nnf
+```
+We only compute the cardinality of a feature model for automotive01.
+```properties
+./target/release/ddnnife example_input/automotive01.dimacs.nnf
+```
+
+Compute the cardinality of features for busybox-1.18.0.dimacs.nnf with 2 threads and save the result as busybox_feat.csv in the current working directory.
+```properties
+./target/release/ddnnife example_input/busybox-1.18.0.dimacs.nnf -s busybox_feat -n 2
+```
+
+Compute the cardinality of partial configurations for X264.dimacs.nnf with 4 threads (default) and save the result as out.txt in the current working directory (default).
+```properties
+./target/release/ddnnife example_input/X264.dimacs.nnf -q example_input/X264.config
+```
+## Create documentation and open it in browser
+
+```properties
+cargo doc --open
+```
+
+Besides the generated documentation there are further comments in the code itself.
+
+## Run tests:
+```properties
+cargo test
 ```
 
 Test coverage can be determined with tarpaulin. tarpaulin is not included in rustup.
+Make sure to execute the following commands in the folder that also contains the Cargo.toml file.
 
 usage:
 1) install tarpaulin
 2) run tests and save results as .html
 3) open the report with a browser (here we use google-chrome)
 ```properties
-sh:~$ cargo install cargo-tarpaulin
-sh:~$ cargo tarpaulin -o Html
-sh:~$ google-chrome tarpaulin-report.html
-```
-
-
-## create documentation and open it in browser
-Just public functions, enums, structs are documented and also just those of the parser module
-
-```properties
-sh:~$ cargo doc --open
+cargo install cargo-tarpaulin
+cargo tarpaulin -o Html
+google-chrome tarpaulin-report.html
 ```
 
 ## cpu native flag

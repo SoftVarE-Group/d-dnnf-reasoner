@@ -7,7 +7,8 @@ use rug::Integer;
 
 #[test]
 fn token_parsing_test() {
-    let mut ddnnf: Ddnnf = parser::build_ddnnf_tree("tests/ddnnfs/small_test.dimacs.nnf");
+    let mut ddnnf: Ddnnf =
+        parser::build_ddnnf_tree("./tests/data/small_test.dimacs.nnf");
 
     assert_eq!(ddnnf.number_of_variables, 4);
 

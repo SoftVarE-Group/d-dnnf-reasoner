@@ -8,16 +8,18 @@ use nom::{
     IResult,
 };
 
-use TokenIdentifier::{And, False, Header, NegativeLiteral, Or, PositiveLiteral, True};
+use TokenIdentifier::{
+    And, False, Header, NegativeLiteral, Or, PositiveLiteral, True,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
     Header,
-    /// A inner node that contains atleast one child
+    /// An inner node that contains atleast one child
     And,
-    /// A inner node that contains exactly two child nodes
+    /// An inner node that contains exactly two child nodes
     Or,
     /// A leaf node that countains a positive number of a variable
     PositiveLiteral,

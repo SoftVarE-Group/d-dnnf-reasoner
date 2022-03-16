@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+/// The BufReaderMl is a BufReader that reuses a String multiples times (once for each line)
+/// We gain some performance using that approach
 pub struct BufReaderMl {
     reader: io::BufReader<File>,
     buf: Rc<String>,
