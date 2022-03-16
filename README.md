@@ -1,5 +1,7 @@
 # ddnnife a d-dnnf-reasoner
 
+ddnnife takes a smooth d-DNNF as input following the [standard format specified by c2d](http://reasoning.cs.ucla.edu/c2d/). After parsing and storing the d-DNNF, ddnnife can be used to compute the cardinality of single features, all features, or partial configurations.
+
 ## Requirements for building
 
 We use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There is says:
