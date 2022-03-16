@@ -4,13 +4,19 @@ ddnnife takes a smooth d-DNNF as input following the [standard format specified 
 
 ## Requirements for building
 
-We use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There is says:
+First, if not done already you have to [install rust](https://www.rust-lang.org/tools/install). The recommended way is the following using curl and rustup:
+```properties
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+After that, we recommend to enter '1' to proceed with installation (without customizations).
+
+Additionally, we use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There is says:
 
 *Rug [...] depends on the [GMP](https://gmplib.org/), [MPFR](https://www.mpfr.org/) and [MPC](https://www.multiprecision.org/mpc/) libraries through the low-level FFI bindings in the [gmp-mpfr-sys crate](https://crates.io/crates/gmp-mpfr-sys), which needs some setup to build; the [gmp-mpfr-sys documentation](https://docs.rs/gmp-mpfr-sys/1.4.7/gmp_mpfr_sys/index.html) has some details on usage under [different os][...].*
 
 To build on GNU/Linux, make sure you have ```diffutils, ggc, m4 and make``` installed on your system. For example on Ubuntu:
 ```properties
-sudo apt install diffutils gcc m4 make
+sudo apt-get update && apt-get install diffutils gcc m4 make
 ```
 
 
