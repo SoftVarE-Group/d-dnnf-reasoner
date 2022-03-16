@@ -42,7 +42,7 @@ Help for dhone
 
 and ddnnife
 ```properties
-./target/release/d-dknnife -h
+./target/release/ddnnife -h
 ```
 
 ### Examples
