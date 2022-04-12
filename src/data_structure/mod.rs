@@ -1,4 +1,4 @@
-use rug::{Assign, Complete, Integer};
+use rug::{Assign, Complete, Integer, Rational, Float};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -637,7 +637,7 @@ impl Ddnnf {
             threads.push(handle);
         }
 
-        let mut results: Vec<(i32, String)> =
+        let mut results: Vec<(i32, String, String)> =
             Vec::with_capacity(self.number_of_variables as usize);
 
         // Get completed work from the channel while there's work to be done.
@@ -646,7 +646,7 @@ impl Ddnnf {
                 // If the control thread successfully receives, a job was completed.
                 Ok((feature, cardinality)) => {
                     // Caching the results
-                    results.push((feature, cardinality.to_string()));
+                    results.push((feature, cardinality.to_string(), (Float::with_val(200,cardinality)/ self.nodes[self.number_of_nodes - 1].count.clone()).to_string()));
                 }
                 Err(_) => {
                     panic!("All workers died unexpectedly.");
@@ -664,7 +664,7 @@ impl Ddnnf {
         let mut wtr = csv::Writer::from_path(file_path)?;
 
         for element in results {
-            wtr.write_record(vec![element.0.to_string(), element.1])?;
+            wtr.write_record(vec![element.0.to_string(), element.1, element.2])?;
         }
 
         // Flush everything into the file that is still in a buffer
