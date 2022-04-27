@@ -14,3 +14,7 @@ out*
 perf_analyse.sh
 history.txt
 tarpaulin-report.html
+
+# docker
+dockerfile
+.dockerignore

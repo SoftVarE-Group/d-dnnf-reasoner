@@ -4,7 +4,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-use clap::{/*crate_authors,*/ crate_version, App, AppSettings, Arg};
+use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 
 extern crate colour;
 use colour::{green, yellow_ln};
@@ -21,7 +21,7 @@ use ddnnf_lib::parser as dparser;
 fn main() {
     let matches = App::new("ddnnife")
     .global_settings(&[AppSettings::ColoredHelp])
-    //.author(crate_authors!())
+    .author(crate_authors!("\n"))
     .version(crate_version!())
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("FILE PATH")

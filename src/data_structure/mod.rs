@@ -1,4 +1,4 @@
-use rug::{Assign, Complete, Integer, Rational, Float};
+use rug::{Assign, Complete, Integer, Float};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -243,6 +243,18 @@ impl Ddnnf {
         }
     }
 
+    // returns the current count of the root node in the ddnnf
+    // that value is the same during all computations
+    fn rc(&self) -> Integer {
+        self.nodes[self.number_of_nodes - 1].count.clone()
+    }
+
+    // returns the current temp count of the root node in the ddnnf
+    // that value is changed during computations
+    fn rt(&self) -> Integer {
+        self.nodes[self.number_of_nodes - 1].temp.clone()
+    }
+
     #[inline]
     /// Computes the cardinality of a feature according
     /// to the rules mentioned at the Nodetypes and returns the result.
@@ -265,7 +277,7 @@ impl Ddnnf {
     /// ```
     pub fn card_of_feature(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) {
-            self.nodes[self.number_of_nodes - 1].count.clone()
+            self.rc()
         } else if self.dead.contains(&feature) {
             Integer::from(0)
         } else {
@@ -279,7 +291,7 @@ impl Ddnnf {
                     self.calc_count(i)
                 }
             }
-            self.nodes[self.number_of_nodes - 1].temp.clone()
+            self.rt()
         }
     }
 
@@ -318,7 +330,7 @@ impl Ddnnf {
                 }
             }
 
-            self.nodes[self.number_of_nodes - 1].temp.clone()
+            self.rt()
         }
     }
 
@@ -387,7 +399,7 @@ impl Ddnnf {
         self.md.clear();
 
         // the result is propagated through the whole graph up to the root
-        self.nodes[self.number_of_nodes - 1].temp.clone()
+        self.rt()
     }
 
     #[inline]
@@ -412,7 +424,7 @@ impl Ddnnf {
     /// ```
     pub fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) || self.dead.contains(&-feature) {
-            self.nodes[self.number_of_nodes - 1].count.clone()
+            self.rc()
         } else if self.dead.contains(&feature) || self.core.contains(&-feature)
         {
             Integer::from(0)
@@ -420,7 +432,7 @@ impl Ddnnf {
             match self.literals.get(&-feature).cloned() {
                 Some(i) => self.calc_count_marker(&vec![i]),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
-                None => self.nodes[self.number_of_nodes - 1].count.clone(),
+                None => self.rc(),
             }
         }
     }
@@ -646,7 +658,7 @@ impl Ddnnf {
                 // If the control thread successfully receives, a job was completed.
                 Ok((feature, cardinality)) => {
                     // Caching the results
-                    results.push((feature, cardinality.to_string(), (Float::with_val(200,cardinality)/ self.nodes[self.number_of_nodes - 1].count.clone()).to_string()));
+                    results.push((feature, cardinality.to_string(), format!("{:.20}", Float::with_val(200,cardinality)/ self.rc())));
                 }
                 Err(_) => {
                     panic!("All workers died unexpectedly.");
