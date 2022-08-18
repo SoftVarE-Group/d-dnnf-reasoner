@@ -12,11 +12,11 @@ use colour::{green, yellow_ln};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
-use std::process;
+use std::process::{self};
 use std::time::Instant;
 
 use ddnnf_lib::data_structure::Ddnnf;
-use ddnnf_lib::parser as dparser;
+use ddnnf_lib::parser::{self as dparser};
 
 fn main() {
     let matches = App::new("ddnnife")
@@ -58,6 +58,13 @@ fn main() {
         .help("Computes the cardinality of features for the feature model, i.e. the cardinality iff we select one feature for all features. The default file name for the output is the \"out.csv\".")
         .short("c")
         .long("card_of_fs"))
+    .arg(Arg::with_name("OMMITED FEATURES")
+        .display_order(5)
+        .requires("FILE PATH")
+        .help("The number of omitted features. This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.")
+        .short("o")
+        .long("ommited_features")
+        .takes_value(true))
     .arg(Arg::with_name("NUMBER OF THREADS")
         .display_order(5)
         .requires("FILE PATH")
@@ -88,19 +95,43 @@ fn main() {
 
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
-    let mut ddnnf: Ddnnf = dparser::build_ddnnf_tree_with_extras(
-        matches.value_of("FILE PATH").unwrap(),
-    );
-    let elapsed_time = time.elapsed().as_secs_f32();
-    println!(
-        "Ddnnf overall count: {:#?}",
-        ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone()
-    );
+    let mut ddnnf: Ddnnf;
 
-    println!(
-        "Elapsed time for parsing and overall count in seconds: {:.3}s.",
-        elapsed_time
-    );
+    if matches.is_present("OMMITED FEATURES") {
+        let ommited_features =
+            match matches
+                .value_of("OMMITED FEATURES")
+                .unwrap()
+                .parse::<u32>()
+            {
+                Ok(x) => x,
+                Err(e) => panic!(
+                    "[Error]: {:?}\nInvalid input for the number of ommited features! Aborting...",
+                    e
+                ),
+            };
+        ddnnf = dparser::build_d4_ddnnf_tree(
+            matches.value_of("FILE PATH").unwrap(),
+            ommited_features,
+        );
+
+        let elapsed_time = time.elapsed().as_secs_f32();
+        println!(
+            "Ddnnf overall count: {:#?}\n
+            Elapsed time for parsing and overall count in seconds: {:.3}s.",
+            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(), elapsed_time
+        );
+    } else {
+        ddnnf = dparser::build_ddnnf_tree_with_extras(
+            matches.value_of("FILE PATH").unwrap(),
+        );
+        let elapsed_time = time.elapsed().as_secs_f32();
+        println!(
+            "Ddnnf overall count: {:#?}\n
+            Elapsed time for parsing and overall count in seconds: {:.3}s.",
+            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(), elapsed_time
+        );
+    }
 
     // change the number of threads used for cardinality of features and partial configurations
     if matches.is_present("NUMBER OF THREADS") {
