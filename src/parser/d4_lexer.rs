@@ -12,18 +12,18 @@ use nom::{
 /// Every token gets an enum instance for the D4lexing progress
 pub enum D4Token {
     /// An inner node that contains atleast one child
-    And { position: i64 },
+    And { position: i32 },
     /// An inner node that contains exactly two child nodes
-    Or { position: i64 },
+    Or { position: i32 },
     /// A True node which is the sink of of the DAG
-    True { position: i64 },
+    True { position: i32 },
     /// A False node can exist, but is rather an exception than the norm
-    False { position: i64 },
+    False { position: i32 },
     /// An Edge between two nodes, with
     Edge {
-        from: i64,
-        to: i64,
-        features: Vec<i64>,
+        from: i32,
+        to: i32,
+        features: Vec<i32>,
     },
 }
 
@@ -48,16 +48,16 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
             tag("0"),
         ),
         |out: &str| {
-            println!("{:?}", out);
-            let ws_numbers: Vec<i64> = out
+            let ws_numbers: Vec<i32> = out
                 .split_whitespace()
                 .map(|num: &str| {
-                    num.parse::<i64>().unwrap_or_else(|_| panic!(
-            "Was not able to parse i64 for edge: \"o \". String was {}",
-            out))
+                    num.parse::<i32>().unwrap_or_else(|_| {
+                        panic!(
+            "Was not able to parse i32 for edge: \"o \". String was {}",
+            out)
+                    })
                 })
-                .collect::<Vec<i64>>();
-            println!("{:?}", ws_numbers);
+                .collect::<Vec<i32>>();
             D4Token::Edge {
                 from: ws_numbers[0],
                 to: ws_numbers[1],
@@ -75,40 +75,48 @@ fn neg_digit1(line: &str) -> IResult<&str, &str> {
 // Lexes an And node which is a inner node with the format "a N 0" with N as Node number.
 fn lex_and(line: &str) -> IResult<&str, D4Token> {
     map(preceded(tag("a "), digit1), |out: &str| D4Token::And {
-        position: out.parse::<i64>().unwrap_or_else(|_| panic!(
-            "Was not able to parse i64 after \"a \". String was :{}",
-            out
-        )),
+        position: out.parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "Was not able to parse i32 after \"a \". String was :{}",
+                out
+            )
+        }),
     })(line)
 }
 
 // Lexes an Or node which is a inner node with the format "o N 0" with N as Node number.
 fn lex_or(line: &str) -> IResult<&str, D4Token> {
     map(preceded(tag("o "), digit1), |out: &str| D4Token::Or {
-        position: out.parse::<i64>().unwrap_or_else(|_| panic!(
-            "Was not able to parse i64 after \"o \". String was: {}",
-            out
-        )),
+        position: out.parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "Was not able to parse i32 after \"o \". String was: {}",
+                out
+            )
+        }),
     })(line)
 }
 
 // Lexes a True node which is a leaf node with the format "t N 0" with N as Node number.
 fn lex_true(line: &str) -> IResult<&str, D4Token> {
     map(preceded(tag("t "), digit1), |out: &str| D4Token::True {
-        position: out.parse::<i64>().unwrap_or_else(|_| panic!(
-            "Was not able to parse i64 after \"t \". String was: {}",
-            out
-        )),
+        position: out.parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "Was not able to parse i32 after \"t \". String was: {}",
+                out
+            )
+        }),
     })(line)
 }
 
 // Lexes a False node which is a leaf node with the format "f N 0"  with N as Node number.
 fn lex_false(line: &str) -> IResult<&str, D4Token> {
     map(preceded(tag("f "), digit1), |out: &str| D4Token::False {
-        position: out.parse::<i64>().unwrap_or_else(|_| panic!(
-            "Was not able to parse i64 after \"f \". String was: {}",
-            out
-        )),
+        position: out.parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "Was not able to parse i32 after \"f \". String was: {}",
+                out
+            )
+        }),
     })(line)
 }
 
@@ -125,7 +133,10 @@ mod test {
         let edge_str = "2 3 4 -5 0";
 
         assert_eq!(lex_and(and_str).unwrap().1, D4Token::And { position: 1 },);
-        assert_eq!(lex_line_d4(and_str).unwrap().1, D4Token::And { position: 1 },);
+        assert_eq!(
+            lex_line_d4(and_str).unwrap().1,
+            D4Token::And { position: 1 },
+        );
 
         assert_eq!(lex_or(or_str).unwrap().1, D4Token::Or { position: 2 },);
         assert_eq!(lex_line_d4(or_str).unwrap().1, D4Token::Or { position: 2 },);
