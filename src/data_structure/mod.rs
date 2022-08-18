@@ -164,7 +164,7 @@ impl Ddnnf {
     fn get_core(&mut self) {
         self.core = (1..=self.number_of_variables as i32)
             .filter(|f| {
-                self.literals.get(&f).is_some()
+                self.literals.get(f).is_some()
                     && self.literals.get(&-f).is_none()
             })
             .collect::<HashSet<i32>>()
@@ -175,7 +175,7 @@ impl Ddnnf {
     fn get_dead(&mut self) {
         self.dead = (1..=self.number_of_variables as i32)
             .filter(|f| {
-                self.literals.get(&f).is_none()
+                self.literals.get(f).is_none()
                     && self.literals.get(&-f).is_some()
             })
             .collect::<HashSet<i32>>()
@@ -232,11 +232,15 @@ impl Ddnnf {
                 .complete()
             }
             Or => {
-                let indizes: &Vec<usize> =
-                    self.nodes[i].children.as_ref().unwrap();
-                self.nodes[i].temp = Integer::from(
-                    &self.nodes[indizes[0]].temp + &self.nodes[indizes[1]].temp,
+                self.nodes[i].temp = Integer::sum(
+                    self.nodes[i]
+                        .children
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|&indize| &self.nodes[indize].temp),
                 )
+                .complete()
             }
             False => self.nodes[i].temp.assign(0),
             _ => self.nodes[i].temp.assign(1),
@@ -376,7 +380,7 @@ impl Ddnnf {
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
     fn calc_count_marker(&mut self, indize: &[usize]) -> Integer {
-        for i in indize.to_owned() {
+        for i in indize.iter().copied() {
             self.nodes[i].temp.assign(0); // change the value of the node
             self.mark_nodes(i); // go through the path til the root node is marked
         }
@@ -430,7 +434,7 @@ impl Ddnnf {
             Integer::from(0)
         } else {
             match self.literals.get(&-feature).cloned() {
-                Some(i) => self.calc_count_marker(&vec![i]),
+                Some(i) => self.calc_count_marker(&[i]),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
                 None => self.rc(),
             }
@@ -473,7 +477,9 @@ impl Ddnnf {
                 }
             }
 
-            if indize.is_empty() { return self.rc(); }
+            if indize.is_empty() {
+                return self.rc();
+            }
 
             self.calc_count_marker(&indize)
         }
@@ -753,13 +759,11 @@ impl Ddnnf {
                 // If work is available, do that work.
                 while let Some(work) = t_queue.pull_work() {
                     // Do some work.
-                    let result;
-                    if work.len() <= 100 {
-                        result =
-                            ddnnf.card_of_partial_config_with_marker(&work);
+                    let result = if work.len() <= 100 {
+                        ddnnf.card_of_partial_config_with_marker(&work);
                     } else {
-                        result = ddnnf.card_of_partial_config(&work);
-                    }
+                        ddnnf.card_of_partial_config(&work);
+                    };
 
                     // Send the work and the result of that work.
                     //
@@ -796,7 +800,7 @@ impl Ddnnf {
                             acc + &num.to_string() + " "
                         });
                     features_str.pop();
-                    let data = &format!("{},{}\n", features_str, cardinality);
+                    let data = &format!("{},{:?}\n", features_str, cardinality);
                     wtr.write_all(data.as_bytes())?;
                 }
                 // If the control thread is the one left standing, that's pretty
