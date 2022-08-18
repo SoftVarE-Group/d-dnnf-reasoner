@@ -35,3 +35,4 @@ nom = "6.1.2"
 csv = "1.1"
 workctl = "0.2.0" # parallelisation
 file_diff = "1.0.0"
+petgraph = "0.6.2"
