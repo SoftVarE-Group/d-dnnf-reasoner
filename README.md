@@ -65,7 +65,12 @@ We only compute the cardinality of a feature model for automotive01.
 
 Compute the cardinality of features for busybox-1.18.0.dimacs.nnf with 2 threads and save the result as busybox_feat.csv in the current working directory.
 ```properties
-./target/release/ddnnife example_input/busybox-1.18.0.dimacs.nnf -s busybox_feat -n 2
+./target/release/ddnnife example_input/busybox-1.18.0.dimacs.nnf -c -s busybox_feat -n 2
+```
+
+Compute the cardinality of features for automotive01 when compiled with d4. Here we need the -o Option that allows us to specify the total number of features. That information is needed but not contained in ddnnfs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the ddnnf.
+```properties
+./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 -c
 ```
 
 Compute the cardinality of partial configurations for X264.dimacs.nnf with 4 threads (default) and save the result as out.txt in the current working directory (default).
