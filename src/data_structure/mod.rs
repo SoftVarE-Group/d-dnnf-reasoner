@@ -53,7 +53,7 @@ static mut COUNTER: u64 = 0;
 impl Node {
     #[inline]
     /// Creates a new And node
-    pub fn new_and(children: Vec<usize>, overall_count: Integer) -> Node {
+    pub fn new_and(overall_count: Integer, children: Vec<usize>) -> Node {
         Node {
             marker: false,
             count: overall_count,
@@ -69,8 +69,8 @@ impl Node {
     /// Creates a new Or node
     pub fn new_or(
         var_number: i32,
-        children: Vec<usize>,
         overall_count: Integer,
+        children: Vec<usize>,
     ) -> Node {
         Node {
             marker: false,

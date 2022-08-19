@@ -119,7 +119,8 @@ fn main() {
         println!(
             "Ddnnf overall count: {:#?}\n
             Elapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(), elapsed_time
+            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(),
+            elapsed_time
         );
     } else {
         ddnnf = dparser::build_ddnnf_tree_with_extras(
@@ -129,7 +130,8 @@ fn main() {
         println!(
             "Ddnnf overall count: {:#?}\n
             Elapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(), elapsed_time
+            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(),
+            elapsed_time
         );
     }
 

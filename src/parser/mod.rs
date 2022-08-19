@@ -8,7 +8,7 @@ use core::panic;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    rc::Rc
+    rc::Rc,
 };
 
 use rug::{Complete, Integer};
@@ -21,11 +21,12 @@ use crate::data_structure::{
     NodeType::{And, False, Literal, Or, True},
 };
 
+use petgraph::Graph;
 use petgraph::{
-    graph::{NodeIndex, EdgeIndex},
-    visit::{DfsPostOrder}, Direction::Outgoing,
+    graph::{EdgeIndex, NodeIndex},
+    visit::DfsPostOrder,
+    Direction::Outgoing,
 };
-use petgraph::{Graph};
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -65,8 +66,8 @@ pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
             (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
             (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
             (TId::And, v) => Node::new_and(
-                v.clone(),
                 calc_overall_and_count(&mut parsed_nodes, &v),
+                v,
             ),
             (TId::Or, v) => {
                 let v_num = v.clone().remove(0) as i32;
@@ -74,8 +75,8 @@ pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
                 children.remove(0);
                 Node::new_or(
                     v_num,
-                    children,
                     calc_overall_or_count(&mut parsed_nodes, &v),
+                    children,
                 )
             }
             (TId::True, _) => Node::new_bool(True),
@@ -98,7 +99,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
     let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let header = lex_line(first_line.trim()).unwrap().1 .1;
+    let header = lex_line(first_line.trim()).unwrap().1.1;
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(header[0]);
 
@@ -114,17 +115,16 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
             (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
             (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
             (TId::And, v) => Node::new_and(
-                v.clone(),
                 calc_overall_and_count(&mut parsed_nodes, &v),
+                v,
             ),
             (TId::Or, v) => {
-                let v_num = v.clone().remove(0) as i32;
                 let mut children = v.clone();
-                children.remove(0);
+                let v_num = children.remove(0) as i32;
                 Node::new_or(
                     v_num,
-                    children,
                     calc_overall_or_count(&mut parsed_nodes, &v),
+                    children,
                 )
             }
             (TId::True, _) => Node::new_bool(True),
@@ -136,23 +136,15 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
 
         // fill the parent node pointer
         if next.node_type == And || next.node_type == Or {
-            let next_childs: Vec<usize> = next.children.clone().unwrap();
-
             let next_indize: usize = parsed_nodes.len();
 
-            for i in next_childs {
+            for i in next.children.clone().unwrap() {
                 parsed_nodes[i].parents.push(next_indize);
             }
         }
 
         // fill the HashMap with the literals
         if next.node_type == Literal {
-            if literals.contains_key(&next.var_number.unwrap()) {
-                panic!(
-                    "Literal {:?} occured at least twice. This violates the standard!",
-                    next.var_number.unwrap()
-                );
-            }
             literals.insert(next.var_number.unwrap(), parsed_nodes.len());
         }
 
@@ -165,84 +157,16 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
 /// Parses a ddnnf, referenced by the file path.
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
-/// TODO actually return a smooth! d-DNNF
 #[inline]
 pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
-    let mut ddnnf_graph = Graph::<TId, Vec<i32>>::new();
+    let mut ddnnf_graph = Graph::<TId, ()>::new();
 
-    // We have to remember the state of our literals because only two occurence of
-    // each literal (one positive and one negative) are allowed
-    #[derive(PartialEq, Debug, Clone)]
-    enum LiteralOcc {
-        Neither,
-        Positive,
-        Negative,
-        Both,
-    }
+    let literal_occurences: Rc<RefCell<Vec<bool>>> =
+        Rc::new(RefCell::new(vec![false; (ommited_features + 1) as usize]));
 
-    let literal_occurences: Rc<RefCell<Vec<LiteralOcc>>> =
-        Rc::new(RefCell::new(vec![
-            LiteralOcc::Neither;
-            (ommited_features + 1) as usize
-        ]));
-
-    let lit_occ_change = |f: &i32| {
-        use LiteralOcc::*;
-        let mut lo = literal_occurences.borrow_mut();
-        let f_abs = f.abs() as usize;
-        match (lo[f_abs].clone(), f > &0) {
-            (Neither, true) => lo[f_abs] = Positive,
-            (Neither, false) => lo[f_abs] = Negative,
-            (Positive, true) => (),
-            (Positive, false) => lo[f_abs] = Both,
-            (Negative, true) => lo[f_abs] = Both,
-            (Negative, false) => (),
-            (Both, _) => (),
-        }
-    };
-
-    let mut indices: HashMap<i32, NodeIndex> = HashMap::new();
-
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
-    // works off each line of the file data seperatly
-    for line in buf_reader {
-        let line = line.expect("Unable to read line");
-
-        let next: D4Token = lex_line_d4(line.as_ref()).unwrap().1;
-
-        use D4Token::*;
-        match next {
-            Edge { from, to, features } => {
-                for f in &features {
-                    lit_occ_change(f);
-                }
-                ddnnf_graph.add_edge(
-                    indices.get(&from).unwrap().to_owned(),
-                    indices.get(&to).unwrap().to_owned(),
-                    features,
-                );
-            }
-            And { position } => {
-                indices.insert(position, ddnnf_graph.add_node(TId::And));
-            }
-            Or { position } => {
-                indices.insert(position, ddnnf_graph.add_node(TId::Or));
-            }
-            True { position } => {
-                let tx = ddnnf_graph.add_node(TId::True);
-                indices.insert(position, tx);
-            }
-            False { position } => {
-                indices.insert(position, ddnnf_graph.add_node(TId::False));
-            }
-        }
-    }
-
-    let root = ddnnf_graph.add_node(TId::And);
-    let old_root: NodeIndex = NodeIndex::new(0);
-    ddnnf_graph.add_edge(root, old_root, Vec::new());
+    let mut indices: Vec<NodeIndex> = Vec::new();
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
@@ -251,40 +175,9 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
         Rc::new(RefCell::new(HashMap::new()));
 
-    let add_literal_node =
-        |ddnnf_graph: &mut Graph<TId, Vec<i32>>, f_u32: u32, attach: NodeIndex| {
-        let f = f_u32 as i32; // we enforce f as u32 to avoid signum issues
-        let mut nx_lit = nx_literals.borrow_mut();
-        let mut lit_nx = literals_nx.borrow_mut();
-
-        lit_occ_change(&(f as i32));
-        let or = ddnnf_graph.add_node(TId::Or);
-        let pos_lit = match lit_nx.get(&f) {
-            Some(x) => *x,
-            None => {
-                let nx = ddnnf_graph.add_node(TId::PositiveLiteral);
-                nx_lit.insert(nx, f);
-                lit_nx.insert(f, nx);
-                nx
-            }
-        };
-        let neg_lit = match lit_nx.get(&-f) {
-            Some(x) => *x,
-            None => {
-                let nx = ddnnf_graph.add_node(TId::NegativeLiteral);
-                nx_lit.insert(nx, -f);
-                lit_nx.insert(-f, nx);
-                nx
-            }
-        };
-
-        ddnnf_graph.add_edge(attach, or, Vec::new());
-        ddnnf_graph.add_edge(or, pos_lit, Vec::new());
-        ddnnf_graph.add_edge(or, neg_lit, Vec::new());
-    };
-
-    let get_literal_indices = 
-    |ddnnf_graph: &mut Graph<TId, Vec<i32>>, literals: Vec<i32>| -> Vec<NodeIndex> {
+    let get_literal_indices = |ddnnf_graph: &mut Graph<TId, ()>,
+                               literals: Vec<i32>|
+     -> Vec<NodeIndex> {
         let mut nx_lit = nx_literals.borrow_mut();
         let mut lit_nx = literals_nx.borrow_mut();
 
@@ -313,54 +206,12 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
                 })
             }
         }
-
         literal_nodes
     };
 
-    let resolve_weighted_edge =
-    |ddnnf_graph: &mut Graph<TId, Vec<i32>>, from: NodeIndex, to: NodeIndex, edge: EdgeIndex| {
-        let and_node = ddnnf_graph.add_node(TId::And);
-        let literal_nodes = get_literal_indices(ddnnf_graph, ddnnf_graph.edge_weight(edge).unwrap().clone());
-
-        ddnnf_graph.remove_edge(edge);
-
-        ddnnf_graph.add_edge(from, and_node, Vec::new());
-        for node in literal_nodes {
-            ddnnf_graph.add_edge(and_node, node, Vec::new());
-        }
-        ddnnf_graph.add_edge(and_node, to, Vec::new());
-    };
-
-    let balance_or_children =
-    |ddnnf_graph: &mut Graph<TId, Vec<i32>>, from: NodeIndex, children: Vec<(NodeIndex, HashSet<u32>)>| {
-        if children.is_empty() { return; }
-
-        for child in children {
-            if child.1.is_empty() { continue; }
-
-            let and_node = ddnnf_graph.add_node(TId::And);
-
-            // place the newly created and node between the or node and its child
-            ddnnf_graph.remove_edge(ddnnf_graph.find_edge(from, child.0).unwrap());
-            ddnnf_graph.add_edge(from, and_node, Vec::new());
-            ddnnf_graph.add_edge(and_node, child.0, Vec::new());
-
-            for literal in child.1 {
-                add_literal_node(ddnnf_graph, literal, and_node);
-            }
-        }
-    };
-
-    // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..ommited_features + 1 {
-        if literal_occurences.borrow()[i as usize] == LiteralOcc::Neither {
-            add_literal_node(&mut ddnnf_graph, i, root);
-        }
-    }
-
-    // first dfs:
+    // while parsing:
     // remove the weighted edges and substitute it with the corresponding
-    // structure that uses AND-Nodes and Literal-Nodes. Example: 
+    // structure that uses AND-Nodes and Literal-Nodes. Example:
     //
     //                  n1                       n1
     //                /    \                   /    \
@@ -369,16 +220,114 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     //                  n2                 Ln    n2    Lm
     //
     //
-    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
-    while let Some(nx) = dfs.next(&ddnnf_graph) {
-        // edges between going from an and node to another node do not
-        // have any weights attached to them. Therefore, we can skip them
-        if ddnnf_graph[nx] != TId::Or { continue; }
-        let mut neighbors = ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
+    let resolve_weighted_edge =
+    |ddnnf_graph: &mut Graph<TId, ()>,
+        from: NodeIndex,
+        to: NodeIndex,
+        edge: EdgeIndex,
+        weights: Vec<i32>| {
+        let and_node = ddnnf_graph.add_node(TId::And);
+        let literal_nodes = get_literal_indices(
+            ddnnf_graph,
+            weights,
+        );
 
-        while let Some(neighbor) = neighbors.next(&ddnnf_graph) {
-            if ddnnf_graph.edge_weight(neighbor.0).unwrap().is_empty() { continue; }
-            resolve_weighted_edge(&mut ddnnf_graph, nx, neighbor.1, neighbor.0);
+        ddnnf_graph.remove_edge(edge);
+
+        ddnnf_graph.add_edge(from, and_node, ());
+        for node in literal_nodes {
+            ddnnf_graph.add_edge(and_node, node, ());
+        }
+        ddnnf_graph.add_edge(and_node, to, ());
+    };
+
+    // opens the file with a BufReaderMl which is similar to a regular BufReader
+    // works off each line of the file data seperatly
+    for line in buf_reader {
+        let line = line.expect("Unable to read line");
+
+        let next: D4Token = lex_line_d4(line.as_ref()).unwrap().1;
+
+        use D4Token::*;
+        match next {
+            Edge { from, to, features } => {
+                for f in &features {
+                    literal_occurences.borrow_mut()[f.abs() as usize] = true;
+                }
+                let from_n = indices[from as usize - 1];
+                let to_n = indices[to as usize - 1];
+                let edge = ddnnf_graph.add_edge(
+                    from_n,
+                    to_n,
+                    ()
+                );
+                resolve_weighted_edge(&mut ddnnf_graph, from_n, to_n, edge, features);
+            }
+            And => {
+                indices.push(ddnnf_graph.add_node(TId::And));
+            }
+            Or => {
+                indices.push(ddnnf_graph.add_node(TId::Or));
+            }
+            True => {
+                indices.push(ddnnf_graph.add_node(TId::True));
+            }
+            False => {
+                indices.push(ddnnf_graph.add_node(TId::False));
+            }
+        }
+    }
+
+    let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> = Rc::new(RefCell::new(vec![None; (ommited_features + 1) as usize]));
+
+    let add_literal_node = |ddnnf_graph: &mut Graph<TId, ()>,
+                            f_u32: u32,
+                            attach: NodeIndex| {
+        let f = f_u32 as i32;
+        let mut ort = or_triangles.borrow_mut();
+
+        if ort[f_u32 as usize].is_some() {
+            ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), ());    
+        } else {
+            let or = ddnnf_graph.add_node(TId::Or);
+            ort[f_u32 as usize] = Some(or);
+
+            let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
+            let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
+
+            ddnnf_graph.add_edge(attach, or, ());
+            ddnnf_graph.add_edge(or, pos_lit, ());
+            ddnnf_graph.add_edge(or, neg_lit, ());
+        }
+    };
+
+    let balance_or_children =
+        |ddnnf_graph: &mut Graph<TId,()>,
+         from: NodeIndex,
+         children: Vec<(NodeIndex, HashSet<u32>)>| {
+            for child in children {
+                let and_node = ddnnf_graph.add_node(TId::And);
+
+                // place the newly created and node between the or node and its child
+                ddnnf_graph
+                    .remove_edge(ddnnf_graph.find_edge(from, child.0).unwrap());
+                ddnnf_graph.add_edge(from, and_node, ());
+                ddnnf_graph.add_edge(and_node, child.0, ());
+
+                for literal in child.1 {
+                    add_literal_node(ddnnf_graph, literal, and_node);
+                }
+            }
+        };
+
+    // add a new root which hold the unmentioned variables within the ommited_features range
+    let root = ddnnf_graph.add_node(TId::And);
+    ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
+    
+    // add literals that are not mentioned in the ddnnf to the new root node
+    for i in 1..ommited_features + 1 {
+        if !literal_occurences.borrow()[i as usize] {
+            add_literal_node(&mut ddnnf_graph, i, root);
         }
     }
 
@@ -388,35 +337,41 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     // 2. Determine which literals occur only in the other paths
     // 3. Add those literals in the path we are currently looking at
     // Example:
-    //                         
-    //                                              OR  
+    //
+    //                                              OR
     //                  OR                       /  \
     //                /    \                   /      \
     //              Ln     AND      into     AND      AND
     //                    /   \             /   \    /   \
     //                   Lm   -Ln          Ln   OR   |  -Ln
     //                                         /  \  /
-    //                                       -Lm   Lm       
+    //                                       -Lm   Lm
     //
-
     let mut safe: HashMap<NodeIndex, HashSet<u32>> = HashMap::new();
-    dfs = DfsPostOrder::new(&ddnnf_graph, root);
+    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
         // have any weights attached to them. Therefore, we can skip them
-        if ddnnf_graph[nx] != TId::Or { continue; }
-        let diffrences = get_literal_diff(&ddnnf_graph, &mut safe, &nx_literals.borrow(), nx);
-        balance_or_children(&mut ddnnf_graph, nx, diffrences);
+        if ddnnf_graph[nx] == TId::Or {
+            let diffrences = get_literal_diff(
+                &ddnnf_graph,
+                &mut safe,
+                &nx_literals.borrow(),
+                nx,
+            );
+            balance_or_children(&mut ddnnf_graph, nx, diffrences);
+        }
     }
 
     // perform a depth first search to get the nodes ordered such
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
-    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
+    dfs = DfsPostOrder::new(&ddnnf_graph, root);
     let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
-    let mut parsed_nodes: Vec<Node> = Vec::new();
+    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
     let mut literals: HashMap<i32, usize> = HashMap::new();
+    let nx_lit = nx_literals.borrow();
 
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         nd_to_usize.insert(nx, parsed_nodes.len());
@@ -426,21 +381,19 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
             .collect::<Vec<usize>>();
         let next: Node = match ddnnf_graph[nx] {
             // extract the parsed Token
-            TId::PositiveLiteral => {
-                Node::new_literal(*nx_literals.borrow().get(&nx).unwrap())
-            }
+            TId::PositiveLiteral |
             TId::NegativeLiteral => {
-                Node::new_literal(*nx_literals.borrow().get(&nx).unwrap())
+                Node::new_literal(nx_lit.get(&nx).unwrap().to_owned())
             }
             TId::And => Node::new_and(
-                neighs.clone(),
                 calc_overall_and_count(&mut parsed_nodes, &neighs),
+                neighs,
             ),
 
             TId::Or => Node::new_or(
                 0,
-                neighs.clone(),
                 calc_overall_or_count_multiple_children(&mut parsed_nodes, &neighs),
+                neighs,
             ),
             TId::True => Node::new_bool(True),
             TId::False => Node::new_bool(False),
@@ -451,23 +404,14 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 
         // fill the parent node pointer
         if next.node_type == And || next.node_type == Or {
-            let next_childs: Vec<usize> = next.children.clone().unwrap();
-
             let next_indize: usize = parsed_nodes.len();
-
-            for i in next_childs {
+            for i in next.children.clone().unwrap() {
                 parsed_nodes[i].parents.push(next_indize);
             }
         }
 
         // fill the HashMap with the literals
         if next.node_type == Literal {
-            if literals.contains_key(&next.var_number.unwrap()) {
-                panic!(
-                    "Literal {:?} occured at least twice. This violates the standard!",
-                    next.var_number.unwrap()
-                );
-            }
             literals.insert(next.var_number.unwrap(), parsed_nodes.len());
         }
 
@@ -479,28 +423,43 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 }
 
 // determine the differences in literal-nodes occuring in the child nodes
-fn get_literal_diff(graph: &Graph<TId, Vec<i32>>, safe: &mut HashMap<NodeIndex, HashSet<u32>>, nx_literals: &HashMap<NodeIndex, i32>, or_node: NodeIndex) -> Vec<(NodeIndex, HashSet<u32>)> {
+fn get_literal_diff(
+    graph: &Graph<TId,()>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
+    or_node: NodeIndex,
+) -> Vec<(NodeIndex, HashSet<u32>)> {
     let mut inter_res = Vec::new();
     let neighbors = graph.neighbors_directed(or_node, Outgoing);
-    
+
     for neighbor in neighbors {
-        inter_res.push((neighbor, get_literals(graph, safe, nx_literals, neighbor)));
+        inter_res
+            .push((neighbor, get_literals(graph, safe, nx_literals, neighbor)));
     }
 
     let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
     for i in 0..inter_res.len() {
         let mut val: HashSet<u32> = HashSet::new();
         for (j, i_res) in inter_res.iter().enumerate() {
-            if i == j { continue; }
-            val.extend(&i_res.1);
+            if i != j {
+                val.extend(&i_res.1);
+            }
         }
-        res.push((inter_res[i].0, &val - &inter_res[i].1));
+        val = &val - &inter_res[i].1;
+        if !val.is_empty() {
+            res.push((inter_res[i].0, val));
+        }
     }
     res
 }
 
 // determine what literal-nodes the current node is or which occur in its children
-fn get_literals(graph: &Graph<TId, Vec<i32>>, safe: &mut HashMap<NodeIndex, HashSet<u32>>, nx_literals: &HashMap<NodeIndex, i32>, or_child: NodeIndex) -> HashSet<u32> {
+fn get_literals(
+    graph: &Graph<TId,()>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
+    or_child: NodeIndex,
+) -> HashSet<u32> {
     let lookup = safe.get(&or_child);
     if let Some(x) = lookup {
         return x.clone();
@@ -509,12 +468,17 @@ fn get_literals(graph: &Graph<TId, Vec<i32>>, safe: &mut HashMap<NodeIndex, Hash
     let mut res = HashSet::new();
     use lexer::TokenIdentifier::*;
     match graph[or_child] {
-        And | Or
-            => { graph.neighbors_directed(or_child, Outgoing)
-            .for_each(|n| res.extend(get_literals(graph, safe, nx_literals, n))); safe.insert(or_child, res.clone()); },
-        PositiveLiteral | NegativeLiteral
-            => { res.insert(nx_literals.get(&or_child).unwrap().abs() as u32); safe.insert(or_child, res.clone()); },
-        _ => { safe.insert(or_child, res.clone()); },
+        And | Or => {
+            graph.neighbors_directed(or_child, Outgoing).for_each(|n| {
+                res.extend(get_literals(graph, safe, nx_literals, n))
+            });
+            safe.insert(or_child, res.clone());
+        }
+        PositiveLiteral | NegativeLiteral => {
+            res.insert(nx_literals.get(&or_child).unwrap().abs() as u32);
+            safe.insert(or_child, res.clone());
+        }
+        _ => ()
     }
     res
 }
@@ -537,8 +501,7 @@ fn calc_overall_or_count_multiple_children(
     nodes: &mut Vec<Node>,
     indizes: &[usize],
 ) -> Integer {
-    Integer::sum(indizes.iter().map(|indize| &nodes[*indize].count))
-        .complete()
+    Integer::sum(indizes.iter().map(|indize| &nodes[*indize].count)).complete()
 }
 
 /// Is used to parse the queries in the config files
