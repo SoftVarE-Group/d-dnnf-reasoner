@@ -759,10 +759,11 @@ impl Ddnnf {
                 // If work is available, do that work.
                 while let Some(work) = t_queue.pull_work() {
                     // Do some work.
-                    let result = if work.len() <= 100 {
-                        ddnnf.card_of_partial_config_with_marker(&work);
+                    let result;
+                    if work.len() <= 100 {
+                        result = ddnnf.card_of_partial_config_with_marker(&work);
                     } else {
-                        ddnnf.card_of_partial_config(&work);
+                        result = ddnnf.card_of_partial_config(&work);
                     };
 
                     // Send the work and the result of that work.
@@ -800,7 +801,7 @@ impl Ddnnf {
                             acc + &num.to_string() + " "
                         });
                     features_str.pop();
-                    let data = &format!("{},{:?}\n", features_str, cardinality);
+                    let data = &format!("{},{}\n", features_str, cardinality);
                     wtr.write_all(data.as_bytes())?;
                 }
                 // If the control thread is the one left standing, that's pretty
