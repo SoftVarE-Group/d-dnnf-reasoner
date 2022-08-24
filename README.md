@@ -87,7 +87,7 @@ Besides the generated documentation there are further comments in the code itsel
 
 ## Run tests:
 ```properties
-cargo test
+cargo test --release
 ```
 
 Test coverage can be determined with tarpaulin. tarpaulin is not included in rustup.

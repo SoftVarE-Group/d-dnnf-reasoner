@@ -595,13 +595,14 @@ impl Ddnnf {
     /// use ddnnf_lib::data_structure::*;
     /// use ddnnf_lib::parser::*;
     /// use rug::Integer;
-    ///
+    /// use std::fs;
+    /// 
     /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    ///
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/axTLS.dimacs.nnf");
-    /// ddnnf.card_of_each_feature_to_csv("./tests/data/axTLS_features_out.csv")
+    /// // and run the queries
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
+    /// ddnnf.card_of_each_feature_to_csv("./tests/data/smt_out.csv")
     ///      .unwrap_or_default();
+    /// let _rm = fs::remove_file("./tests/data/smt_out.csv");
     ///
     /// ```
     pub fn card_of_each_feature_to_csv(
@@ -719,16 +720,17 @@ impl Ddnnf {
     /// use ddnnf_lib::data_structure::*;
     /// use ddnnf_lib::parser::*;
     /// use rug::Integer;
-    ///
+    /// use std::fs;
+    /// 
     /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    ///
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("tests/data/axTLS.dimacs.nnf");
+    /// // and run the queries
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
     /// ddnnf.card_multi_queries(
-    ///     "./tests/data/axTLS.config",
-    ///     "./tests/data/axTLS_pc_out.txt",)
+    ///     "./tests/data/small_test.config",
+    ///     "./tests/data/smt_out.txt",)
     ///     .unwrap_or_default();
-    ///
+    /// let _rm = fs::remove_file("./tests/data/smt_out.txt");
+    /// 
     /// ```
     pub fn card_multi_queries(
         &mut self,

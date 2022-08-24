@@ -519,12 +519,12 @@ fn calc_overall_or_count_multiple_children(
 /// // 61 86
 /// // 36 -83
 ///
-/// let config_path = "./tests/data/axTLS.config";
+/// let config_path = "./tests/data/auto1.config";
 /// let queries: Vec<Vec<i32>> = parse_queries_file(config_path);
 ///
-/// assert_eq!(vec![-62, 86], queries[0]);
-/// assert_eq!(vec![61, 86], queries[1]);
-/// assert_eq!(vec![36, -83], queries[2]);
+/// assert_eq!(vec![1044, 885], queries[0]);
+/// assert_eq!(vec![1284, -537], queries[1]);
+/// assert_eq!(vec![-1767, 675], queries[2]);
 /// ```
 /// # Panic
 ///
