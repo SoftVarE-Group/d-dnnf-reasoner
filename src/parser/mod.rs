@@ -11,15 +11,12 @@ use std::{
     rc::Rc,
 };
 
-use rug::{Complete, Integer};
+use rug::{Integer, Complete};
 
 pub mod bufreader_for_big_files;
 use bufreader_for_big_files::BufReaderMl;
 
-use crate::data_structure::{
-    Ddnnf, Node,
-    NodeType::{And, False, Literal, Or, True},
-};
+use crate::data_structure::{Ddnnf, Node, NodeType};
 
 use petgraph::Graph;
 use petgraph::{
@@ -66,7 +63,7 @@ pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
             (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
             (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
             (TId::And, v) => Node::new_and(
-                calc_overall_and_count(&mut parsed_nodes, &v),
+                calc_and_count(&mut parsed_nodes, &v),
                 v,
             ),
             (TId::Or, v) => {
@@ -75,12 +72,12 @@ pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
                 children.remove(0);
                 Node::new_or(
                     v_num,
-                    calc_overall_or_count(&mut parsed_nodes, &v),
+                    calc_or_count(&mut parsed_nodes, &children),
                     children,
                 )
             }
-            (TId::True, _) => Node::new_bool(True),
-            (TId::False, _) => Node::new_bool(False),
+            (TId::True, _) => Node::new_bool(true),
+            (TId::False, _) => Node::new_bool(false),
             _ => panic!(
                 "Tried to parse the header of the .nnf at the wrong time"
             ),
@@ -99,7 +96,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
     let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let header = lex_line(first_line.trim()).unwrap().1.1;
+    let header = lex_line(first_line.trim()).unwrap().1 .1;
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(header[0]);
 
@@ -115,7 +112,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
             (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
             (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
             (TId::And, v) => Node::new_and(
-                calc_overall_and_count(&mut parsed_nodes, &v),
+                calc_and_count(&mut parsed_nodes, &v),
                 v,
             ),
             (TId::Or, v) => {
@@ -123,29 +120,31 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
                 let v_num = children.remove(0) as i32;
                 Node::new_or(
                     v_num,
-                    calc_overall_or_count(&mut parsed_nodes, &v),
+                    calc_or_count(&mut parsed_nodes, &children),
                     children,
                 )
             }
-            (TId::True, _) => Node::new_bool(True),
-            (TId::False, _) => Node::new_bool(False),
+            (TId::True, _) => Node::new_bool(true),
+            (TId::False, _) => Node::new_bool(false),
             _ => panic!(
                 "Tried to parse the header of the .nnf at the wrong time"
             ),
         };
 
-        // fill the parent node pointer
-        if next.node_type == And || next.node_type == Or {
-            let next_indize: usize = parsed_nodes.len();
-
-            for i in next.children.clone().unwrap() {
-                parsed_nodes[i].parents.push(next_indize);
+        // fill the parent node pointer, save literals
+        match &next.ntype {
+            NodeType::And { children } |
+            NodeType::Or { children } => {
+                let next_indize: usize = parsed_nodes.len();
+                for &i in children {
+                    parsed_nodes[i].parents.push(next_indize);
+                }
             }
-        }
-
-        // fill the HashMap with the literals
-        if next.node_type == Literal {
-            literals.insert(next.var_number.unwrap(), parsed_nodes.len());
+            // fill the HashMap with the literals
+            NodeType::Literal { literal } => {
+                literals.insert(*literal, parsed_nodes.len());
+            }
+            _ => (),
         }
 
         parsed_nodes.push(next);
@@ -278,11 +277,11 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
         }
     }
 
-    let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> = Rc::new(RefCell::new(vec![None; (ommited_features + 1) as usize]));
+    let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
+        Rc::new(RefCell::new(vec![None; (ommited_features + 1) as usize]));
 
-    let add_literal_node = |ddnnf_graph: &mut Graph<TId, ()>,
-                            f_u32: u32,
-                            attach: NodeIndex| {
+    let add_literal_node = 
+        |ddnnf_graph: &mut Graph<TId,()>, f_u32: u32, attach: NodeIndex| {
         let f = f_u32 as i32;
         let mut ort = or_triangles.borrow_mut();
 
@@ -302,7 +301,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     };
 
     let balance_or_children =
-        |ddnnf_graph: &mut Graph<TId,()>,
+        |ddnnf_graph: &mut Graph<TId, ()>,
          from: NodeIndex,
          children: Vec<(NodeIndex, HashSet<u32>)>| {
             for child in children {
@@ -323,7 +322,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     // add a new root which hold the unmentioned variables within the ommited_features range
     let root = ddnnf_graph.add_node(TId::And);
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
-    
+
     // add literals that are not mentioned in the ddnnf to the new root node
     for i in 1..ommited_features + 1 {
         if !literal_occurences.borrow()[i as usize] {
@@ -386,33 +385,33 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
                 Node::new_literal(nx_lit.get(&nx).unwrap().to_owned())
             }
             TId::And => Node::new_and(
-                calc_overall_and_count(&mut parsed_nodes, &neighs),
+                calc_and_count(&mut parsed_nodes, &neighs),
                 neighs,
             ),
 
             TId::Or => Node::new_or(
                 0,
-                calc_overall_or_count_multiple_children(&mut parsed_nodes, &neighs),
+                calc_or_count(&mut parsed_nodes, &neighs),
                 neighs,
             ),
-            TId::True => Node::new_bool(True),
-            TId::False => Node::new_bool(False),
-            other => panic!(
-                "There should not be any other Nodetypes as And, Or, and Literals. Found Nodetype: {:?}", other
-            ),
+            TId::True => Node::new_bool(true),
+            TId::False => Node::new_bool(false),
+            TId::Header => panic!("The d4 standard does not include a header!"),
         };
 
-        // fill the parent node pointer
-        if next.node_type == And || next.node_type == Or {
-            let next_indize: usize = parsed_nodes.len();
-            for i in next.children.clone().unwrap() {
-                parsed_nodes[i].parents.push(next_indize);
+        match &next.ntype {
+            NodeType::And { children } |
+            NodeType::Or { children } => {
+                let next_indize: usize = parsed_nodes.len();
+                for &i in children {
+                    parsed_nodes[i].parents.push(next_indize);
+                }
             }
-        }
-
-        // fill the HashMap with the literals
-        if next.node_type == Literal {
-            literals.insert(next.var_number.unwrap(), parsed_nodes.len());
+            // fill the HashMap with the literals
+            NodeType::Literal { literal } => {
+                literals.insert(*literal, parsed_nodes.len());
+            }
+            _ => (),
         }
 
         parsed_nodes.push(next);
@@ -424,7 +423,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 
 // determine the differences in literal-nodes occuring in the child nodes
 fn get_literal_diff(
-    graph: &Graph<TId,()>,
+    graph: &Graph<TId, ()>,
     safe: &mut HashMap<NodeIndex, HashSet<u32>>,
     nx_literals: &HashMap<NodeIndex, i32>,
     or_node: NodeIndex,
@@ -455,7 +454,7 @@ fn get_literal_diff(
 
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
-    graph: &Graph<TId,()>,
+    graph: &Graph<TId, ()>,
     safe: &mut HashMap<NodeIndex, HashSet<u32>>,
     nx_literals: &HashMap<NodeIndex, i32>,
     or_child: NodeIndex,
@@ -478,30 +477,25 @@ fn get_literals(
             res.insert(nx_literals.get(&or_child).unwrap().abs() as u32);
             safe.insert(or_child, res.clone());
         }
-        _ => ()
+        _ => (),
     }
     res
 }
 
-// multiplies the overall_count of all child Nodes of an And Node
+// multiplies the count of all child Nodes of an And Node
 #[inline]
-fn calc_overall_and_count(nodes: &mut Vec<Node>, indizes: &[usize]) -> Integer {
-    Integer::product(indizes.iter().map(|indize| &nodes[*indize].count))
+fn calc_and_count(nodes: &mut Vec<Node>, indices: &[usize]) -> Integer {
+    Integer::product(indices.iter().map(|&index| &nodes[index].count))
         .complete()
 }
 
-// adds up the overall_count of all child Nodes of an And Node
+// adds up the count of all child Nodes of an And Node
 #[inline]
-fn calc_overall_or_count(nodes: &mut Vec<Node>, indizes: &[usize]) -> Integer {
-    Integer::from(&nodes[indizes[1]].count + &nodes[indizes[2]].count)
-}
-
-#[inline]
-fn calc_overall_or_count_multiple_children(
+fn calc_or_count(
     nodes: &mut Vec<Node>,
-    indizes: &[usize],
+    indices: &[usize],
 ) -> Integer {
-    Integer::sum(indizes.iter().map(|indize| &nodes[*indize].count)).complete()
+    Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()
 }
 
 /// Is used to parse the queries in the config files
@@ -513,11 +507,6 @@ fn calc_overall_or_count_multiple_children(
 /// # Example
 /// ```
 /// use ddnnf_lib::parser::parse_queries_file;
-///
-/// // an example for a config file (and the actuall start of "./tests/data/axTLS.config"):
-/// // -62 86
-/// // 61 86
-/// // 36 -83
 ///
 /// let config_path = "./tests/data/auto1.config";
 /// let queries: Vec<Vec<i32>> = parse_queries_file(config_path);

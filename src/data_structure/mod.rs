@@ -14,23 +14,6 @@ use workctl::WorkQueue;
 
 use crate::parser;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-/// The Type of the Node declares how we handle the computation for the different types of cardinalities
-pub enum NodeType {
-    /// The cardinality of an And node is always the product of its childs
-    And,
-    /// The cardinality of an Or node is the sum of its two children
-    Or,
-    /// The cardinality is one if not declared otherwise due to some query
-    Literal,
-    /// The cardinality is one
-    True,
-    /// The cardinality is zero
-    False,
-}
-
-use NodeType::{And, False, Literal, Or, True};
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Represents all types of Nodes with its different parts
 pub struct Node {
@@ -39,81 +22,73 @@ pub struct Node {
     pub count: Integer,
     /// The cardinality during the different queries
     pub temp: Integer,
-    pub node_type: NodeType,
-    /// And and Or nodes hold children
-    pub children: Option<Vec<usize>>,
     /// Every node excpet the root has (multiple) parent nodes
     pub parents: Vec<usize>,
-    /// Literals hold a variable number
-    pub var_number: Option<i32>,
+    /// the different kinds of nodes with its additional fields
+    pub ntype: NodeType,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// The Type of the Node declares how we handle the computation for the different types of cardinalities
+pub enum NodeType {
+    /// The cardinality of an And node is always the product of its childs
+    And { children: Vec<usize> },
+    /// The cardinality of an Or node is the sum of its children
+    Or { children: Vec<usize> },
+    /// The cardinality is one if not declared otherwise due to some query
+    Literal { literal: i32 },
+    /// The cardinality is one
+    True,
+    /// The cardinality is zero
+    False,
+}
+
+use NodeType::{And, False, Literal, Or, True};
 
 static mut COUNTER: u64 = 0;
 
 impl Node {
     #[inline]
-    /// Creates a new And node
-    pub fn new_and(overall_count: Integer, children: Vec<usize>) -> Node {
+    /// Creates a new node
+    fn new_node(count: Integer, ntype: NodeType) -> Node {
         Node {
             marker: false,
-            count: overall_count,
-            temp: Integer::from(0),
-            node_type: And,
-            children: Some(children),
+            count,
+            temp: Integer::ZERO,
             parents: Vec::new(),
-            var_number: None,
+            ntype
         }
+    }
+
+    #[inline]
+    /// Creates a new And node
+    pub fn new_and(count: Integer, children: Vec<usize>) -> Node {
+        Node::new_node(count, And { children })
     }
 
     #[inline]
     /// Creates a new Or node
     pub fn new_or(
-        var_number: i32,
-        overall_count: Integer,
+        _decision_var: i32,
+        count: Integer,
         children: Vec<usize>,
     ) -> Node {
-        Node {
-            marker: false,
-            count: overall_count,
-            temp: Integer::from(0),
-            node_type: Or,
-            children: Some(children),
-            parents: Vec::new(),
-            var_number: Some(var_number),
-        }
+        Node::new_node(count, Or { children })
     }
 
     #[inline]
     /// Creates a new Literal node
-    pub fn new_literal(var_number: i32) -> Node {
-        Node {
-            marker: false,
-            count: Integer::from(1),
-            temp: Integer::from(0),
-            node_type: Literal,
-            children: None,
-            parents: Vec::new(),
-            var_number: Some(var_number),
-        }
+    pub fn new_literal(literal: i32) -> Node {
+        Node::new_node(Integer::from(1), Literal { literal })
     }
 
     #[inline]
     /// Creates either a new True or False node
-    pub fn new_bool(node_type: NodeType) -> Node {
-        let count: Integer = match node_type {
-            True => Integer::from(1),
-            False => Integer::from(0),
-            _ => panic!("NodeType {:?} is not a Bool", node_type),
-        };
-
-        Node {
-            marker: false,
-            count,
-            temp: Integer::from(0),
-            node_type,
-            children: None,
-            parents: Vec::new(),
-            var_number: None,
+    pub fn new_bool(b: bool) -> Node {
+        if b {
+            Node::new_node(Integer::from(1), True)
+        } else {
+            Node::new_node(Integer::ZERO, False)
         }
     }
 }
@@ -219,37 +194,30 @@ impl Ddnnf {
     #[inline]
     // Computes the cardinality of a node according to the rules mentioned at the Nodetypes and saves it in tmp
     fn calc_count(&mut self, i: usize) {
-        match self.nodes[i].node_type {
-            And => {
+        match &self.nodes[i].ntype {
+            And { children } => {
                 self.nodes[i].temp = Integer::product(
-                    self.nodes[i]
-                        .children
-                        .as_ref()
-                        .unwrap()
+                        children
                         .iter()
-                        .map(|&indize| &self.nodes[indize].temp),
+                        .map(|&indice| &self.nodes[indice].temp),
                 )
                 .complete()
             }
-            Or => {
-                self.nodes[i].temp = Integer::sum(
-                    self.nodes[i]
-                        .children
-                        .as_ref()
-                        .unwrap()
+            Or { children } => {
+                self.nodes[i].temp =
+                    Integer::sum(children
                         .iter()
-                        .map(|&indize| &self.nodes[indize].temp),
-                )
-                .complete()
+                        .map(|&indice| &self.nodes[indice].temp))
+                        .complete()
             }
             False => self.nodes[i].temp.assign(0),
-            _ => self.nodes[i].temp.assign(1),
+            _ => self.nodes[i].temp.assign(1), // True and Literal
         }
     }
 
     // returns the current count of the root node in the ddnnf
     // that value is the same during all computations
-    fn rc(&self) -> Integer {
+    pub fn rc(&self) -> Integer {
         self.nodes[self.number_of_nodes - 1].count.clone()
     }
 
@@ -283,16 +251,20 @@ impl Ddnnf {
         if self.core.contains(&feature) {
             self.rc()
         } else if self.dead.contains(&feature) {
-            Integer::from(0)
+            Integer::ZERO
         } else {
             for i in 0..self.number_of_nodes {
-                if self.nodes[i].node_type == Literal // search for the node we want to adjust
-                    && feature == -self.nodes[i].var_number.unwrap()
-                {
-                    self.nodes[i].temp.assign(0);
-                } else {
+                match &mut self.nodes[i].ntype {
+                    // search for the node we want to adjust
+                    Literal { literal } => {
+                        if feature == -*literal {
+                            self.nodes[i].temp.assign(0);
+                        } else {
+                            self.calc_count(i)   
+                        }
+                    }
                     // all other values stay the same, respectevly get adjusted because the count of the one node got changed
-                    self.calc_count(i)
+                    _ => self.calc_count(i),
                 }
             }
             self.rt()
@@ -321,19 +293,22 @@ impl Ddnnf {
     /// ```
     pub fn card_of_partial_config(&mut self, features: &[i32]) -> Integer {
         if self.query_is_not_sat(features) {
-            Integer::from(0)
+            Integer::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
             for i in 0..self.number_of_nodes {
-                if self.nodes[i].node_type == Literal
-                    && features.contains(&-self.nodes[i].var_number.unwrap())
-                {
-                    self.nodes[i].temp.assign(0);
-                } else {
-                    self.calc_count(i)
+                match &self.nodes[i].ntype {
+                    // search for the nodes we want to adjust
+                    Literal { literal } => {
+                        if features.contains(&-literal) {
+                            self.nodes[i].temp.assign(0);
+                        } else {
+                            self.calc_count(i)   
+                        }
+                    }
+                    _ => self.calc_count(i),
                 }
             }
-
             self.rt()
         }
     }
@@ -343,37 +318,31 @@ impl Ddnnf {
     // And and Or nodes that base the computation on their child nodes use the
     // .temp value if the child node is marked and the .count value if not
     fn calc_count_marked_node(&mut self, i: usize) {
-        match self.nodes[i].node_type {
-            And => {
+        match &self.nodes[i].ntype {
+            And { children } => {
                 self.nodes[i].temp = Integer::product(
-                    self.nodes[i].children.as_ref().unwrap().iter().map(
-                        |&indize| {
-                            if self.nodes[indize].marker {
-                                &self.nodes[indize].temp
+                    children.iter().map(
+                        |&index| {
+                            if self.nodes[index].marker {
+                                &self.nodes[index].temp
                             } else {
-                                &self.nodes[indize].count
-                            }
-                        },
-                    ),
-                )
+                                &self.nodes[index].count
+                    }
+                }))
                 .complete()
             }
-            Or => {
-                self.nodes[i].temp = Integer::sum(
-                    self.nodes[i].children.as_ref().unwrap().iter().map(
-                        |&indize| {
-                            if self.nodes[indize].marker {
-                                &self.nodes[indize].temp
-                            } else {
-                                &self.nodes[indize].count
-                            }
-                        },
-                    ),
-                )
+            Or { children } => {
+                self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
+                    if self.nodes[index].marker {
+                        &self.nodes[index].temp
+                    } else {
+                        &self.nodes[index].count
+                    }
+                }))
                 .complete()
             }
             False => self.nodes[i].temp.assign(0),
-            _ => self.nodes[i].temp.assign(1),
+            _ => self.nodes[i].temp.assign(1) // True and Literal
         }
     }
 
@@ -431,7 +400,7 @@ impl Ddnnf {
             self.rc()
         } else if self.dead.contains(&feature) || self.core.contains(&-feature)
         {
-            Integer::from(0)
+            Integer::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
                 Some(i) => self.calc_count_marker(&[i]),
@@ -464,7 +433,7 @@ impl Ddnnf {
         features: &[i32],
     ) -> Integer {
         if self.query_is_not_sat(features) {
-            Integer::from(0)
+            Integer::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
 
@@ -492,11 +461,12 @@ impl Ddnnf {
         self.nodes[i].marker = true;
         self.md.push(i);
 
-        for j in self.nodes[i].parents.clone() {
+        for j in 0..self.nodes[i].parents.len() {
             // check for parent nodes and adjust their count resulting of the changes to their children
-            if !self.nodes[j].marker {
+            let index = self.nodes[i].parents[j];
+            if !self.nodes[index].marker {
                 // only mark those nodes which aren't already marked to specificly avoid marking nodes near the root multple times
-                self.mark_nodes(j);
+                self.mark_nodes(index);
             }
         }
     }
@@ -596,7 +566,7 @@ impl Ddnnf {
     /// use ddnnf_lib::parser::*;
     /// use rug::Integer;
     /// use std::fs;
-    /// 
+    ///
     /// // create a ddnnf
     /// // and run the queries
     /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
@@ -721,7 +691,7 @@ impl Ddnnf {
     /// use ddnnf_lib::parser::*;
     /// use rug::Integer;
     /// use std::fs;
-    /// 
+    ///
     /// // create a ddnnf
     /// // and run the queries
     /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
@@ -730,7 +700,7 @@ impl Ddnnf {
     ///     "./tests/data/smt_out.txt",)
     ///     .unwrap_or_default();
     /// let _rm = fs::remove_file("./tests/data/smt_out.txt");
-    /// 
+    ///
     /// ```
     pub fn card_multi_queries(
         &mut self,
@@ -763,7 +733,8 @@ impl Ddnnf {
                     // Do some work.
                     let result;
                     if work.len() <= 100 {
-                        result = ddnnf.card_of_partial_config_with_marker(&work);
+                        result =
+                            ddnnf.card_of_partial_config_with_marker(&work);
                     } else {
                         result = ddnnf.card_of_partial_config(&work);
                     };
@@ -850,10 +821,10 @@ impl Ddnnf {
         let mut false_counter = 0;
 
         for i in 0..self.nodes.len() {
-            match &self.nodes[i].node_type {
-                And => and_counter += 1,
-                Or => or_counter += 1,
-                Literal => literal_counter += 1,
+            match &self.nodes[i].ntype {
+                And { children: _ } => and_counter += 1,
+                Or { children: _ } => or_counter += 1,
+                Literal { literal: _ } => literal_counter += 1,
                 True => true_counter += 1,
                 False => false_counter += 1,
             }
@@ -892,18 +863,14 @@ impl Ddnnf {
         let mut and_counter = 0;
 
         for i in 0..self.nodes.len() {
-            match &self.nodes[i].children {
-                Some(x) => {
-                    total_child_counter += x.len() as u64;
-                    if self.nodes[i].node_type == And {
-                        and_child_counter += x.len() as u64;
-                    }
+            match &self.nodes[i].ntype {
+                And { children } => {
+                    and_child_counter += children.len() as u64
                 }
-                None => continue,
+                Or { children } => total_child_counter += children.len() as u64,
+                _ => continue,
             }
-            if self.nodes[i].node_type == And {
-                and_counter += 1
-            }
+            if let And { children: _ } = &mut self.nodes[i].ntype { and_child_counter += 1; and_counter += 1}
         }
 
         let node_count: u64 = self.nodes.len() as u64;
@@ -966,19 +933,24 @@ impl Ddnnf {
 fn get_depth(nodes: &[Node], indize: usize, count: u64) -> Vec<u64> {
     let current: &Node = &nodes[indize];
 
-    if current.node_type != And && current.node_type != Or {
-        vec![count]
-    } else {
-        match &current.children {
-            Some(children) => {
-                let mut child_depths: Vec<Vec<u64>> = Vec::new();
-                for i in children {
-                    child_depths.push(get_depth(nodes, *i, count + 1));
-                }
-                child_depths.into_iter().flatten().collect()
+    match &current.ntype {
+        And { children } => {
+            let mut child_depths: Vec<Vec<u64>> = Vec::new();
+            for &i in children {
+                child_depths.push(get_depth(nodes, i, count + 1));
             }
-            None => panic!("An inner node does not have child nodes. That should not happen!"),
+            child_depths.into_iter().flatten().collect()
         }
+        Or { children } => {
+            let mut child_depths: Vec<Vec<u64>> = Vec::new();
+            for &i in children {
+                child_depths.push(get_depth(nodes, i, count + 1));
+            }
+            child_depths.into_iter().flatten().collect()
+        }
+        Literal { literal: _ } => vec![count],
+        True => vec![count],
+        False => vec![count],
     }
 }
 

@@ -105,33 +105,18 @@ mod test {
         let edge_str = "2 3 4 -5 0";
 
         assert_eq!(lex_and(and_str).unwrap().1, D4Token::And);
-        assert_eq!(
-            lex_line_d4(and_str).unwrap().1,
-            D4Token::And,
-        );
+        assert_eq!(lex_line_d4(and_str).unwrap().1, D4Token::And,);
 
         assert_eq!(lex_or(or_str).unwrap().1, D4Token::Or);
         assert_eq!(lex_line_d4(or_str).unwrap().1, D4Token::Or);
 
-        assert_eq!(
-            lex_true(true_str).unwrap().1,
-            D4Token::True,
-        );
+        assert_eq!(lex_true(true_str).unwrap().1, D4Token::True,);
 
-        assert_eq!(
-            lex_line_d4(true_str).unwrap().1,
-            D4Token::True,
-        );
+        assert_eq!(lex_line_d4(true_str).unwrap().1, D4Token::True,);
 
-        assert_eq!(
-            lex_false(false_str).unwrap().1,
-            D4Token::False,
-        );
+        assert_eq!(lex_false(false_str).unwrap().1, D4Token::False,);
 
-        assert_eq!(
-            lex_line_d4(false_str).unwrap().1,
-            D4Token::False,
-        );
+        assert_eq!(lex_line_d4(false_str).unwrap().1, D4Token::False,);
 
         assert_eq!(
             lex_edge(edge_str).unwrap().1,

@@ -13,17 +13,20 @@ fn token_parsing_test() {
     assert_eq!(ddnnf.number_of_variables, 4);
 
     let or_node = ddnnf.nodes.pop().unwrap();
-    let or_node_childs = or_node.children.unwrap();
+    match or_node.ntype {
+        Or { children } => {
+            assert_eq!(children.len(), 2_usize);
+            assert_eq!(or_node.count, Integer::from(4_u32))
+        },
+        _ => panic!("Node isn't an or node")
+    }
 
-    assert_eq!(or_node_childs.len().clone(), 2_usize);
-    assert_eq!(or_node.node_type, Or);
-    assert_eq!(or_node.count, Integer::from(4));
-
-    assert_eq!(ddnnf.nodes[or_node_childs[0]].node_type, And);
-    assert_eq!(ddnnf.nodes[or_node_childs[1]].node_type, And);
-
-    let and_node_childs = ddnnf.nodes.pop().unwrap().children.unwrap();
-    assert_eq!(and_node_childs.len(), 2_usize);
-    assert_eq!(ddnnf.nodes[and_node_childs[0]].node_type, Or);
-    assert_eq!(ddnnf.nodes[and_node_childs[1]].node_type, And);
+    let and_node = ddnnf.nodes.pop().unwrap();
+    match and_node.ntype {
+        And { children } => {
+            assert_eq!(children.len(), 2_usize);
+            assert_eq!(and_node.count, Integer::from(2_u32))
+        },
+        _ => panic!("Node isn't an and node")
+    }
 }

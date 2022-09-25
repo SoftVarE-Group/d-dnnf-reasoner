@@ -4,8 +4,8 @@ use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser;
 
 use file_diff::diff_files;
-use std::fs::File;
 use std::fs;
+use std::fs::File;
 
 #[test]
 fn card_of_features_test() {
@@ -49,10 +49,7 @@ fn card_of_pc_test() {
         parser::build_ddnnf_tree_with_extras("tests/data/auto1_c2d.nnf");
     ddnnf.max_worker = 1;
     ddnnf
-        .card_multi_queries(
-            config_file,
-            c2d_out,
-        )
+        .card_multi_queries(config_file, c2d_out)
         .unwrap_or_default();
 
     let mut should = File::open(sb_file_path).unwrap();
@@ -66,10 +63,7 @@ fn card_of_pc_test() {
         parser::build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
     ddnnf.max_worker = 1;
     ddnnf
-        .card_multi_queries(
-            config_file,
-            d4_out,
-        )
+        .card_multi_queries(config_file, d4_out)
         .unwrap_or_default();
 
     let mut should = File::open(sb_file_path).unwrap();

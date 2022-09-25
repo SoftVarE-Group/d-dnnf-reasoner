@@ -119,7 +119,7 @@ fn main() {
         println!(
             "Ddnnf overall count: {:#?}\n
             Elapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(),
+            ddnnf.rc(),
             elapsed_time
         );
     } else {
@@ -130,7 +130,7 @@ fn main() {
         println!(
             "Ddnnf overall count: {:#?}\n
             Elapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.nodes[ddnnf.number_of_nodes - 1].count.clone(),
+            ddnnf.rc(),
             elapsed_time
         );
     }
