@@ -69,7 +69,7 @@ impl Node {
     #[inline]
     /// Creates a new Or node
     pub fn new_or(
-        _decision_var: i32,
+        _decision_var: u32,
         count: Integer,
         children: Vec<usize>,
     ) -> Node {

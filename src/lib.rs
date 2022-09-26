@@ -9,7 +9,7 @@ extern crate test;
 
 pub mod parser;
 pub use crate::parser::d4_lexer;
-pub use crate::parser::lexer;
+pub use crate::parser::c2d_lexer;
 
 pub mod data_structure;
 pub use crate::data_structure::{Ddnnf, Node};

@@ -8,6 +8,8 @@ use nom::{
     IResult,
 };
 
+use D4Token::*;
+
 #[derive(Debug, Clone, PartialEq)]
 /// Every token gets an enum instance for the D4lexing progress
 pub enum D4Token {
@@ -23,7 +25,7 @@ pub enum D4Token {
     Edge {
         from: i32,
         to: i32,
-        features: Vec<i32>,
+        features: Vec<i32>
     },
 }
 
@@ -58,7 +60,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                     })
                 })
                 .collect::<Vec<i32>>();
-            D4Token::Edge {
+            Edge {
                 from: ws_numbers[0],
                 to: ws_numbers[1],
                 features: ws_numbers[2..ws_numbers.len()].to_vec(),
@@ -74,22 +76,22 @@ fn neg_digit1(line: &str) -> IResult<&str, &str> {
 
 // Lexes an And node which is a inner node with the format "a N 0" with N as Node number.
 fn lex_and(line: &str) -> IResult<&str, D4Token> {
-    value(D4Token::And, preceded(tag("a "), digit1))(line)
+    value(And, preceded(tag("a "), digit1))(line)
 }
 
 // Lexes an Or node which is a inner node with the format "o N 0" with N as Node number.
 fn lex_or(line: &str) -> IResult<&str, D4Token> {
-    value(D4Token::Or, preceded(tag("o "), digit1))(line)
+    value(Or, preceded(tag("o "), digit1))(line)
 }
 
 // Lexes a True node which is a leaf node with the format "t N 0" with N as Node number.
 fn lex_true(line: &str) -> IResult<&str, D4Token> {
-    value(D4Token::True, preceded(tag("t "), digit1))(line)
+    value(True, preceded(tag("t "), digit1))(line)
 }
 
 // Lexes a False node which is a leaf node with the format "f N 0"  with N as Node number.
 fn lex_false(line: &str) -> IResult<&str, D4Token> {
-    value(D4Token::False, preceded(tag("f "), digit1))(line)
+    value(False, preceded(tag("f "), digit1))(line)
 }
 
 #[cfg(test)]
@@ -104,23 +106,23 @@ mod test {
         let false_str = "f 4 0";
         let edge_str = "2 3 4 -5 0";
 
-        assert_eq!(lex_and(and_str).unwrap().1, D4Token::And);
-        assert_eq!(lex_line_d4(and_str).unwrap().1, D4Token::And,);
+        assert_eq!(lex_and(and_str).unwrap().1, And);
+        assert_eq!(lex_line_d4(and_str).unwrap().1, And,);
 
-        assert_eq!(lex_or(or_str).unwrap().1, D4Token::Or);
-        assert_eq!(lex_line_d4(or_str).unwrap().1, D4Token::Or);
+        assert_eq!(lex_or(or_str).unwrap().1, Or);
+        assert_eq!(lex_line_d4(or_str).unwrap().1, Or);
 
-        assert_eq!(lex_true(true_str).unwrap().1, D4Token::True,);
+        assert_eq!(lex_true(true_str).unwrap().1, True,);
 
-        assert_eq!(lex_line_d4(true_str).unwrap().1, D4Token::True,);
+        assert_eq!(lex_line_d4(true_str).unwrap().1, True,);
 
-        assert_eq!(lex_false(false_str).unwrap().1, D4Token::False,);
+        assert_eq!(lex_false(false_str).unwrap().1, False,);
 
-        assert_eq!(lex_line_d4(false_str).unwrap().1, D4Token::False,);
+        assert_eq!(lex_line_d4(false_str).unwrap().1, False,);
 
         assert_eq!(
             lex_edge(edge_str).unwrap().1,
-            D4Token::Edge {
+            Edge {
                 from: 2,
                 to: 3,
                 features: vec![4, -5]
@@ -129,7 +131,7 @@ mod test {
 
         assert_eq!(
             lex_line_d4(edge_str).unwrap().1,
-            D4Token::Edge {
+            Edge {
                 from: 2,
                 to: 3,
                 features: vec![4, -5]

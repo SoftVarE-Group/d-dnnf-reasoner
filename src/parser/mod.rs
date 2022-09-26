@@ -1,5 +1,5 @@
-pub mod lexer;
-use lexer::{lex_line, TId};
+pub mod c2d_lexer;
+use c2d_lexer::{lex_line, TId, C2DToken};
 
 pub mod d4_lexer;
 use d4_lexer::{lex_line_d4, D4Token};
@@ -46,38 +46,37 @@ use petgraph::{
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
+    use C2DToken::*;
+    
     let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let header = lex_line(first_line.trim()).unwrap().1 .1;
+    let mut nodes = 0; let mut variables: usize = 0;
+    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim()).unwrap().1 {
+        nodes = n; variables = v;
+    };
 
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(header[0] as usize);
+    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
     for line in buf_reader {
         let line = line.expect("Unable to read line");
-
         let next = match lex_line(line.trim()).unwrap().1 {
-            // extract the parsed Token
-            (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
-            (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
-            (TId::And, v) => Node::new_and(
-                calc_and_count(&mut parsed_nodes, &v),
-                v,
+            And { children } => Node::new_and(
+                calc_and_count(&mut parsed_nodes, &children),
+                children,
             ),
-            (TId::Or, v) => {
-                let v_num = v.clone().remove(0) as i32;
-                let mut children = v.clone();
-                children.remove(0);
+            Or { decision, children } => {
                 Node::new_or(
-                    v_num,
+                    decision,
                     calc_or_count(&mut parsed_nodes, &children),
                     children,
                 )
             }
-            (TId::True, _) => Node::new_bool(true),
-            (TId::False, _) => Node::new_bool(false),
+            Literal { feature } => Node::new_literal(feature),
+            True => Node::new_bool(true),
+            False => Node::new_bool(false),
             _ => panic!(
                 "Tried to parse the header of the .nnf at the wrong time"
             ),
@@ -86,19 +85,23 @@ pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, HashMap::new(), header[2] as u32, header[0])
+    Ddnnf::new(parsed_nodes, HashMap::new(), variables as u32, nodes)
 }
 
 #[inline]
 /// Adds the parent connection as well as the hashmpa for the literals and their corresponding position in the vector
 /// Works analog to build_ddnnf_tree()
 pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
+    use C2DToken::*;
+
     let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let header = lex_line(first_line.trim()).unwrap().1 .1;
-
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(header[0]);
+    let mut nodes = 0; let mut variables: usize = 0;
+    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim()).unwrap().1 {
+        nodes = n; variables = v;
+    };
+    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
 
     let mut literals: HashMap<i32, usize> = HashMap::new();
 
@@ -108,24 +111,20 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
         let line = line.expect("Unable to read line");
 
         let next: Node = match lex_line(line.as_ref()).unwrap().1 {
-            // extract the parsed Token
-            (TId::PositiveLiteral, v) => Node::new_literal(v[0] as i32),
-            (TId::NegativeLiteral, v) => Node::new_literal(-(v[0] as i32)),
-            (TId::And, v) => Node::new_and(
-                calc_and_count(&mut parsed_nodes, &v),
-                v,
+            And { children } => Node::new_and(
+                calc_and_count(&mut parsed_nodes, &children),
+                children,
             ),
-            (TId::Or, v) => {
-                let mut children = v.clone();
-                let v_num = children.remove(0) as i32;
+            Or { decision, children } => {
                 Node::new_or(
-                    v_num,
+                    decision,
                     calc_or_count(&mut parsed_nodes, &children),
                     children,
                 )
             }
-            (TId::True, _) => Node::new_bool(true),
-            (TId::False, _) => Node::new_bool(false),
+            Literal { feature } => Node::new_literal(feature),
+            True => Node::new_bool(true),
+            False => Node::new_bool(false),
             _ => panic!(
                 "Tried to parse the header of the .nnf at the wrong time"
             ),
@@ -150,7 +149,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, header[2] as u32, header[0])
+    Ddnnf::new(parsed_nodes, literals, variables as u32, nodes)
 }
 
 /// Parses a ddnnf, referenced by the file path.
@@ -465,7 +464,7 @@ fn get_literals(
     }
 
     let mut res = HashSet::new();
-    use lexer::TokenIdentifier::*;
+    use c2d_lexer::TokenIdentifier::*;
     match graph[or_child] {
         And | Or => {
             graph.neighbors_directed(or_child, Outgoing).for_each(|n| {

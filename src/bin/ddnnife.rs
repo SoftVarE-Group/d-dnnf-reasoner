@@ -4,7 +4,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-use clap::{crate_authors, crate_version, App, AppSettings, Arg};
+use clap::{App, AppSettings, Arg};
 
 extern crate colour;
 use colour::{green, yellow_ln};
@@ -21,72 +21,62 @@ use ddnnf_lib::parser::{self as dparser};
 fn main() {
     let matches = App::new("ddnnife")
     .global_settings(&[AppSettings::ColoredHelp])
-    .author(crate_authors!("\n"))
-    .version(crate_version!())
+    .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
+    .version("0.4.0")
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("FILE PATH")
-        .display_order(1)
-        .index(1)
         .allow_hyphen_values(true)
         .help("The path to the file in dimacs format. The d-dnnf has to be smooth to work properly!"))
     .arg(Arg::with_name("FEATURE/S")
-        .display_order(2)
         .requires("FILE PATH")
         .help("The numbers of the features that should be included or excluded (positive number to include, negative to exclude). Can be one or multiple. A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace!")
-        .short("f")
+        .short('f')
         .long("features")
         .allow_hyphen_values(true)
         .takes_value(true)
         .multiple(true))
     .arg(Arg::with_name("FILE QUERIES")
-        .display_order(2)
         .requires("FILE PATH")
         .help("Mulitple queries that follow the feature format and the qeries themself are seperatated by \"\\n\". Give the path to the input file after the flag. The default file name for the output is the \"out.txt\".")
-        .short("q")
+        .short('q')
         .long("queries")
         .allow_hyphen_values(true)
         .takes_value(true))
     .arg(Arg::with_name("INTERACTIVE")
-        .display_order(3)
         .requires("FILE PATH")
         .help("The interactive mode allows the computation of multiple queries one after another by typing the query into the console. This mode is way slower then loading the queries with a file!\nThis mode also requires a file path to a file in dimacs format. There are the following options in interactive mode:\n[feature numbers with the same format as in -f]: computes the cardinality of partial configurations\nexit: closes the application (CTRL+C and CTRL+D also work)\nhelp: prints help information")
-        .short("i")
+        .short('i')
         .long("interactive"))
     .arg(Arg::with_name("CARDINALITY OF FEATURES")
-        .display_order(4)
         .requires("FILE PATH")
         .help("Computes the cardinality of features for the feature model, i.e. the cardinality iff we select one feature for all features. The default file name for the output is the \"out.csv\".")
-        .short("c")
+        .short('c')
         .long("card_of_fs"))
     .arg(Arg::with_name("OMMITED FEATURES")
-        .display_order(5)
         .requires("FILE PATH")
         .help("The number of omitted features. This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.")
-        .short("o")
+        .short('o')
         .long("ommited_features")
         .takes_value(true))
     .arg(Arg::with_name("NUMBER OF THREADS")
-        .display_order(5)
         .requires("FILE PATH")
         .help("Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
-        .short("n")
+        .short('n')
         .long("number_threads")
         .takes_value(true))
     .arg(Arg::with_name("HEURISTICS")
-        .display_order(6)
         .requires("FILE PATH")
         .help("Provides information about the type of nodes, their connection and the different paths.")
         .long("heuristics"))
     .arg(Arg::with_name("CUSTOM OUTPUT FILE NAME")
-        .display_order(7)
         .requires("FILE PATH")
         .help("Allows a custom file name for output file for the cardinality of features and file queries. The appropiate file ending gets added automcaticly.")
-        .short("s")
+        .short('s')
         .long("save_as")
         .takes_value(true))
     .get_matches();
 
-    if matches.is_present("HEURISTICS") {
+    if matches.contains_id("HEURISTICS") {
         let mut ddnnf: Ddnnf =
             dparser::build_ddnnf_tree(matches.value_of("FILE PATH").unwrap());
         ddnnf.print_all_heuristics();
@@ -97,7 +87,7 @@ fn main() {
     let time = Instant::now();
     let mut ddnnf: Ddnnf;
 
-    if matches.is_present("OMMITED FEATURES") {
+    if matches.contains_id("OMMITED FEATURES") {
         let ommited_features =
             match matches
                 .value_of("OMMITED FEATURES")
@@ -136,7 +126,7 @@ fn main() {
     }
 
     // change the number of threads used for cardinality of features and partial configurations
-    if matches.is_present("NUMBER OF THREADS") {
+    if matches.contains_id("NUMBER OF THREADS") {
         let threads: u16 = match matches
             .value_of("NUMBER OF THREADS")
             .unwrap()
@@ -158,7 +148,7 @@ fn main() {
     }
 
     // computes the cardinality for the partial configuration that can be mentioned with parameters
-    if matches.is_present("FEATURE/S") {
+    if matches.contains_id("FEATURE/S") {
         let features: Vec<i32> =
             dparser::parse_features(matches.values_of_lossy("FEATURE/S"));
         ddnnf.execute_query(features);
@@ -166,7 +156,7 @@ fn main() {
 
     // computes the cardinality of partial configurations and saves the results in a .txt file
     // the results do not have to be in the same order if the number of threads is greater than one
-    if matches.is_present("FILE QUERIES") {
+    if matches.contains_id("FILE QUERIES") {
         let file_path_in = matches.value_of("FILE QUERIES").unwrap();
         let file_path_out = &format!(
             "{}{}",
@@ -191,7 +181,7 @@ fn main() {
     }
 
     // switch in the interactive mode
-    if matches.is_present("INTERACTIVE") {
+    if matches.contains_id("INTERACTIVE") {
         let mut rl = Editor::<()>::new();
         if rl.load_history("history.txt").is_err() {
             println!("No previous history.");
@@ -247,7 +237,7 @@ fn main() {
 
     // computes the cardinality of features and saves the results in a .csv file
     // the cardinalities are always sorted from lowest to highest (also for multiple threadss)
-    if matches.is_present("CARDINALITY OF FEATURES") {
+    if matches.contains_id("CARDINALITY OF FEATURES") {
         let file_path = &format!(
             "{}{}",
             matches.value_of("CUSTOM OUTPUT FILE NAME").unwrap_or("out"),

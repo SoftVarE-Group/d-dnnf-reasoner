@@ -2,7 +2,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-use clap::{/*crate_authors,*/ crate_version, App, AppSettings, Arg};
+use clap::{App, AppSettings, Arg};
 use ddnnf_lib::parser::bufreader_for_big_files::BufReaderMl;
 
 use std::collections::HashMap;
@@ -12,8 +12,8 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 
 pub use ddnnf_lib::parser as dparser;
-pub use dparser::lexer;
-pub use lexer::{TId, Token};
+pub use dparser::c2d_lexer;
+pub use c2d_lexer::{TId, C2DToken};
 
 pub use ddnnf_lib::Node;
 
@@ -27,8 +27,8 @@ pub use ddnnf_lib::Node;
 fn main() {
     let matches = App::new("dhone")
     .global_settings(&[AppSettings::ColoredHelp])
-    //.author(crate_authors!())
-    .version(crate_version!())
+    .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
+    .version("0.4.0")
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("FILE PATH")
         .display_order(1)
@@ -39,7 +39,7 @@ fn main() {
         .display_order(2)
         .requires("FILE PATH")
         .help("Name of the output file. If this parameter is not set, we name the output file res.dimacs.nnf")
-        .short("s")
+        .short('s')
         .long("save_as")
         .takes_value(true))
     .get_matches();
@@ -59,7 +59,7 @@ fn main() {
 
         for token in token_stream {
             buf_writer
-                .write_all(lexer::serialize_token(token).as_bytes())
+                .write_all(c2d_lexer::serialize_C2DToken(token).as_bytes())
                 .expect("Unable to write data");
         }
 
@@ -82,7 +82,7 @@ fn main() {
 /// ```
 /// extern crate ddnnf_lib;
 /// use ddnnf_lib::parser;
-///
+/// 
 /// let file_path = "./tests/data/small_test.dimacs.nnf";
 /// preprocess(file_path);
 /// ```
@@ -90,8 +90,8 @@ fn main() {
 /// # Panics
 ///
 /// The function panics for an invalid file path.
-fn preprocess(path: &str) -> Vec<Token> {
-    let mut token_stream: Vec<Token> = get_token_stream(path);
+fn preprocess(path: &str) -> Vec<C2DToken> {
+    let mut token_stream: Vec<C2DToken> = get_token_stream(path);
 
     let mut literals: HashMap<i32, usize> = HashMap::with_capacity(1000);
 
@@ -101,19 +101,11 @@ fn preprocess(path: &str) -> Vec<Token> {
     for (index, token) in token_stream.iter().enumerate() {
         // if we find a literal we save the number and its position
         let unique: i32 = match token {
-            (TId::PositiveLiteral, v) => {
-                if literals.get(&(v[0] as i32)).is_some() {
-                    v[0] as i32
+            C2DToken::Literal { feature: f } => {
+                if literals.get(&f).is_some() {
+                    *f
                 } else {
-                    literals.insert(v[0] as i32, index);
-                    0
-                }
-            }
-            (TId::NegativeLiteral, v) => {
-                if literals.get(&-(v[0] as i32)).is_some() {
-                    -(v[0] as i32)
-                } else {
-                    literals.insert(-(v[0] as i32), index);
+                    literals.insert(*f, index);
                     0
                 }
             }
@@ -129,22 +121,22 @@ fn preprocess(path: &str) -> Vec<Token> {
     }
 
     for change in changes {
-        token_stream[change] = (TId::True, vec![]);
+        token_stream[change] = C2DToken::True;
     }
     token_stream
 }
 
 // generates a token stream from a file path
-fn get_token_stream(path: &str) -> Vec<Token> {
+fn get_token_stream(path: &str) -> Vec<C2DToken> {
     let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
     // we do not know the capacity beforehand without applying semmantics but we know that the file will often be quite big
-    let mut parsed_tokens: Vec<Token> = Vec::with_capacity(10000);
+    let mut parsed_tokens: Vec<C2DToken> = Vec::with_capacity(10000);
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
     for line in buf_reader {
         let line = line.expect("Unable to read line");
-        parsed_tokens.push(dparser::lexer::lex_line(line.as_ref()).unwrap().1);
+        parsed_tokens.push(dparser::c2d_lexer::lex_line(line.as_ref()).unwrap().1);
     }
 
     parsed_tokens
