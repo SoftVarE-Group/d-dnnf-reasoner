@@ -98,7 +98,8 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
     let mut nodes = 0; let mut variables: usize = 0;
-    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim()).unwrap().1 {
+    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim())
+            .expect(format!("[ERROR] the first line of the file: \"{}\" isn't a header!", first_line.trim()).as_str()).1 {
         nodes = n; variables = v;
     };
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
@@ -577,23 +578,4 @@ pub fn parse_queries_file(path: &str) -> Vec<Vec<i32>> {
         parsed_queries.push(res);
     }
     parsed_queries
-}
-
-/// Parses i32 values out of a Vector of Strings
-///
-/// # Example
-/// ```
-/// use ddnnf_lib::parser::parse_features;
-///
-/// let valid_in = Some(vec![String::from("3"), String::from("-12")]);
-/// assert_eq!(vec![3,-12], parse_features(valid_in));
-/// ```
-/// # Panic
-///
-/// Panics for String values that can not be parsed into an i32 and for None
-pub fn parse_features(input: Option<Vec<String>>) -> Vec<i32> {
-    input.unwrap().into_iter()
-    .map(|elem| elem.parse::<i32>()
-        .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem))
-    ).collect()
 }

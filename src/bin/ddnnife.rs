@@ -29,8 +29,9 @@ fn main() {
         .allow_hyphen_values(true)
         .help("The path to the file in dimacs format. The d-dnnf has to be smooth to work properly!")
         .takes_value(true))
-    .arg(arg!(-f --features "The numbers of the features that should be included or excluded (positive number to include, negative to exclude). Can be one or multiple. A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace!")
+    .arg(arg!(-f --features "The numbers of the features that should be included or excluded (positive number to include, negative to exclude). Can be one or multiple. A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace! This should be the last option, because of the multiple possible arguments")
         .requires("file_path")
+        .value_parser(value_parser!(i32))
         .value_name("FEATURE/S")
         .allow_hyphen_values(true)
         .takes_value(true)
@@ -54,35 +55,30 @@ fn main() {
         .takes_value(true))
     .arg(arg!(-d --ddnnf "Save the smooth ddnnf in the c2d format. Default output file is out.nnf. Alternatively, you can choose a name. The .nnf ending is added automatically")
         .requires("file_path")
-        .takes_value(true)
-        .default_value("out"))
+        .value_parser(value_parser!(String))
+        .min_values(0))
     .arg(arg!(-n --threads "Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
         .requires("file_path")
+        .value_parser(value_parser!(u16).range(1..33))
         .value_name("NUMBER OF THREADS")
         .takes_value(true))
     .arg(arg!(--heuristics "Provides information about the type of nodes, their connection and the different paths.")
         .requires("file_path")
         .takes_value(false))
-    .arg(arg!(-s --save_as "Allows a custom file name for output file for the cardinality of features and file queries. The appropiate file ending gets added automcaticly.")
+    .arg(arg!(-s --save_as "Allows a custom file name for output file for the cardinality of features and file queries. The appropiate file ending gets added automcaticly. The option gets ignored if neither -c nor -q is provided.")
         .requires("file_path")
+        .value_parser(value_parser!(String))
         .value_name("CUSTOM OUTPUT FILE NAME")
-        .takes_value(true))
+        .takes_value(true)
+        .default_value("out"))
     .get_matches();
-
-    if matches.contains_id("heuristics") {
-        let mut ddnnf: Ddnnf =
-            dparser::build_ddnnf_tree(matches.value_of("file_path").unwrap());
-        ddnnf.print_all_heuristics();
-        process::exit(0);
-    }
 
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
     let mut ddnnf: Ddnnf;
 
     if matches.contains_id("ommited_features") {
-        let ommited_features: u32 = *matches.get_one("ommited_features")
-            .expect("[Error]: Invalid input for the number of ommited features! Aborting...");
+        let ommited_features: u32 = *matches.get_one("ommited_features").unwrap();
         ddnnf = dparser::build_d4_ddnnf_tree(
             matches.value_of("file_path").unwrap(),
             ommited_features,
@@ -108,32 +104,22 @@ fn main() {
         );
     }
 
+    // print the heuristics
+    if matches.contains_id("heuristics") {
+        ddnnf.print_all_heuristics();
+        process::exit(0);
+    }
+
     // change the number of threads used for cardinality of features and partial configurations
     if matches.contains_id("threads") {
-        let threads: u16 = match matches
-            .value_of("threads")
-            .unwrap()
-            .parse::<u16>()
-        {
-            Ok(x) => {
-                if x > 32 {
-                    32
-                } else {
-                    x
-                }
-            }
-            Err(e) => panic!(
-                "[Error]: {:?}\nInvalid input for number of threads! Aborting...",
-                e
-            ),
-        };
-        ddnnf.max_worker = threads;
+        ddnnf.max_worker = *matches.get_one("threads").unwrap();
     }
 
     // computes the cardinality for the partial configuration that can be mentioned with parameters
     if matches.contains_id("features") {
         let features: Vec<i32> =
-            dparser::parse_features(matches.values_of_lossy("features"));
+                matches.get_many("features")
+                .expect("invalid format for features").copied().collect();
         ddnnf.execute_query(features);
     }
 
@@ -143,7 +129,7 @@ fn main() {
         let file_path_in = matches.value_of("queries").unwrap();
         let file_path_out = &format!(
             "{}{}",
-            matches.value_of("save_as").unwrap_or("out"),
+            matches.get_one::<String>("save_as").unwrap().as_str(),
             ".txt"
         );
 
@@ -189,9 +175,15 @@ fn main() {
                         other => {
                             let features: Option<Vec<i32>> = other.split_whitespace().map(|elem|
                             match elem.to_string().parse::<i32>() {
-                                Ok(s) => Some(s),
+                                // check if input is within the valid range
+                                Ok(s) => if s.abs() > ddnnf.number_of_variables as i32 || s == 0 {
+                                    println!("The feature number {} is out of the range of 1 to {}. Please try again.", s, ddnnf.number_of_variables);
+                                    None
+                                } else {
+                                    Some(s)
+                                },
                                 Err(e) => {
-                                    println!("The followin parsing error occured: {}. Please try again.", e);
+                                    println!("{}. Please try again.", e);
                                     None
                                 },
                             }).collect();
@@ -243,12 +235,14 @@ fn main() {
         );
     }
 
+    // writes the d-DNNF to file
     if matches.contains_id("ddnnf") {
         let path = &format!(
             "{}{}",
-            matches.value_of("ddnnf").unwrap(),
+            matches.get_one::<String>("ddnnf").get_or_insert(&String::from("out")).as_str(),
             ".nnf"
         );
-        write_ddnnf(ddnnf, path).unwrap();        
+        write_ddnnf(ddnnf, path).unwrap();
+        println!("The smooth d-DNNF was written into the c2d format in {}.", path);
     }
 }
