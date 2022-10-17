@@ -14,7 +14,15 @@ out*
 perf_analyse.sh
 history.txt
 tarpaulin-report.html
+tmp/
+valcom
+build.rs
+*.csv
+*.zip
 
 # docker
 dockerfile
 .dockerignore
+
+# vsc
+.idea
