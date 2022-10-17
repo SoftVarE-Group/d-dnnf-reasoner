@@ -182,7 +182,7 @@ fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
 }
 
 #[allow(non_snake_case)]
-pub fn serialize_C2DToken(C2DToken: C2DToken) -> String {
+pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
     match C2DToken {
         Header { nodes, edges, variables } => format!("nnf {} {} {}\n", nodes, edges, variables),
         And { children: c} => {
@@ -281,30 +281,30 @@ mod test {
     fn test_serialization() {
         let header: C2DToken = Header { nodes: 10, edges: 20, variables: 30};
         let header_s: String = String::from("nnf 10 20 30\n");
-        assert_eq!(serialize_C2DToken(header), header_s);
+        assert_eq!(deconstruct_C2DToken(header), header_s);
 
         let and: C2DToken = And { children: vec![1, 2, 3, 4, 5]};
         let and_s: String = String::from("A 5 1 2 3 4 5\n");
-        assert_eq!(serialize_C2DToken(and), and_s);
+        assert_eq!(deconstruct_C2DToken(and), and_s);
 
         let or: C2DToken = Or { decision: 42, children: vec![1, 2]};
         let or_s: String = String::from("O 42 2 1 2\n");
-        assert_eq!(serialize_C2DToken(or), or_s);
+        assert_eq!(deconstruct_C2DToken(or), or_s);
 
         let p_literal: C2DToken = Literal { feature: 4269 };
         let p_literal_s: String = String::from("L 4269\n");
-        assert_eq!(serialize_C2DToken(p_literal), p_literal_s);
+        assert_eq!(deconstruct_C2DToken(p_literal), p_literal_s);
 
         let n_literal: C2DToken = Literal { feature: -4269 };
         let n_literal_s: String = String::from("L -4269\n");
-        assert_eq!(serialize_C2DToken(n_literal), n_literal_s);
+        assert_eq!(deconstruct_C2DToken(n_literal), n_literal_s);
 
         let ttrue: C2DToken = True;
         let ttrue_s: String = String::from("A 0\n");
-        assert_eq!(serialize_C2DToken(ttrue), ttrue_s);
+        assert_eq!(deconstruct_C2DToken(ttrue), ttrue_s);
 
         let tfalse: C2DToken = False;
         let tfalse_s: String = String::from("O 0 0\n");
-        assert_eq!(serialize_C2DToken(tfalse), tfalse_s);
+        assert_eq!(deconstruct_C2DToken(tfalse), tfalse_s);
     }
 }

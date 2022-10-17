@@ -4,7 +4,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-use clap::{AppSettings, Arg, arg, ArgAction, Command, value_parser};
+use clap::{AppSettings, Arg, arg, Command, value_parser};
 
 extern crate colour;
 use colour::{green, yellow_ln};
@@ -16,7 +16,7 @@ use std::process::{self};
 use std::time::Instant;
 
 use ddnnf_lib::data_structure::Ddnnf;
-use ddnnf_lib::parser::{self as dparser};
+use ddnnf_lib::parser::{self as dparser, write_ddnnf};
 
 fn main() {
     let matches = Command::new("ddnnife")
@@ -52,6 +52,10 @@ fn main() {
         .value_parser(value_parser!(u32))
         .value_name("OMMITED FEATURES")
         .takes_value(true))
+    .arg(arg!(-d --ddnnf "Save the smooth ddnnf in the c2d format. Default output file is out.nnf. Alternatively, you can choose a name. The .nnf ending is added automatically")
+        .requires("file_path")
+        .takes_value(true)
+        .default_value("out"))
     .arg(arg!(-n --threads "Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
         .requires("file_path")
         .value_name("NUMBER OF THREADS")
@@ -237,5 +241,14 @@ fn main() {
             elapsed_time,
             elapsed_time / ddnnf.number_of_variables as f64
         );
+    }
+
+    if matches.contains_id("ddnnf") {
+        let path = &format!(
+            "{}{}",
+            matches.value_of("ddnnf").unwrap(),
+            ".nnf"
+        );
+        write_ddnnf(ddnnf, path).unwrap();        
     }
 }

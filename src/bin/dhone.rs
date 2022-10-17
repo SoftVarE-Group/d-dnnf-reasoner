@@ -59,7 +59,7 @@ fn main() {
 
         for token in token_stream {
             buf_writer
-                .write_all(c2d_lexer::serialize_C2DToken(token).as_bytes())
+                .write_all(c2d_lexer::deconstruct_C2DToken(token).as_bytes())
                 .expect("Unable to write data");
         }
 
