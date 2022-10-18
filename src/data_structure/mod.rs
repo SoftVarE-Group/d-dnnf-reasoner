@@ -1,3 +1,5 @@
+mod anomalies;
+
 use rug::{Assign, Complete, Float, Integer};
 
 use std::{
@@ -132,28 +134,6 @@ impl Ddnnf {
         ddnnf.get_core();
         ddnnf.get_dead();
         ddnnf
-    }
-
-    /// Computes all core features
-    /// A feature is a core feature iff there exists only the positiv occurence of that feature
-    fn get_core(&mut self) {
-        self.core = (1..=self.number_of_variables as i32)
-            .filter(|f| {
-                self.literals.get(f).is_some()
-                    && self.literals.get(&-f).is_none()
-            })
-            .collect::<HashSet<i32>>()
-    }
-
-    /// Computes all dead features
-    /// A feature is a dead feature iff there exists only the negativ occurence of that feature
-    fn get_dead(&mut self) {
-        self.dead = (1..=self.number_of_variables as i32)
-            .filter(|f| {
-                self.literals.get(f).is_none()
-                    && self.literals.get(&-f).is_some()
-            })
-            .collect::<HashSet<i32>>()
     }
 
     #[inline]
