@@ -1,4 +1,4 @@
-name: Rust
+name: reasoner CI
 
 on:
   push:
@@ -17,6 +17,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build
-      run: cargo build --release
-    - name: Run tests
-      run: cargo test --release
+      run: cargo build
+    - name: Doc-tests
+      run: cargo test --doc
+    - name: Integration-tests
+      run: cargo test --release --tests
