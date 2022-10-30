@@ -11,14 +11,19 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
     - name: Build
       run: cargo build
+      
+  Doc-tests:
+    runs-on: ubuntu-latest
+    steps:
     - name: Doc-tests
       run: cargo test --doc
+      
+  Integration-tests:
+    runs-on: ubuntu-latest
+    steps:
     - name: Integration-tests
       run: cargo test --release --tests
