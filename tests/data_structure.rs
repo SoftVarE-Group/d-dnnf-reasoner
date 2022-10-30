@@ -77,6 +77,6 @@ fn card_of_pc_test() {
 #[test]
 fn heuristics_test() {
     let mut ddnnf: Ddnnf =
-        parser::build_ddnnf_tree("./tests/data/auto1_c2d.nnf");
+        parser::build_ddnnf_tree_with_extras("./tests/data/auto1_c2d.nnf");
     ddnnf.print_all_heuristics();
 }

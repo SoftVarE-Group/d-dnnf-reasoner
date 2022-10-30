@@ -37,7 +37,6 @@ use petgraph::{
 ///
 /// let file_path = "./tests/data/small_test.dimacs.nnf";
 ///
-/// let ddnnf: Ddnnf = parser::build_ddnnf_tree(file_path);
 /// let ddnnfx: Ddnnf = parser::build_ddnnf_tree_with_extras(file_path);
 /// ```
 ///
@@ -45,52 +44,6 @@ use petgraph::{
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf_tree(path: &str) -> Ddnnf {
-    use C2DToken::*;
-    
-    let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
-
-    let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let mut nodes = 0; let mut variables: usize = 0;
-    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim()).unwrap().1 {
-        nodes = n; variables = v;
-    };
-
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
-
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
-    // works off each line of the file data seperatly
-    for line in buf_reader {
-        let line = line.expect("Unable to read line");
-        let next = match lex_line(line.trim()).unwrap().1 {
-            And { children } => Node::new_and(
-                calc_and_count(&mut parsed_nodes, &children),
-                children,
-            ),
-            Or { decision, children } => {
-                Node::new_or(
-                    decision,
-                    calc_or_count(&mut parsed_nodes, &children),
-                    children,
-                )
-            }
-            Literal { feature } => Node::new_literal(feature),
-            True => Node::new_bool(true),
-            False => Node::new_bool(false),
-            _ => panic!(
-                "Tried to parse the header of the .nnf at the wrong time"
-            ),
-        };
-
-        parsed_nodes.push(next);
-    }
-
-    Ddnnf::new(parsed_nodes, HashMap::new(), variables as u32, nodes)
-}
-
-#[inline]
-/// Adds the parent connection as well as the hashmpa for the literals and their corresponding position in the vector
-/// Works analog to build_ddnnf_tree()
 pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
     use C2DToken::*;
 
