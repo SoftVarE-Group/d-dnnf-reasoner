@@ -2,13 +2,14 @@ pub mod c2d_lexer;
 use c2d_lexer::{lex_line, TId, C2DToken};
 
 pub mod d4_lexer;
+use colour::{red, green, yellow};
 use d4_lexer::{lex_line_d4, D4Token};
 
 use core::panic;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    rc::Rc, fs::File, io::{LineWriter, Write},
+    rc::Rc, fs::File, io::{LineWriter, Write}, process
 };
 
 use rug::{Integer, Complete};
@@ -50,11 +51,18 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
     let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
 
     let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let mut nodes = 0; let mut variables: usize = 0;
-    if let Header { nodes: n, edges: _, variables: v } = lex_line(first_line.trim())
-            .expect(format!("[ERROR] the first line of the file: \"{}\" isn't a header!", first_line.trim()).as_str()).1 {
-        nodes = n; variables = v;
-    };
+    let nodes; let variables;
+
+    match lex_line(first_line.trim()) {
+        Ok((_, Header { nodes: n, edges: _, variables: v })) => { nodes = n; variables = v; },
+        Ok(_) | Err(_) => { // tried to parse the d4 standard without -o option which results in trying to parse the c2d standard
+            red!("error: "); print!("the first line of the file isn't a header!\n\nYou probably should use the option: ");
+            yellow!("'--ommited_features <OMMITED FEATURES>'");
+            print!(".\nFor more information try "); green!("--help\n");
+            process::exit(1);
+        },
+    }
+
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
 
     let mut literals: HashMap<i32, usize> = HashMap::new();
