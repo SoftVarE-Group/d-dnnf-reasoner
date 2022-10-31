@@ -28,7 +28,7 @@ fn main() {
     let matches = App::new("dhone")
     .global_settings(&[AppSettings::ColoredHelp])
     .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
-    .version("0.4.0")
+    .version("0.5.0")
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("FILE PATH")
         .display_order(1)

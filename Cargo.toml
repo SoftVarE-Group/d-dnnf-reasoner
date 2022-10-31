@@ -1,6 +1,6 @@
 [package]
 name = "ddnnf_reasoning"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Heiko Raab; heiko.raab@uni-ulm-de", "Chico Sundermann; chico.sundermann@uni-ulm.de"]
 edition = "2018"
 license = "GNU LGPL-2.1"

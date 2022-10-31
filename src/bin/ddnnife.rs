@@ -22,7 +22,7 @@ fn main() {
     let mut matches = Command::new("ddnnife")
     .global_settings(&[AppSettings::ColoredHelp])
     .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
-    .version("0.4.0")
+    .version("0.5.0")
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("file_path")
         .value_name("FILE PATH")

@@ -166,7 +166,7 @@ dependencies = [
 
 [[package]]
 name = "ddnnf_reasoning"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "colour",
