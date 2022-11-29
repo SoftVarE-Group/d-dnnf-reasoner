@@ -12,6 +12,7 @@ use colour::{green, yellow_ln};
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use std::io::{self, Write, BufRead};
 use std::path::Path;
 use std::time::Instant;
 
@@ -35,6 +36,9 @@ fn main() {
         .allow_hyphen_values(true)
         .takes_value(true)
         .multiple(true))
+    .arg(arg!(--stream "The stream API")
+        .requires("file_path")
+        .takes_value(false))
     .arg(arg!(-i --interactive "The interactive mode allows the computation of multiple queries one after another by typing the query into the console. This mode is way slower then loading the queries with a file!\nThis mode also requires a file path to a file in dimacs format. There are the following options in interactive mode:\n[feature numbers with the same format as in -f]: computes the cardinality of partial configurations\nexit: closes the application (CTRL+C and CTRL+D also work)\nhelp: prints help information")
         .requires("file_path")
         .takes_value(false))
@@ -83,8 +87,7 @@ fn main() {
 
         let elapsed_time = time.elapsed().as_secs_f32();
         println!(
-            "Ddnnf overall count: {:#?}\n
-            Elapsed time for parsing and overall count in seconds: {:.3}s.",
+            "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
             ddnnf.rc(),
             elapsed_time
         );
@@ -94,8 +97,7 @@ fn main() {
         );
         let elapsed_time = time.elapsed().as_secs_f32();
         println!(
-            "Ddnnf overall count: {:#?}\n
-            Elapsed time for parsing and overall count in seconds: {:.3}s.",
+            "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
             ddnnf.rc(),
             elapsed_time
         );
@@ -230,6 +232,31 @@ fn main() {
             }
         }
         rl.save_history("history.txt").unwrap();
+    }
+
+
+    // switch in the stream mode
+    if matches.contains_id("stream") {
+        let mut buffer = String::new();
+        
+        let stdin = io::stdin();
+        let mut handle_in = stdin.lock();
+        
+        let stdout = io::stdout();
+        let mut handle_out = stdout.lock();
+
+        handle_out.write_all(b"entered stream mode. starting loop..\n\n").unwrap();
+        handle_out.flush().unwrap();
+
+        loop {
+            buffer.clear();
+            handle_in.read_line(&mut buffer).unwrap();
+
+            if buffer == "exit\n" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
+            
+            handle_out.write_all(format!("{}\n", buffer).as_bytes()).unwrap();
+            handle_out.flush().unwrap();
+        }
     }
 
     // writes the d-DNNF to file
