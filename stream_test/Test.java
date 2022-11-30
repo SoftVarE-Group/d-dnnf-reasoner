@@ -14,6 +14,8 @@ public class Test {
         watch(process);
     }
 
+    final static int QUERIES = 1;
+
     private static void watch(final Process process) {
         new Thread() {
             public void run() {
@@ -29,16 +31,28 @@ public class Test {
                         }
 
                         System.out.print(">> ");
-                        prcOut.write(sysIn.readLine() + "\n");
-                        prcOut.flush();
-                    } catch (NullPointerException e) {
+                        String userInput = sysIn.readLine();
+                        for (int i = 0; i < QUERIES; ++i) {
+                            prcOut.write(userInput + "\n");
+                            prcOut.flush();
+                        }
+                        for (int i = 0; i < QUERIES - 1; ++i) {
+                            while (!(line = prcIn.readLine()).equals("")) {
+                                System.out.println("i: " + i + " " + line);
+                            }
+                        }
+                    } catch (Exception e) {
                         System.out.println("Shutting down without an exception :D");
+                        System.out.println("Exception: " + e);
                         break;
-                    } catch (IOException e) {
-                        e.printStackTrace();
                     }
                 }
             }
         }.start();
     }
 }
+
+/**
+ * core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370
+ * count p 1 \n count p 1 \n count p 1
+ */

@@ -6,14 +6,9 @@ import java.io.InputStreamReader;
 class StreamGobbler extends Thread
 {
     private InputStream is;
-    private String myMessage;
 
     public StreamGobbler(InputStream istream) {
         this.is = istream;
-    }
-
-    public String getMessage() {
-        return this.myMessage;
     }
 
     @Override
@@ -28,8 +23,7 @@ class StreamGobbler extends Thread
             while ((read = br.read(ch, 0, size)) >= 0) {
                 buffer.append(ch, 0, read);
             }
-        }
-        catch (Exception ioe) {
+        } catch (Exception ioe) {
             ioe.printStackTrace();
         }
         finally {
@@ -39,6 +33,6 @@ class StreamGobbler extends Thread
                 e.printStackTrace();
             }
         }
-        this.myMessage = buffer.toString();
+        System.err.println(buffer);
     }
 }
