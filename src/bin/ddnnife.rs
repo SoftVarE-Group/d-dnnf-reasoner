@@ -9,11 +9,14 @@ use clap::{AppSettings, Arg, arg, Command, value_parser};
 extern crate colour;
 use colour::{green, yellow_ln};
 
+use ddnnf_lib::handle_stream_msg;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use std::io::{self, Write, BufRead};
 use std::path::Path;
+use std::sync::mpsc::{self, Receiver};
+use std::thread::{self};
 use std::time::Instant;
 
 use ddnnf_lib::data_structure::Ddnnf;
@@ -237,10 +240,7 @@ fn main() {
 
     // switch in the stream mode
     if matches.contains_id("stream") {
-        let mut buffer = String::new();
-        
-        let stdin = io::stdin();
-        let mut handle_in = stdin.lock();
+        let stdin_channel = spawn_stdin_channel();
         
         let stdout = io::stdout();
         let mut handle_out = stdout.lock();
@@ -249,13 +249,23 @@ fn main() {
         handle_out.flush().unwrap();
 
         loop {
-            buffer.clear();
-            handle_in.read_line(&mut buffer).unwrap();
+            match stdin_channel.recv() {
+                Ok(mut buffer) => {
+                    buffer.pop();
 
-            if buffer == "exit\n" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
-            
-            handle_out.write_all(format!("{}\n", buffer).as_bytes()).unwrap();
-            handle_out.flush().unwrap();
+                    handle_out.write_all(format!("got: {}\n", buffer).as_bytes()).unwrap();
+
+                    let response = handle_stream_msg(&buffer, &mut ddnnf);
+                    if response == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
+                    
+                    handle_out.write_all(format!("{}\n\n", response).as_bytes()).unwrap();
+                    handle_out.flush().unwrap();
+                },
+                Err(e) => {
+                    handle_out.write_all(format!("error while receiving msg: {}\n", e).as_bytes()).unwrap();
+                    handle_out.flush().unwrap();
+                },
+            }
         }
     }
 
@@ -268,4 +278,18 @@ fn main() {
         write_ddnnf(ddnnf, path).unwrap();
         println!("The smooth d-DNNF was written into the c2d format in {}.", path);
     }
+}
+
+fn spawn_stdin_channel() -> Receiver<String> {
+    let (tx, rx) = mpsc::channel::<String>();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        let mut handle_in = stdin.lock();
+        loop {
+            let mut buffer = String::new();
+            handle_in.read_line(&mut buffer).unwrap();
+            tx.send(buffer).unwrap();
+        }
+    });
+    rx
 }
