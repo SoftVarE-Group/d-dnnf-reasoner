@@ -14,7 +14,7 @@ public class Test {
         watch(process);
     }
 
-    final static int QUERIES = 1;
+    final static int QUERIES = 10;
 
     private static void watch(final Process process) {
         new Thread() {
@@ -23,20 +23,24 @@ public class Test {
                 final BufferedReader prcIn = new BufferedReader(new InputStreamReader(process.getInputStream()));
                 final BufferedWriter prcOut = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
 
+                String line;
+                try {
+                    while (!(line = prcIn.readLine()).equals("")) {
+                        System.out.println(line);
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
                 while(true) {
                     try {
-                        String line;
-                        while (!(line = prcIn.readLine()).equals("")) {
-                            System.out.println(line);
-                        }
-
                         System.out.print(">> ");
                         String userInput = sysIn.readLine();
-                        for (int i = 0; i < QUERIES; ++i) {
+                        for (int i = 0; i <= QUERIES; ++i) {
                             prcOut.write(userInput + "\n");
                             prcOut.flush();
                         }
-                        for (int i = 0; i < QUERIES - 1; ++i) {
+                        for (int i = 0; i <= QUERIES; ++i) {
                             while (!(line = prcIn.readLine()).equals("")) {
                                 System.out.println("i: " + i + " " + line);
                             }
@@ -51,8 +55,3 @@ public class Test {
         }.start();
     }
 }
-
-/**
- * core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370
- * count p 1 \n count p 1 \n count p 1
- */
