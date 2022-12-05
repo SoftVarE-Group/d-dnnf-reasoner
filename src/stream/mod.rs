@@ -1,18 +1,22 @@
 use crate::Ddnnf;
 
 /// error codes:
-/// 1 Operation is not yet supported
-/// 2 Operation does not exist. Neither now nor in the future
-/// 3 Parse error
-/// 4 Syntax error
+/// E1 Operation is not yet supported
+/// E2 Operation does not exist. Neither now nor in the future
+/// E3 Parse error
+/// E4 Syntax error
 
 pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
     let args: Vec<&str> = msg.split_whitespace().collect();
-    if args.len() == 0 { return String::from("error: got an empty msg"); }
+    if args.is_empty() {
+        return String::from("E4 error: got an empty msg");
+    }
 
-    let mut param_index = 1; let mut previous_param_index = 0;
-    let mut params = Vec::new(); let mut values = Vec::new();
-    
+    let mut param_index = 1;
+    let mut previous_param_index = 0;
+    let mut params = Vec::new();
+    let mut values = Vec::new();
+
     // go through all possible extra values that can be provided til
     // either there are no more or we can't parse anymore
     while param_index < args.len() && param_index != previous_param_index {
@@ -22,7 +26,7 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
             param_index += 1;
             params = match get_numbers(&args[param_index..]) {
                 Ok(v) => v,
-                Err(e) => return e
+                Err(e) => return e,
             };
             param_index += params.len();
         }
@@ -31,50 +35,112 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
             param_index += 1;
             values = match get_numbers(&args[param_index..]) {
                 Ok(v) => v,
-                Err(e) => return e
+                Err(e) => return e,
             };
             param_index += values.len();
         }
     }
 
     if param_index == previous_param_index {
-        return String::from("error: could not use all parameters provided");
+        return String::from("E4 error: could not use all parameters provided");
     }
 
     println!("params: {:?}, values: {:?}, param_index: {:?}, previous_param_index: {:?}",
         params, values, param_index, previous_param_index);
 
-
     match args[0] {
-        "core" => return params.iter()
-            .filter(|&p| if p.is_positive() { ddnnf.core.contains(p) } else { ddnnf.dead.contains(&p.abs()) })
-            .map(|v| v.to_string())
-            .collect::<Vec<String>>().join(" "),
-        "count" => return ddnnf.card_of_partial_config_with_marker(&params).to_string(),
-        "sat" => (ddnnf.card_of_partial_config_with_marker(&params) != 0).to_string(),
-        "exit" => return String::from("exit"),
-        "atomic" | "random" | "uni random"|
-        "t-wise sampling" | "enum" => return String::from("1 error: not yet supported"), 
-        _ => return String::from("2 error: is not supported"),
+        "core" => op_with_assumptions_and_vars(
+            |d, x| {
+                let could_be_core = x.pop().unwrap();
+                let without_cf =
+                    Ddnnf::card_of_partial_config_with_marker(d, x);
+                x.push(could_be_core);
+                let with_cf = Ddnnf::card_of_partial_config_with_marker(d, x);
+
+                if with_cf == without_cf {
+                    Some(could_be_core)
+                } else {
+                    None
+                }
+            },
+            ddnnf,
+            &mut params,
+            &values,
+            false
+        ),
+        "count" => op_with_assumptions_and_vars(
+            |d, x| Some(Ddnnf::card_of_partial_config_with_marker(d, x)),
+            ddnnf,
+            &mut params,
+            &values,
+            true
+        ),
+        "sat" => op_with_assumptions_and_vars(
+            |d, x| {
+                Some(Ddnnf::card_of_partial_config_with_marker(d, x) > 0)
+            },
+            ddnnf,
+            &mut params,
+            &values,
+            true
+        ),
+        "exit" => String::from("exit"),
+        "atomic" | "random" | "uni_random" | "t-wise_sampling" | "enum" => {
+            String::from("E1 error: not yet supported")
+        }
+        _ => String::from("E2 error: is not supported"),
     }
+}
+
+fn op_with_assumptions_and_vars<T: ToString>(
+    operation: fn(&mut Ddnnf, &mut Vec<i32>) -> Option<T>,
+    ddnnf: &mut Ddnnf,
+    assumptions: &mut Vec<i32>,
+    vars: &[i32],
+    can_handle_empty_vars: bool
+) -> String {
+    let mut response = Vec::new();
+    for var in vars {
+        assumptions.push(*var);
+        match operation(ddnnf, assumptions) {
+            Some(v) => response.push(v.to_string()),
+            None => (),
+        }
+        assumptions.pop();
+    }
+
+    if vars.is_empty() {
+        if !assumptions.is_empty() || can_handle_empty_vars {
+            match operation(ddnnf, assumptions) {
+                Some(v) => response.push(v.to_string()),
+                None => (),
+            }
+        } else {
+            return String::from("E4 error: can't compute if features are core if no features are supplied");
+        }
+    }
+
+    response.join(";")
 }
 
 fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
     let mut numbers = Vec::new();
     for param in params.iter() {
-        if param.chars().all(|c| c.is_alphabetic()) {
+        if param.chars().any(|c| c.is_alphabetic()) {
             return Ok(numbers);
         }
         match param.parse::<i32>() {
             Ok(num) => numbers.push(num),
-            Err(e) => return Err(format!("3 error: {}", e.to_string())),
+            Err(e) => return Err(format!("E3 error: {}", e)),
         }
     }
-    if numbers.len() == 0 {
-        return Err(String::from("4 error: option used but there was not value supplied"))
+    if numbers.is_empty() {
+        return Err(String::from(
+            "E4 error: option used but there was not value supplied",
+        ));
     }
 
-    return Ok(numbers);
+    Ok(numbers)
 }
 
 #[cfg(test)]
@@ -84,10 +150,8 @@ mod test {
 
     #[test]
     fn handle_stream_msg_test() {
-        let mut auto1: Ddnnf = build_d4_ddnnf_tree(
-            "example_input/auto1_d4.nnf",
-            2513,
-        );
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
 
         // core are 20 and 2122. dead are 177 and 2370
         let test0: &str = "core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370";
@@ -104,21 +168,135 @@ mod test {
     }
 
     #[test]
-    fn test_get_numbers() {
-        let test1 = vec!["1", "-2", "3"];
-        let test2 = vec!["1", "-2", "3", "v", "4"];
-        let test3 = vec!["1", "-2", "3", " ", "4"];
+    fn handle_stream_msg_core_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+
+        assert_eq!(
+            String::from("20;-58"),
+            handle_stream_msg("core v 20 -20 58 -58", &mut auto1)
+        );
+        assert_eq!(
+            String::from("67;-58"),
+            handle_stream_msg("core p 20 v 1 67 -58", &mut auto1)
+        );
+        assert_eq!(
+            String::from(""),
+            handle_stream_msg("core p 1", &mut auto1)
+        );
+        assert_eq!(
+            String::from("4;5;6"), // count p 1 2 3 == 0
+            handle_stream_msg("core p 1 2 3 v 4 5 6", &mut auto1)
+        );
+
+        assert_eq!(
+            String::from("E4 error: can't compute if features are core if no features are supplied"),
+            handle_stream_msg("core", &mut auto1)
+        );
+    }
+
+    #[test]
+    fn handle_stream_msg_count_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+
+        assert_eq!(
+            String::from("1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000;44558490301175088812121229002380743156731839067219819764321860535061593824456157036646879771006312148798957047211355633063364007335639360623647085885718285895752858908864905172260153747031300505600000000000000000000000;387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000"),
+            handle_stream_msg("count v 1 -2 3", &mut auto1)
+        );
+        assert_eq!(
+            String::from("0;0"),
+            handle_stream_msg("count p -1469 -1114 939 1551 v 1 1529", &mut auto1)
+        );
         
-        assert_eq!(get_numbers(&test1), Ok(vec![1,-2,3]));
-        assert_eq!(get_numbers(&test2), Ok(vec![1,-2,3]));
-        assert_eq!(get_numbers(&test3), Err(String::from("error: invalid digit found in string")));
+        assert_eq!(
+            auto1.rc().to_string(),
+            handle_stream_msg("count", &mut auto1)
+        );
+        assert_eq!(
+            handle_stream_msg("count v 123 -1111", &mut auto1),
+            vec![handle_stream_msg("count p 123", &mut auto1), handle_stream_msg("count p -1111", &mut auto1)].join(";")
+        );
+    }
 
-        let test4 = vec!["a", "1", "-2", "3"];
-        let test5 = vec!["1", "-2", "3.0", "v", "4"];
-        let test6 = vec!["1", "-2", "--3", " ", "4"];
+    #[test]
+    fn handle_stream_msg_sat_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
 
-        assert_eq!(get_numbers(&test4), Ok(vec![]));
-        assert_eq!(get_numbers(&test5), Err(String::from("error: invalid digit found in string")));
-        assert_eq!(get_numbers(&test6), Err(String::from("error: invalid digit found in string")));
+        assert_eq!(
+            String::from("true;true;false"),
+            handle_stream_msg("sat v 1 -2 58", &mut auto1)
+        );
+        assert_eq!(
+            String::from("false;false"),
+            handle_stream_msg("sat p -1469 -1114 939 1551 v 1 1529", &mut auto1)
+        );
+        assert_eq!(
+            (auto1.rc() > 0).to_string(),
+            handle_stream_msg("sat", &mut auto1)
+        );
+        assert_eq!(
+            handle_stream_msg("sat v 1 58", &mut auto1),
+            vec![handle_stream_msg("sat p 1", &mut auto1), handle_stream_msg("sat p 58", &mut auto1)].join(";")
+        );
+    }
+
+    #[test]
+    fn handle_stream_msg_error_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+        assert_eq!(
+            String::from("E4 error: got an empty msg"),
+            handle_stream_msg("", &mut auto1)
+        );
+        assert_eq!(
+            String::from("E4 error: could not use all parameters provided"),
+            handle_stream_msg("count p 1 v 2 another_param 3", &mut auto1)
+        );
+
+        assert_eq!(
+            String::from("E1 error: not yet supported"),
+            handle_stream_msg("t-wise_sampling p 1 v 2", &mut auto1)
+        );
+        assert_eq!(
+            String::from("E2 error: is not supported"),
+            handle_stream_msg("revive_dinosaurs p 1 v 2", &mut auto1)
+        );
+    }
+
+    #[test]
+    fn test_get_numbers() {
+        assert_eq!(
+            Ok(vec![1, -2, 3]),
+            get_numbers(vec!["1", "-2", "3"].as_ref())
+        );
+        assert_eq!(
+            Ok(vec![1, -2, 3]),
+            get_numbers(vec!["1", "-2", "3", "v", "4"].as_ref())
+        );
+
+        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "3"].as_ref()));
+        assert_eq!(
+            Ok(vec![]),
+            get_numbers(vec!["another_param", "1", "-2", "3"].as_ref())
+        );
+
+        assert_eq!(
+            Err(String::from("E3 error: invalid digit found in string")),
+            get_numbers(vec!["1", "-2", "3", " ", "4"].as_ref())
+        );
+        assert_eq!(
+            Err(String::from("E3 error: invalid digit found in string")),
+            get_numbers(vec!["1", "-2", "3.0", "v", "4"].as_ref())
+        );
+        assert_eq!(
+            Err(String::from("E3 error: invalid digit found in string")),
+            get_numbers(vec!["1", "-2", "--3", " ", "4"].as_ref())
+        );
+        assert_eq!(
+            Err(String::from("E4 error: option used but there was not value supplied")),
+            get_numbers(vec![].as_ref())
+        );
     }
 }
