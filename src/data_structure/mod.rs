@@ -487,8 +487,8 @@ impl Ddnnf {
     /// let file_path = "./tests/data/small_test.dimacs.nnf";
     /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
     ///
-    /// ddnnf.execute_query(vec![3,1]); // 3
-    /// ddnnf.execute_query(vec![3]); // also 3
+    /// ddnnf.execute_query_interactive(vec![3,1]); // 3
+    /// ddnnf.execute_query_interactive(vec![3]); // also 3
     ///
     /// ```
     pub fn execute_query_interactive(&mut self, mut features: Vec<i32>) {
@@ -540,7 +540,21 @@ impl Ddnnf {
     }
 
     /// executes a query
-    /// we use the in our opinion best type of query depending on the amount of features 
+    /// we use the in our opinion best type of query depending on the amount of features
+    /// 
+    /// # Example
+    /// ```
+    /// extern crate ddnnf_lib;
+    /// use ddnnf_lib::data_structure::*;
+    /// use ddnnf_lib::parser::*;
+    /// use rug::Integer;
+    ///
+    /// // create a ddnnf
+    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    ///
+    /// assert_eq!(3, ddnnf.execute_query(&vec![3,1]));
+    /// assert_eq!(3, ddnnf.execute_query(&vec![3]));
     pub fn execute_query(&mut self, features: &[i32]) -> Integer {
         match features.len() {
             0 => self.rc(),
