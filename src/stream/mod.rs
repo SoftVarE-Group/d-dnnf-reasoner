@@ -52,8 +52,7 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
         "core" => op_with_assumptions_and_vars(
             |d, x| {
                 let could_be_core = x.pop().unwrap();
-                let without_cf =
-                    Ddnnf::card_of_partial_config_with_marker(d, x);
+                let without_cf = Ddnnf::execute_query(d, x);
                 x.push(could_be_core);
                 let with_cf = Ddnnf::card_of_partial_config_with_marker(d, x);
 
@@ -69,26 +68,76 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
             false
         ),
         "count" => op_with_assumptions_and_vars(
-            |d, x| Some(Ddnnf::card_of_partial_config_with_marker(d, x)),
+            |d, x| Some(Ddnnf::execute_query(d, x)),
             ddnnf,
             &mut params,
             &values,
             true
         ),
         "sat" => op_with_assumptions_and_vars(
-            |d, x| {
-                Some(Ddnnf::card_of_partial_config_with_marker(d, x) > 0)
-            },
+            |d, x| Some(Ddnnf::execute_query(d, x) > 0),
             ddnnf,
             &mut params,
             &values,
             true
         ),
+        "enum" => compute_all_enumeration(ddnnf, &mut params),
         "exit" => String::from("exit"),
-        "atomic" | "random" | "uni_random" | "t-wise_sampling" | "enum" => {
+        "atomic" | "random" | "uni_random" | "t-wise_sampling" => {
             String::from("E1 error: not yet supported")
         }
         _ => String::from("E2 error: is not supported"),
+    }
+}
+
+fn compute_all_enumeration(
+    ddnnf: &mut Ddnnf,
+    assumptions: &mut Vec<i32>,
+) -> String {
+    let mut set_features = assumptions;
+    let mut sol = Vec::new();
+    enumeration_step(ddnnf, &mut set_features, &mut sol);
+
+    sol.iter()
+        .map(|res| {
+            res.iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        })
+        .collect::<Vec<String>>()
+        .join(";")
+}
+
+fn enumeration_step(
+    ddnnf: &mut Ddnnf,
+    set_features: &mut Vec<i32>,
+    solutions: &mut Vec<Vec<i32>>,
+) {
+    if set_features.len() == ddnnf.number_of_variables as usize {
+        solutions.push(set_features.to_vec().clone());
+        return;
+    } else {
+        let next = if set_features.is_empty() {
+            1
+        } else {
+            let mut candidate = 1;
+            while set_features.contains(&candidate) || set_features.contains(&-candidate) {
+                candidate += 1;
+            }
+            candidate
+        };
+        set_features.push(next);
+        if ddnnf.execute_query(&set_features) > 0 {
+            enumeration_step(ddnnf, set_features, solutions);
+        }
+        set_features.pop();
+
+        set_features.push(-next);
+        if ddnnf.execute_query(&set_features) > 0 {
+            enumeration_step(ddnnf, set_features, solutions);
+        }
+        set_features.pop();
     }
 }
 
@@ -97,7 +146,7 @@ fn op_with_assumptions_and_vars<T: ToString>(
     ddnnf: &mut Ddnnf,
     assumptions: &mut Vec<i32>,
     vars: &[i32],
-    can_handle_empty_vars: bool
+    can_handle_empty_vars: bool,
 ) -> String {
     let mut response = Vec::new();
     for var in vars {
@@ -201,7 +250,12 @@ mod test {
             build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
 
         assert_eq!(
-            String::from("1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000;44558490301175088812121229002380743156731839067219819764321860535061593824456157036646879771006312148798957047211355633063364007335639360623647085885718285895752858908864905172260153747031300505600000000000000000000000;387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000"),
+            String::from(
+            vec![
+                "1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000",
+                "44558490301175088812121229002380743156731839067219819764321860535061593824456157036646879771006312148798957047211355633063364007335639360623647085885718285895752858908864905172260153747031300505600000000000000000000000",
+                "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000"
+            ].join(";")),
             handle_stream_msg("count v 1 -2 3", &mut auto1)
         );
         assert_eq!(
@@ -238,7 +292,29 @@ mod test {
         );
         assert_eq!(
             handle_stream_msg("sat v 1 58", &mut auto1),
-            vec![handle_stream_msg("sat p 1", &mut auto1), handle_stream_msg("sat p 58", &mut auto1)].join(";")
+            vec![
+                handle_stream_msg("sat p 1", &mut auto1),
+                handle_stream_msg("sat p 58", &mut auto1)
+            ].join(";")
+        );
+    }
+
+    #[test]
+    fn handle_stream_msg_enum_test() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("example_input/VP9_d4.nnf", 42);
+        println!("{:?}", vp9.number_of_variables);
+        assert_eq!(
+            vec![
+                "1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42",
+                "1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42"
+            ].join(";"),
+            handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39", &mut vp9)
+        );
+
+        assert_eq!(
+            80,
+            handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 ", &mut vp9).split(";").count()
         );
     }
 

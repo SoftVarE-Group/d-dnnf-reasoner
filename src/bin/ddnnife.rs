@@ -9,7 +9,6 @@ use clap::{AppSettings, Arg, arg, Command, value_parser};
 extern crate colour;
 use colour::{green, yellow_ln};
 
-use ddnnf_lib::handle_stream_msg;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -21,6 +20,7 @@ use std::time::Instant;
 
 use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser::{self as dparser, write_ddnnf};
+use ddnnf_lib::handle_stream_msg;
 
 fn main() {
     let mut matches = Command::new("ddnnife")
@@ -121,7 +121,7 @@ fn main() {
         let features: Vec<i32> =
                 matches.get_many("features")
                 .expect("invalid format for features").copied().collect();
-        ddnnf.execute_query(features);
+        ddnnf.execute_query_interactive(features);
     }
 
     // file path without last extension
@@ -215,7 +215,7 @@ fn main() {
                                 },
                             }).collect();
                             if let Some(f) = features {
-                                ddnnf.execute_query(f)
+                                ddnnf.execute_query_interactive(f)
                             }
                         }
                     }
@@ -239,6 +239,7 @@ fn main() {
 
 
     // switch in the stream mode
+    let mut save_ddnnf = false;
     if matches.contains_id("stream") {
         let stdin_channel = spawn_stdin_channel();
         
@@ -255,8 +256,13 @@ fn main() {
 
                     handle_out.write_all(format!("got: {}\n", buffer).as_bytes()).unwrap();
 
+                    match buffer.as_str() {
+                        "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
+                        "save" => save_ddnnf = true,
+                        _ => (),
+                    }
+
                     let response = handle_stream_msg(&buffer, &mut ddnnf);
-                    if response == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
                     
                     handle_out.write_all(format!("{}\n\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();
@@ -270,7 +276,7 @@ fn main() {
     }
 
     // writes the d-DNNF to file
-    if matches.contains_id("save_ddnnf") {
+    if matches.contains_id("save_ddnnf") || save_ddnnf {
         let path = &format!(
             "{}-saved.nnf",
             matches.get_one::<String>("save_ddnnf").get_or_insert(&file_path).as_str()

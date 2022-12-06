@@ -491,7 +491,7 @@ impl Ddnnf {
     /// ddnnf.execute_query(vec![3]); // also 3
     ///
     /// ```
-    pub fn execute_query(&mut self, mut features: Vec<i32>) {
+    pub fn execute_query_interactive(&mut self, mut features: Vec<i32>) {
         if features.len() == 1 {
             let f = features.pop().unwrap();
             let time = Instant::now();
@@ -536,6 +536,17 @@ impl Ddnnf {
                 "Elapsed time for a partial configuration in seconds: {:.6}s.",
                 elapsed_time
             );
+        }
+    }
+
+    /// executes a query
+    /// we use the in our opinion best type of query depending on the amount of features 
+    pub fn execute_query(&mut self, features: &[i32]) -> Integer {
+        match features.len() {
+            0 => self.rc(),
+            1 => self.card_of_feature_with_marker(features[0]),
+            2..=9 => self.card_of_partial_config_with_marker(&features),
+            _ => self.card_of_partial_config(&features)
         }
     }
 }
