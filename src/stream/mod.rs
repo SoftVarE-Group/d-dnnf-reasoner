@@ -61,9 +61,6 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
         }
     }
 
-    println!("params: {:?}, values: {:?}, param_index: {:?}",
-        params, values, param_index);
-
     match args[0] {
         "core" => op_with_assumptions_and_vars(
             |d, x| {

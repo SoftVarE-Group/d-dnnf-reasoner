@@ -88,22 +88,27 @@ fn main() {
             ommited_features,
         );
 
-        let elapsed_time = time.elapsed().as_secs_f32();
-        println!(
-            "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.rc(),
-            elapsed_time
-        );
+        if !matches.contains_id("stream") {
+            let elapsed_time = time.elapsed().as_secs_f32();
+            println!(
+                "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
+                ddnnf.rc(),
+                elapsed_time
+            );
+        }
     } else {
         ddnnf = dparser::build_ddnnf_tree_with_extras(
             matches.value_of("file_path").unwrap(),
         );
-        let elapsed_time = time.elapsed().as_secs_f32();
-        println!(
-            "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
-            ddnnf.rc(),
-            elapsed_time
-        );
+
+        if !matches.contains_id("stream") {
+            let elapsed_time = time.elapsed().as_secs_f32();
+            println!(
+                "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
+                ddnnf.rc(),
+                elapsed_time
+            );
+        }
     }
 
     // print the heuristics
@@ -246,15 +251,10 @@ fn main() {
         let stdout = io::stdout();
         let mut handle_out = stdout.lock();
 
-        handle_out.write_all(b"entered stream mode. starting loop..\n\n").unwrap();
-        handle_out.flush().unwrap();
-
         loop {
             match stdin_channel.recv() {
                 Ok(mut buffer) => {
                     buffer.pop();
-
-                    handle_out.write_all(format!("got: {}\n", buffer).as_bytes()).unwrap();
 
                     match buffer.as_str() {
                         "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
@@ -264,7 +264,7 @@ fn main() {
 
                     let response = handle_stream_msg(&buffer, &mut ddnnf);
                     
-                    handle_out.write_all(format!("{}\n\n", response).as_bytes()).unwrap();
+                    handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();
                 },
                 Err(e) => {
