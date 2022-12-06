@@ -1,3 +1,6 @@
+use rand::seq::SliceRandom;
+use rand_chacha::{ChaChaRng, rand_core::SeedableRng};
+
 use crate::Ddnnf;
 
 /// error codes:
@@ -13,40 +16,53 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
     }
 
     let mut param_index = 1;
-    let mut previous_param_index = 0;
+
     let mut params = Vec::new();
     let mut values = Vec::new();
+    let mut seed = 42;
+    let mut limit = 1;
 
     // go through all possible extra values that can be provided til
     // either there are no more or we can't parse anymore
-    while param_index < args.len() && param_index != previous_param_index {
-        previous_param_index = param_index;
-
-        if param_index < args.len() && args[param_index] == "p" {
+    while param_index < args.len() {
+        if param_index < args.len() {
             param_index += 1;
-            params = match get_numbers(&args[param_index..]) {
-                Ok(v) => v,
-                Err(e) => return e,
-            };
-            param_index += params.len();
-        }
-
-        if param_index < args.len() && args[param_index] == "v" {
-            param_index += 1;
-            values = match get_numbers(&args[param_index..]) {
-                Ok(v) => v,
-                Err(e) => return e,
-            };
-            param_index += values.len();
+            match args[param_index-1] {
+                "p" => {
+                    params = match get_numbers(&args[param_index..]) {
+                        Ok(v) => v,
+                        Err(e) => return e,
+                    };
+                    param_index += params.len();
+                },
+                "v" => {
+                    values = match get_numbers(&args[param_index..]) {
+                        Ok(v) => v,
+                        Err(e) => return e,
+                    };
+                    param_index += values.len();
+                },
+                "seed" => {
+                    seed = match args[param_index].parse::<u64>() {
+                        Ok(x) => x,
+                        Err(e) => return format!("E3 error: {}", e),
+                    };
+                    param_index += 1;
+                },
+                "limit" => {
+                    limit = match args[param_index].parse::<usize>() {
+                        Ok(x) => x,
+                        Err(e) => return format!("E3 error: {}", e),
+                    };
+                    param_index += 1;
+                },
+                other => return format!("E4 error: the option \"{}\" is not valid in this context", other),
+            }
         }
     }
 
-    if param_index == previous_param_index {
-        return String::from("E4 error: could not use all parameters provided");
-    }
-
-    println!("params: {:?}, values: {:?}, param_index: {:?}, previous_param_index: {:?}",
-        params, values, param_index, previous_param_index);
+    println!("params: {:?}, values: {:?}, param_index: {:?}",
+        params, values, param_index);
 
     match args[0] {
         "core" => op_with_assumptions_and_vars(
@@ -81,25 +97,27 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
             &values,
             true
         ),
-        "enum" => compute_all_enumeration(ddnnf, &mut params),
+        "enum" => enumerate(ddnnf, &mut params, u64::MAX, usize::MAX),
+        "random" => enumerate(ddnnf, &mut params, seed, limit),
         "exit" => String::from("exit"),
-        "atomic" | "random" | "uni_random" | "t-wise_sampling" => {
+        "atomic" | "uni_random" | "t-wise_sampling" => {
             String::from("E1 error: not yet supported")
         }
-        _ => String::from("E2 error: is not supported"),
+        other => format!("E2 error: the operation \"{}\" is not supported", other),
     }
 }
 
-fn compute_all_enumeration(
-    ddnnf: &mut Ddnnf,
-    assumptions: &mut Vec<i32>,
+fn enumerate(ddnnf: &mut Ddnnf,assumptions: &mut Vec<i32>,
+    seed: u64,
+    limit: usize,
 ) -> String {
     let mut set_features = assumptions;
     let mut sol = Vec::new();
-    enumeration_step(ddnnf, &mut set_features, &mut sol);
+    enumeration_step(ddnnf, seed, limit, &mut set_features, &mut sol);
 
-    sol.iter()
+    sol.iter_mut()
         .map(|res| {
+            res.sort_unstable_by(|a,b| a.abs().cmp(&b.abs()));
             res.iter()
                 .map(|f| f.to_string())
                 .collect::<Vec<String>>()
@@ -111,31 +129,48 @@ fn compute_all_enumeration(
 
 fn enumeration_step(
     ddnnf: &mut Ddnnf,
+    seed: u64,
+    limit: usize,
     set_features: &mut Vec<i32>,
     solutions: &mut Vec<Vec<i32>>,
 ) {
+    if solutions.len() == limit { return; }
     if set_features.len() == ddnnf.number_of_variables as usize {
         solutions.push(set_features.to_vec().clone());
         return;
     } else {
-        let next = if set_features.is_empty() {
-            1
-        } else {
-            let mut candidate = 1;
-            while set_features.contains(&candidate) || set_features.contains(&-candidate) {
-                candidate += 1;
+        let next = if seed == u64::MAX {
+            if set_features.is_empty() {
+                1
+            } else {
+                let mut candidate = 1;
+                while set_features.contains(&candidate) || set_features.contains(&-candidate) {
+                    candidate += 1;
+                }
+                candidate
             }
-            candidate
+        } else {
+            let mut shuffled_features: Vec<i32> = (1_i32..=ddnnf.number_of_variables as i32).collect::<Vec<i32>>();
+            let mut rng = ChaChaRng::seed_from_u64(seed);
+            shuffled_features.shuffle(&mut rng);
+
+            let mut index = 0;
+            while set_features.contains(&shuffled_features[index])
+               || set_features.contains(&-shuffled_features[index]) {
+                index += 1;
+            }
+            shuffled_features[index]
         };
+
         set_features.push(next);
         if ddnnf.execute_query(&set_features) > 0 {
-            enumeration_step(ddnnf, set_features, solutions);
+            enumeration_step(ddnnf, seed, limit, set_features, solutions);
         }
         set_features.pop();
 
         set_features.push(-next);
         if ddnnf.execute_query(&set_features) > 0 {
-            enumeration_step(ddnnf, set_features, solutions);
+            enumeration_step(ddnnf, seed, limit, set_features, solutions);
         }
         set_features.pop();
     }
@@ -200,7 +235,7 @@ mod test {
     #[test]
     fn handle_stream_msg_test() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
         // core are 20 and 2122. dead are 177 and 2370
         let test0: &str = "core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370";
@@ -219,7 +254,7 @@ mod test {
     #[test]
     fn handle_stream_msg_core_test() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
         assert_eq!(
             String::from("20;-58"),
@@ -247,7 +282,7 @@ mod test {
     #[test]
     fn handle_stream_msg_count_test() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
         assert_eq!(
             String::from(
@@ -276,7 +311,7 @@ mod test {
     #[test]
     fn handle_stream_msg_sat_test() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
         assert_eq!(
             String::from("true;true;false"),
@@ -302,8 +337,8 @@ mod test {
     #[test]
     fn handle_stream_msg_enum_test() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("example_input/VP9_d4.nnf", 42);
-        println!("{:?}", vp9.number_of_variables);
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+
         assert_eq!(
             vec![
                 "1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42",
@@ -319,16 +354,39 @@ mod test {
     }
 
     #[test]
+    fn handle_stream_msg_random_test() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+
+        assert_eq!(
+            String::from("1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42"),
+            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69", &mut vp9)
+        );
+        assert_eq!(
+            String::from("1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42"),
+            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39", &mut vp9)
+        );
+        assert_eq!(
+            String::from("1 2 -3 4 -5 6 -7 8 -9 10 -11 12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 -26 -27 28 -29 -30 31 -32 33 -34 -35 -36 37 38 39 40 41 -42"),
+            handle_stream_msg("random", &mut vp9)
+        );
+        assert_eq!(
+            35,
+            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ", &mut vp9).split(";").count()
+        );
+    }
+
+    #[test]
     fn handle_stream_msg_error_test() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("example_input/auto1_d4.nnf", 2513);
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         assert_eq!(
             String::from("E4 error: got an empty msg"),
             handle_stream_msg("", &mut auto1)
         );
         assert_eq!(
-            String::from("E4 error: could not use all parameters provided"),
-            handle_stream_msg("count p 1 v 2 another_param 3", &mut auto1)
+            String::from("E4 error: the option \"5\" is not valid in this context"),
+            handle_stream_msg("random p 1 2 seed 13 5", &mut auto1)
         );
 
         assert_eq!(
@@ -336,9 +394,13 @@ mod test {
             handle_stream_msg("t-wise_sampling p 1 v 2", &mut auto1)
         );
         assert_eq!(
-            String::from("E2 error: is not supported"),
+            String::from("E2 error: the operation \"revive_dinosaurs\" is not supported"),
             handle_stream_msg("revive_dinosaurs p 1 v 2", &mut auto1)
         );
+        assert_eq!(
+            String::from("E4 error: the option \"god_mode\" is not valid in this context"),
+            handle_stream_msg("count p 1 v 2 god_mode 3", &mut auto1)
+        );       
     }
 
     #[test]
