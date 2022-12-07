@@ -244,7 +244,6 @@ fn main() {
 
 
     // switch in the stream mode
-    let mut save_ddnnf = false;
     if matches.contains_id("stream") {
         let stdin_channel = spawn_stdin_channel();
         
@@ -256,13 +255,12 @@ fn main() {
                 Ok(mut buffer) => {
                     buffer.pop();
 
-                    match buffer.as_str() {
+                    let response = handle_stream_msg(&buffer, &mut ddnnf);
+
+                    match response.as_str() {
                         "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
-                        "save" => save_ddnnf = true,
                         _ => (),
                     }
-
-                    let response = handle_stream_msg(&buffer, &mut ddnnf);
                     
                     handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();
@@ -276,12 +274,12 @@ fn main() {
     }
 
     // writes the d-DNNF to file
-    if matches.contains_id("save_ddnnf") || save_ddnnf {
+    if matches.contains_id("save_ddnnf") {
         let path = &format!(
             "{}-saved.nnf",
             matches.get_one::<String>("save_ddnnf").get_or_insert(&file_path).as_str()
         );
-        write_ddnnf(ddnnf, path).unwrap();
+        write_ddnnf(&mut ddnnf, path).unwrap();
         println!("The smooth d-DNNF was written into the c2d format in {}.", path);
     }
 }

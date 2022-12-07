@@ -460,12 +460,12 @@ fn calc_or_count(
 }
 
 /// Takes a d-DNNF and writes the string representation into a file with the provided name
-pub fn write_ddnnf(ddnnf: Ddnnf, path_out: &str) -> std::io::Result<()> {    
+pub fn write_ddnnf(ddnnf: &mut Ddnnf, path_out: &str) -> std::io::Result<()> {    
     let file = File::create(path_out)?;
     let mut file = LineWriter::with_capacity(1000, file);
     
     file.write_all(format!("nnf {} {} {}\n", ddnnf.nodes.len(), 0, ddnnf.number_of_variables).as_bytes())?;
-    for node in ddnnf.nodes {
+    for node in &ddnnf.nodes {
         file.write_all(deconstruct_node(node).as_bytes())?;
     }
 
@@ -475,8 +475,8 @@ pub fn write_ddnnf(ddnnf: Ddnnf, path_out: &str) -> std::io::Result<()> {
 /// Takes a node of the ddnnf which is in the our representation of a flatted DAG
 /// and transforms it into the corresponding String.
 /// We use an adjusted version of the c2d format: Or nodes can have multiple children, there are no decision nodes
-fn deconstruct_node(node: Node) -> String {
-    let mut str = match node.ntype {
+fn deconstruct_node(node: &Node) -> String {
+    let mut str = match &node.ntype {
         NodeType::And { children } => deconstruct_children(String::from("A "), &children),
         NodeType::Or { children } => deconstruct_children(String::from("O 0 "), &children),
         NodeType::Literal { literal } => format!("L {}", literal),

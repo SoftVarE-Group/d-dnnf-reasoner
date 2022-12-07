@@ -1,13 +1,16 @@
+use std::path::Path;
+
 use rand::seq::SliceRandom;
 use rand_chacha::{ChaChaRng, rand_core::SeedableRng};
 
-use crate::Ddnnf;
+use crate::{Ddnnf, parser::write_ddnnf};
 
 /// error codes:
 /// E1 Operation is not yet supported
 /// E2 Operation does not exist. Neither now nor in the future
 /// E3 Parse error
 /// E4 Syntax error
+/// E5 file or path error
 
 pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
     let args: Vec<&str> = msg.split_whitespace().collect();
@@ -21,43 +24,55 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
     let mut values = Vec::new();
     let mut seed = 42;
     let mut limit = 1;
+    let mut path = Path::new("");
 
     // go through all possible extra values that can be provided til
     // either there are no more or we can't parse anymore
     while param_index < args.len() {
-        if param_index < args.len() {
-            param_index += 1;
-            match args[param_index-1] {
-                "p" => {
-                    params = match get_numbers(&args[param_index..]) {
-                        Ok(v) => v,
-                        Err(e) => return e,
-                    };
-                    param_index += params.len();
-                },
-                "v" => {
-                    values = match get_numbers(&args[param_index..]) {
-                        Ok(v) => v,
-                        Err(e) => return e,
-                    };
-                    param_index += values.len();
-                },
-                "seed" => {
-                    seed = match args[param_index].parse::<u64>() {
-                        Ok(x) => x,
-                        Err(e) => return format!("E3 error: {}", e),
-                    };
-                    param_index += 1;
-                },
-                "limit" => {
-                    limit = match args[param_index].parse::<usize>() {
-                        Ok(x) => x,
-                        Err(e) => return format!("E3 error: {}", e),
-                    };
-                    param_index += 1;
-                },
-                other => return format!("E4 error: the option \"{}\" is not valid in this context", other),
-            }
+        param_index += 1;
+        match args[param_index-1] {
+            "p" => {
+                params = match get_numbers(&args[param_index..]) {
+                    Ok(v) => v,
+                    Err(e) => return e,
+                };
+                param_index += params.len();
+            },
+            "v" => {
+                values = match get_numbers(&args[param_index..]) {
+                    Ok(v) => v,
+                    Err(e) => return e,
+                };
+                param_index += values.len();
+            },
+            "seed" | "limit" | "path" => {
+                if param_index < args.len() {
+                    match args[param_index-1] {
+                        "seed" => { seed = match args[param_index].parse::<u64>() {
+                                Ok(x) => x,
+                                Err(e) => return format!("E3 error: {}", e),
+                            };
+                            param_index += 1;
+                        },
+                        "limit" => {
+                            limit = match args[param_index].parse::<usize>() {
+                                Ok(x) => x,
+                                Err(e) => return format!("E3 error: {}", e),
+                            };
+                            param_index += 1;
+                        },
+                        _ => { 
+                            // has to be path because of the outer patter match
+                            // we use a wildcard to satisfy the rust compiler
+                            path = Path::new(args[param_index]);
+                            param_index += 1;
+                        },
+                    }
+                } else {
+                    return format!("E4 error: param \"{}\" was used, but no value supplied", args[param_index-1]);
+                }
+            },
+            other => return format!("E4 error: the option \"{}\" is not valid in this context", other),
         }
     }
 
@@ -97,6 +112,18 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
         "enum" => enumerate(ddnnf, &mut params, u64::MAX, usize::MAX),
         "random" => enumerate(ddnnf, &mut params, seed, limit),
         "exit" => String::from("exit"),
+        "save" => {
+            if path.to_str().unwrap() == "" {
+                return String::from("E5 error: no file path was supplied");
+            }
+            if !path.is_absolute() {
+                return String::from("E5 error: file path is not absolute, but has to be");
+            }
+            match write_ddnnf(ddnnf, path.to_str().unwrap()) {
+                Ok(_) => String::from(""),
+                Err(e) => format!("E5 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
+            }
+        },
         "atomic" | "uni_random" | "t-wise_sampling" => {
             String::from("E1 error: not yet supported")
         }
@@ -226,6 +253,8 @@ fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
 
 #[cfg(test)]
 mod test {
+    use std::{env, fs};
+
     use super::*;
     use crate::parser::build_d4_ddnnf_tree;
 
@@ -235,8 +264,8 @@ mod test {
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
         // core are 20 and 2122. dead are 177 and 2370
-        let test0: &str = "core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370";
-        println!("{}", handle_stream_msg(test0, &mut auto1));
+        let _test0: &str = "core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370";
+        //println!("{}", handle_stream_msg(test0, &mut auto1));
 
         let test1: &str = "core v 5 6 7 p 1 -2 3";
         handle_stream_msg(test1, &mut auto1);
@@ -371,6 +400,42 @@ mod test {
             35,
             handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ", &mut vp9).split(";").count()
         );
+    }
+
+    #[test]
+    fn handle_stream_msg_save_test() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+        let binding = env::current_dir().unwrap();
+        let working_dir = binding.to_str().unwrap();
+
+        assert_eq!(
+            format!("E4 error: the option \"{}\" is not valid in this context", &working_dir),
+            handle_stream_msg(format!("save {}", &working_dir).as_str(), &mut vp9)
+        );
+        assert_eq!(
+            String::from("E4 error: param \"path\" was used, but no value supplied"),
+            handle_stream_msg("save path", &mut vp9)
+        );
+
+        assert_eq!(
+            String::from("E5 error: no file path was supplied"),
+            handle_stream_msg("save", &mut vp9)
+        );
+        assert_eq!(
+            String::from("E5 error: No such file or directory (os error 2) while trying to write ddnnf to /home/ferris/Documents/crazy_project/out.nnf"),
+            handle_stream_msg("save path /home/ferris/Documents/crazy_project/out.nnf", &mut vp9)
+        );
+        assert_eq!(
+            String::from("E5 error: file path is not absolute, but has to be"),
+            handle_stream_msg("save path ./", &mut vp9)
+        );
+
+        assert_eq!(
+            String::from(""),
+            handle_stream_msg(format!("save path {}/tests/data/out.nnf", &working_dir).as_str(), &mut vp9)
+        );
+        let _res = fs::remove_file(format!("{}/tests/data/out.nnf", &working_dir));
     }
 
     #[test]

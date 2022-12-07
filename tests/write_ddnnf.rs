@@ -19,7 +19,7 @@ fn card_of_features_normal_and_reloaded_test() {
     
     // save nnf in c2d format
     let saved_nnf = "./tests/data/auto1_d4_to_c2d.nnf";
-    write_ddnnf(ddnnf, saved_nnf).unwrap();
+    write_ddnnf(&mut ddnnf, saved_nnf).unwrap();
 
     // compute the cardinality of features for the saved file
     let saved_out = "./tests/data/auto1_d4_to_c2d_fs.csv";
