@@ -1,9 +1,14 @@
-use std::path::Path;
+use std::cmp::max;
+use std::iter::FromIterator;
+use std::{path::Path, collections::HashSet};
 
-use rand::seq::SliceRandom;
-use rand_chacha::{ChaChaRng, rand_core::SeedableRng};
+use rand_pcg::{Pcg32, Lcg64Xsh32};
+use rand::{Rng, SeedableRng};
+
+use rug::Assign;
 
 use crate::{Ddnnf, parser::write_ddnnf};
+use crate::data_structure::NodeType::*;
 
 /// error codes:
 /// E1 Operation is not yet supported
@@ -78,36 +83,57 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
 
     match args[0] {
         "core" => op_with_assumptions_and_vars(
-            |d, x| {
-                let could_be_core = x.pop().unwrap();
-                let without_cf = Ddnnf::execute_query(d, x);
-                x.push(could_be_core);
-                let with_cf = Ddnnf::card_of_partial_config_with_marker(d, x);
+            |d, assumptions, vars| {
+                if vars {
+                    let could_be_core = assumptions.pop().unwrap();
+                    let without_cf = Ddnnf::execute_query(d, &assumptions);
+                    assumptions.push(could_be_core);
+                    let with_cf = Ddnnf::execute_query(d, &assumptions);
 
-                if with_cf == without_cf {
-                    Some(could_be_core)
+                    if with_cf == without_cf {
+                        Some(could_be_core.to_string())
+                    } else {
+                        None
+                    }
                 } else {
-                    None
+                    if assumptions.is_empty() {
+                        let mut core: HashSet<i32> = HashSet::new();
+                        core.extend(&d.core);
+                        core.extend(&d.dead);
+                        Some(format_vec(core.iter()))
+                    } else {
+                        let mut core = Vec::new();
+                        let reference = Ddnnf::execute_query(d, &assumptions);
+                        for i in 1_i32..=d.number_of_variables as i32 {
+                            assumptions.push(i);
+                            let inter = Ddnnf::execute_query(d, &assumptions);
+                            if reference == inter {
+                                core.push(i);
+                            }
+                            if inter == 0 {
+                                core.push(-i);
+                            }
+                            assumptions.pop();
+                        }
+                        Some(format_vec(core.iter()))
+                    }
                 }
             },
             ddnnf,
             &mut params,
             &values,
-            false
         ),
         "count" => op_with_assumptions_and_vars(
-            |d, x| Some(Ddnnf::execute_query(d, x)),
+            |d, x, _| Some(Ddnnf::execute_query(d, x)),
             ddnnf,
             &mut params,
-            &values,
-            true
+            &values
         ),
         "sat" => op_with_assumptions_and_vars(
-            |d, x| Some(Ddnnf::execute_query(d, x) > 0),
+            |d, x, _| Some(Ddnnf::execute_query(d, x) > 0),
             ddnnf,
             &mut params,
-            &values,
-            true
+            &values
         ),
         "enum" => enumerate(ddnnf, &mut params, u64::MAX, usize::MAX),
         "random" => enumerate(ddnnf, &mut params, seed, limit),
@@ -131,104 +157,158 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
     }
 }
 
-fn enumerate(ddnnf: &mut Ddnnf,assumptions: &mut Vec<i32>,
+fn enumerate(ddnnf: &mut Ddnnf, assumptions: &mut Vec<i32>,
     seed: u64,
     limit: usize,
 ) -> String {
-    let mut set_features = assumptions;
-    let mut sol = Vec::new();
-    enumeration_step(ddnnf, seed, limit, &mut set_features, &mut sol);
+    let mut sol: HashSet<Vec<i32>> = HashSet::new();
+    let assumptions_set: HashSet<i32> = HashSet::from_iter(assumptions.iter().cloned());
+    let configs = ddnnf.execute_query(&assumptions);
+    let mut rng = if seed != u64::MAX {
+        Some(Pcg32::seed_from_u64(seed))
+    } else {
+        None
+    };
 
-    sol.iter_mut()
-        .map(|res| {
-            res.sort_unstable_by(|a,b| a.abs().cmp(&b.abs()));
-            res.iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<String>>()
-                .join(" ")
-        })
-        .collect::<Vec<String>>()
-        .join(";")
+    enumeration_pre_step(ddnnf, assumptions_set.clone(), &mut rng, (limit, max(usize::MAX, configs.to_usize_wrapping())), &mut sol);
+    for n in ddnnf.nodes.iter_mut() {
+        n.marker = false;
+    }
+    ddnnf.md.clear();
+    
+    format_vec_vec(sol.iter())
+}
+
+fn enumeration_pre_step(ddnnf: &mut Ddnnf,
+    mut assumptions: HashSet<i32>,
+    rng: &mut Option<Lcg64Xsh32>,
+    limits: (usize, usize),
+    sol: &mut HashSet<Vec<i32>>
+) {
+    if sol.len() >= limits.0 || sol.len() >= limits.1 {
+        return;
+    }
+
+    // reseting all previous assignments of literals
+    for n in ddnnf.nodes.iter_mut() {
+        n.marker = false;
+    }
+    ddnnf.md.clear();
+    for (f, index) in ddnnf.literals.iter() {
+        if assumptions.contains(&-f.to_owned()) {
+            ddnnf.nodes[*index].temp.assign(0);
+            ddnnf.nodes[*index].marker = true;
+        } else if assumptions.contains(&f.to_owned()){
+            ddnnf.nodes[*index].temp.assign(1);
+            ddnnf.nodes[*index].marker = true;
+        } else {
+            ddnnf.nodes[*index].temp.assign(1);
+        }
+    }
+
+    let mut save = assumptions.clone();
+    enumeration_step(ddnnf, ddnnf.number_of_nodes-1, &mut assumptions);
+    
+    if ddnnf.nodes[ddnnf.number_of_nodes-1].temp > 0 {
+        if assumptions.len() == ddnnf.number_of_variables as usize {
+            let mut vec = Vec::from_iter(assumptions.iter().cloned());
+            vec.sort_by(|a, b| a.abs().cmp(&b.abs()));
+            sol.insert(vec);
+            return;
+        }
+
+        let mut next = 1;
+        while save.contains(&next) || save.contains(&-next) {
+            match rng {
+                Some(x) => next = x.gen_range(1..=ddnnf.number_of_variables) as i32,
+                None => next += 1,
+            }
+        }
+
+        if next <= ddnnf.number_of_variables as i32 {
+            save.insert(next);
+            enumeration_pre_step(ddnnf, save.clone(), rng, limits, sol); 
+
+            save.remove(&next);
+            save.insert(-next);
+            enumeration_pre_step(ddnnf, save.clone(), rng, limits, sol);
+        }
+    }
 }
 
 fn enumeration_step(
     ddnnf: &mut Ddnnf,
-    seed: u64,
-    limit: usize,
-    set_features: &mut Vec<i32>,
-    solutions: &mut Vec<Vec<i32>>,
+    index: usize,
+    set_features: &mut HashSet<i32>
 ) {
-    if solutions.len() == limit { return; }
-    if set_features.len() == ddnnf.number_of_variables as usize {
-        solutions.push(set_features.to_vec().clone());
+    if ddnnf.nodes[index].marker {
         return;
-    } else {
-        let next = if seed == u64::MAX {
-            if set_features.is_empty() {
-                1
-            } else {
-                let mut candidate = 1;
-                while set_features.contains(&candidate) || set_features.contains(&-candidate) {
-                    candidate += 1;
+    }
+    ddnnf.nodes[index].marker = true;
+    match ddnnf.nodes[index].ntype.clone() {
+        And { children } => {
+            for c in &children {
+                enumeration_step(ddnnf, *c, set_features);
+                if ddnnf.nodes[*c].temp == 0 {
+                    ddnnf.nodes[index].temp.assign(0);
+                    return;
                 }
-                candidate
             }
-        } else {
-            let mut shuffled_features: Vec<i32> = (1_i32..=ddnnf.number_of_variables as i32).collect::<Vec<i32>>();
-            let mut rng = ChaChaRng::seed_from_u64(seed);
-            shuffled_features.shuffle(&mut rng);
-
-            let mut index = 0;
-            while set_features.contains(&shuffled_features[index])
-               || set_features.contains(&-shuffled_features[index]) {
-                index += 1;
+            ddnnf.nodes[index].temp.assign(1);
+        },
+        Or { children } => {
+            for c in &children {
+                enumeration_step(ddnnf, *c, set_features);
+                if ddnnf.nodes[*c].temp > 0 {
+                    ddnnf.nodes[index].temp.assign(1);
+                    return;
+                }
             }
-            shuffled_features[index]
-        };
-
-        set_features.push(next);
-        if ddnnf.execute_query(&set_features) > 0 {
-            enumeration_step(ddnnf, seed, limit, set_features, solutions);
-        }
-        set_features.pop();
-
-        set_features.push(-next);
-        if ddnnf.execute_query(&set_features) > 0 {
-            enumeration_step(ddnnf, seed, limit, set_features, solutions);
-        }
-        set_features.pop();
+            ddnnf.nodes[index].temp.assign(0);
+        },
+        True => ddnnf.nodes[index].temp.assign(1),
+        _ => (),
     }
 }
 
 fn op_with_assumptions_and_vars<T: ToString>(
-    operation: fn(&mut Ddnnf, &mut Vec<i32>) -> Option<T>,
+    operation: fn(&mut Ddnnf, &mut Vec<i32>, bool) -> Option<T>,
     ddnnf: &mut Ddnnf,
     assumptions: &mut Vec<i32>,
     vars: &[i32],
-    can_handle_empty_vars: bool,
 ) -> String {
+    if vars.is_empty() {
+        match operation(ddnnf, assumptions, false) {
+            Some(v) => return v.to_string(),
+            None => (),
+        }
+    }
+
     let mut response = Vec::new();
     for var in vars {
         assumptions.push(*var);
-        match operation(ddnnf, assumptions) {
+        match operation(ddnnf, assumptions, true) {
             Some(v) => response.push(v.to_string()),
             None => (),
         }
         assumptions.pop();
     }
 
-    if vars.is_empty() {
-        if !assumptions.is_empty() || can_handle_empty_vars {
-            match operation(ddnnf, assumptions) {
-                Some(v) => response.push(v.to_string()),
-                None => (),
-            }
-        } else {
-            return String::from("E4 error: can't compute if features are core if no features are supplied");
-        }
-    }
-
     response.join(";")
+}
+
+fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
+    vals.map(|v| v.to_string()).collect::<Vec<String>>().join(" ")
+}
+
+fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
+    where
+    T: IntoIterator,
+    T::Item: ToString,
+{
+    vals.map(|res| format_vec(res.into_iter()))
+    .collect::<Vec<String>>()
+    .join(";")
 }
 
 fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
@@ -244,7 +324,7 @@ fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
     }
     if numbers.is_empty() {
         return Err(String::from(
-            "E4 error: option used but there was not value supplied",
+            "E4 error: option used but there was no value supplied",
         ));
     }
 
@@ -259,40 +339,23 @@ mod test {
     use crate::parser::build_d4_ddnnf_tree;
 
     #[test]
-    fn handle_stream_msg_test() {
-        let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
-
-        // core are 20 and 2122. dead are 177 and 2370
-        let _test0: &str = "core p 1 2 3 2122 177 -1 -2 -3 -20 -177 -2370";
-        //println!("{}", handle_stream_msg(test0, &mut auto1));
-
-        let test1: &str = "core v 5 6 7 p 1 -2 3";
-        handle_stream_msg(test1, &mut auto1);
-
-        let test2: &str = "core p 1 -2 3 v";
-        handle_stream_msg(test2, &mut auto1);
-
-        let test3: &str = "core p 1 -2 3";
-        handle_stream_msg(test3, &mut auto1);
-    }
-
-    #[test]
     fn handle_stream_msg_core_test() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
         assert_eq!(
             String::from("20;-58"),
             handle_stream_msg("core v 20 -20 58 -58", &mut auto1)
         );
         assert_eq!(
-            String::from("67;-58"),
-            handle_stream_msg("core p 20 v 1 67 -58", &mut auto1)
+            String::from(""),
+            handle_stream_msg("core v 1 2 3 -1 -2 -3", &mut auto1)
         );
         assert_eq!(
-            String::from(""),
-            handle_stream_msg("core p 1", &mut auto1)
+            String::from("67;-58"),
+            handle_stream_msg("core p 20 v 1 67 -58", &mut auto1)
         );
         assert_eq!(
             String::from("4;5;6"), // count p 1 2 3 == 0
@@ -300,8 +363,18 @@ mod test {
         );
 
         assert_eq!(
-            String::from("E4 error: can't compute if features are core if no features are supplied"),
-            handle_stream_msg("core", &mut auto1)
+            String::from("1 2 6 10 15 19 25 31 40"),
+            handle_stream_msg("core p 1", &mut vp9)
+        );
+        assert!( // count p 1 2 3 == 0 => all features are core under that assumption
+            handle_stream_msg("core p 1 2 3", &mut auto1).split(" ").count() == (auto1.number_of_variables*2) as usize
+        );
+
+        assert!(
+            handle_stream_msg("core", &mut auto1).split(" ").count() == auto1.core.len() + auto1.dead.len()
+        );
+        assert!(
+            handle_stream_msg("core", &mut vp9).split(" ").count() == vp9.core.len() + vp9.dead.len()
         );
     }
 
@@ -362,20 +435,26 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum_test() {
+        let mut _auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
-        assert_eq!(
-            vec![
-                "1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42",
-                "1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42"
-            ].join(";"),
-            handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39", &mut vp9)
+        let binding = handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39", &mut vp9);
+        let res: Vec<&str> = binding.split(";").collect();
+
+        assert!(
+            res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42")
+            && res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42")
         );
 
         assert_eq!(
             80,
-            handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 ", &mut vp9).split(";").count()
+            handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27", &mut vp9).split(";").count()
+        );
+        assert_eq!(
+            216000,
+            handle_stream_msg("enum", &mut vp9).split(";").count()
         );
     }
 
@@ -385,20 +464,49 @@ mod test {
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
         assert_eq!(
-            String::from("1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42"),
-            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69", &mut vp9)
+            String::from("E3 error: invalid digit found in string"),
+            handle_stream_msg("random seed banana", &mut vp9)
         );
         assert_eq!(
-            String::from("1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42"),
-            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39", &mut vp9)
+            String::from("E3 error: invalid digit found in string"),
+            handle_stream_msg("random limit eight", &mut vp9)
         );
-        assert_eq!(
-            String::from("1 2 -3 4 -5 6 -7 8 -9 10 -11 12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 -26 -27 28 -29 -30 31 -32 33 -34 -35 -36 37 38 39 40 41 -42"),
-            handle_stream_msg("random", &mut vp9)
+
+        let mut binding = handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69", &mut vp9);
+        let mut res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
+        assert!(
+            vp9.execute_query(&res) == 1
         );
+        binding = handle_stream_msg("random", &mut vp9);
+        res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
+        assert!(
+            vp9.execute_query(&res) == 1
+        );
+
         assert_eq!(
             35,
             handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ", &mut vp9).split(";").count()
+        );
+        // if the limit > the #remaining satisfiable configurations for given assumptions then there will by only #remaining satisfiable configurations
+        assert_eq!(
+            handle_stream_msg("count p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27", &mut vp9).parse::<usize>().unwrap(),
+            handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 100000000 seed 42", &mut vp9).split(";").count()
+        );
+        let binding2 = handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ", &mut vp9);
+        let inter_res = binding2.split(";").collect::<Vec<&str>>();
+        for res in inter_res {
+            assert!(
+                vp9.execute_query(&res.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>()) == 1
+            );
+        }
+
+        // make sure that counting still works and the marked nodes aren't bad
+        assert_eq!(
+            String::from(
+            vec![
+                "216000", "0", "72000"
+            ].join(";")),
+            handle_stream_msg("count v 1 -2 3", &mut vp9)
         );
     }
 
@@ -439,6 +547,17 @@ mod test {
     }
 
     #[test]
+    fn handle_stream_msg_other_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        assert_eq!(
+            String::from("exit"),
+            handle_stream_msg("exit seed 4 limit 10", &mut auto1)
+        );
+    }
+
+    #[test]
     fn handle_stream_msg_error_test() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
@@ -452,6 +571,15 @@ mod test {
         );
 
         assert_eq!(
+            String::from("E4 error: option used but there was no value supplied"),
+            handle_stream_msg("random p", &mut auto1)
+        );
+        assert_eq!(
+            String::from("E4 error: option used but there was no value supplied"),
+            handle_stream_msg("count p 1 2 3 v", &mut auto1)
+        );
+
+        assert_eq!(
             String::from("E1 error: not yet supported"),
             handle_stream_msg("t-wise_sampling p 1 v 2", &mut auto1)
         );
@@ -462,7 +590,11 @@ mod test {
         assert_eq!(
             String::from("E4 error: the option \"god_mode\" is not valid in this context"),
             handle_stream_msg("count p 1 v 2 god_mode 3", &mut auto1)
-        );       
+        );
+        assert_eq!(
+            String::from("E4 error: the option \"BDDs\" is not valid in this context"),
+            handle_stream_msg("count p 1 2 BDDs 3", &mut auto1)
+        );  
     }
 
     #[test]
@@ -495,7 +627,7 @@ mod test {
             get_numbers(vec!["1", "-2", "--3", " ", "4"].as_ref())
         );
         assert_eq!(
-            Err(String::from("E4 error: option used but there was not value supplied")),
+            Err(String::from("E4 error: option used but there was no value supplied")),
             get_numbers(vec![].as_ref())
         );
     }

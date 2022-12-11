@@ -17,7 +17,7 @@ use crate::parser;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Represents all types of Nodes with its different parts
 pub struct Node {
-    marker: bool,
+    pub marker: bool,
     /// The cardinality of the node for the cardinality of a feature model
     pub count: Integer,
     /// The cardinality during the different queries
