@@ -97,9 +97,10 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
                     }
                 } else {
                     if assumptions.is_empty() {
-                        let mut core: HashSet<i32> = HashSet::new();
-                        core.extend(&d.core);
-                        core.extend(&d.dead);
+                        let mut core = Vec::from_iter(&d.core);
+                        let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
+                        core.extend(dead);
+                        core.sort_by(|a, b| a.abs().cmp(&b.abs()));
                         Some(format_vec(core.iter()))
                     } else {
                         let mut core = Vec::new();
@@ -345,6 +346,14 @@ mod test {
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
+        let binding = handle_stream_msg("core", &mut auto1);
+        let res = binding.split(" ").collect::<Vec<&str>>();
+        assert_eq!(
+            243, res.len()
+        );
+        assert!(
+            res.contains(&"20") && res.contains(&"-168")
+        );
         assert_eq!(
             String::from("20;-58"),
             handle_stream_msg("core v 20 -20 58 -58", &mut auto1)
