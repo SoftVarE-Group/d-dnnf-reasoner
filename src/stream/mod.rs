@@ -37,14 +37,14 @@ pub fn handle_stream_msg(msg: &str, ddnnf: &mut Ddnnf) -> String {
         param_index += 1;
         match args[param_index-1] {
             "p" => {
-                params = match get_numbers(&args[param_index..]) {
+                params = match get_numbers(&args[param_index..], ddnnf.number_of_variables) {
                     Ok(v) => v,
                     Err(e) => return e,
                 };
                 param_index += params.len();
             },
             "v" => {
-                values = match get_numbers(&args[param_index..]) {
+                values = match get_numbers(&args[param_index..], ddnnf.number_of_variables) {
                     Ok(v) => v,
                     Err(e) => return e,
                 };
@@ -312,7 +312,7 @@ fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
     .join(";")
 }
 
-fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
+fn get_numbers(params: &[&str], boundary: u32) -> Result<Vec<i32>, String> {
     let mut numbers = Vec::new();
     for param in params.iter() {
         if param.chars().any(|c| c.is_alphabetic()) {
@@ -327,6 +327,10 @@ fn get_numbers(params: &[&str]) -> Result<Vec<i32>, String> {
         return Err(String::from(
             "E4 error: option used but there was no value supplied",
         ));
+    }
+
+    if numbers.iter().any(|v| v.abs() > boundary as i32) {
+        return Err(format!("E3 error: not all parameters are within the boundary of {} to {}", -(boundary as i32), boundary as i32));
     }
 
     Ok(numbers)
@@ -610,34 +614,40 @@ mod test {
     fn test_get_numbers() {
         assert_eq!(
             Ok(vec![1, -2, 3]),
-            get_numbers(vec!["1", "-2", "3"].as_ref())
+            get_numbers(vec!["1", "-2", "3"].as_ref(), 4)
         );
         assert_eq!(
             Ok(vec![1, -2, 3]),
-            get_numbers(vec!["1", "-2", "3", "v", "4"].as_ref())
+            get_numbers(vec!["1", "-2", "3", "v", "4"].as_ref(), 5)
         );
 
-        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "3"].as_ref()));
+        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "3"].as_ref(), 10));
         assert_eq!(
             Ok(vec![]),
-            get_numbers(vec!["another_param", "1", "-2", "3"].as_ref())
+            get_numbers(vec!["another_param", "1", "-2", "3"].as_ref(), 10)
         );
 
         assert_eq!(
             Err(String::from("E3 error: invalid digit found in string")),
-            get_numbers(vec!["1", "-2", "3", " ", "4"].as_ref())
+            get_numbers(vec!["1", "-2", "3", " ", "4"].as_ref(), 10)
         );
         assert_eq!(
             Err(String::from("E3 error: invalid digit found in string")),
-            get_numbers(vec!["1", "-2", "3.0", "v", "4"].as_ref())
+            get_numbers(vec!["1", "-2", "3.0", "v", "4"].as_ref(), 10)
         );
         assert_eq!(
             Err(String::from("E3 error: invalid digit found in string")),
-            get_numbers(vec!["1", "-2", "--3", " ", "4"].as_ref())
+            get_numbers(vec!["1", "-2", "--3", " ", "4"].as_ref(), 10)
         );
         assert_eq!(
             Err(String::from("E4 error: option used but there was no value supplied")),
-            get_numbers(vec![].as_ref())
+            get_numbers(vec![].as_ref(), 10)
         );
+
+        assert_eq!(
+            Err(String::from("E3 error: not all parameters are within the boundary of -10 to 10")),
+            get_numbers(vec!["1", "-2", "-300", "4"].as_ref(), 10)
+        );
+        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "30"].as_ref(), 10));
     }
 }
