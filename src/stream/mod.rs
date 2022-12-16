@@ -37,30 +37,30 @@ impl Ddnnf {
         while param_index < args.len() {
             param_index += 1;
             match args[param_index-1] {
-                "p" => {
+                "a" | "assumptions" => {
                     params = match get_numbers(&args[param_index..], self.number_of_variables) {
                         Ok(v) => v,
                         Err(e) => return e,
                     };
                     param_index += params.len();
                 },
-                "v" => {
+                "v" | "variables" => {
                     values = match get_numbers(&args[param_index..], self.number_of_variables) {
                         Ok(v) => v,
                         Err(e) => return e,
                     };
                     param_index += values.len();
                 },
-                "seed" | "limit" | "path" => {
+                "seed" | "s" | "limit" | "l" | "path" | "p" => {
                     if param_index < args.len() {
                         match args[param_index-1] {
-                            "seed" => { seed = match args[param_index].parse::<u64>() {
+                            "seed" | "s" => { seed = match args[param_index].parse::<u64>() {
                                     Ok(x) => x,
                                     Err(e) => return format!("E3 error: {}", e),
                                 };
                                 param_index += 1;
                             },
-                            "limit" => {
+                            "limit" | "l" => {
                                 limit = match args[param_index].parse::<usize>() {
                                     Ok(x) => x,
                                     Err(e) => return format!("E3 error: {}", e),
@@ -371,19 +371,19 @@ mod test {
         );
         assert_eq!(
             String::from("67;-58"),
-            auto1.handle_stream_msg("core p 20 v 1 67 -58")
+            auto1.handle_stream_msg("core a 20 v 1 67 -58")
         );
         assert_eq!(
             String::from("4;5;6"), // count p 1 2 3 == 0
-            auto1.handle_stream_msg("core p 1 2 3 v 4 5 6")
+            auto1.handle_stream_msg("core a 1 2 3 v 4 5 6")
         );
 
         assert_eq!(
             String::from("1 2 6 10 15 19 25 31 40"),
-            vp9.handle_stream_msg("core p 1")
+            vp9.handle_stream_msg("core assumptions 1")
         );
         assert!( // count p 1 2 3 == 0 => all features are core under that assumption
-            auto1.handle_stream_msg("core p 1 2 3").split(" ").count() == (auto1.number_of_variables*2) as usize
+            auto1.handle_stream_msg("core a 1 2 3").split(" ").count() == (auto1.number_of_variables*2) as usize
         );
 
         assert!(
@@ -410,7 +410,7 @@ mod test {
         );
         assert_eq!(
             String::from("0;0"),
-            auto1.handle_stream_msg("count p -1469 -1114 939 1551 v 1 1529")
+            auto1.handle_stream_msg("count assumptions -1469 -1114 939 1551 variables 1 1529")
         );
         
         assert_eq!(
@@ -419,7 +419,7 @@ mod test {
         );
         assert_eq!(
             auto1.handle_stream_msg("count v 123 -1111"),
-            vec![auto1.handle_stream_msg("count p 123"), auto1.handle_stream_msg("count p -1111")].join(";")
+            vec![auto1.handle_stream_msg("count a 123"), auto1.handle_stream_msg("count a -1111")].join(";")
         );
     }
 
@@ -434,7 +434,7 @@ mod test {
         );
         assert_eq!(
             String::from("false;false"),
-            auto1.handle_stream_msg("sat p -1469 -1114 939 1551 v 1 1529")
+            auto1.handle_stream_msg("sat a -1469 -1114 939 1551 v 1 1529")
         );
         assert_eq!(
             (auto1.rc() > 0).to_string(),
@@ -443,8 +443,8 @@ mod test {
         assert_eq!(
             auto1.handle_stream_msg("sat v 1 58"),
             vec![
-                auto1.handle_stream_msg("sat p 1"),
-                auto1.handle_stream_msg("sat p 58")
+                auto1.handle_stream_msg("sat a 1"),
+                auto1.handle_stream_msg("sat a 58")
             ].join(";")
         );
     }
@@ -456,7 +456,7 @@ mod test {
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
-        let binding = vp9.handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39");
+        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39");
         let res: Vec<&str> = binding.split(";").collect();
 
         assert!(
@@ -466,7 +466,7 @@ mod test {
 
         assert_eq!(
             80,
-            vp9.handle_stream_msg("enum p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").split(";").count()
+            vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").split(";").count()
         );
         assert_eq!(
             216000,
@@ -481,14 +481,14 @@ mod test {
 
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
-            vp9.handle_stream_msg("random seed banana")
+            vp9.handle_stream_msg("random s banana")
         );
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
-            vp9.handle_stream_msg("random limit eight")
+            vp9.handle_stream_msg("random l eight")
         );
 
-        let mut binding = vp9.handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69");
+        let mut binding = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69");
         let mut res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
         assert!(
             vp9.execute_query(&res) == 1
@@ -501,14 +501,14 @@ mod test {
 
         assert_eq!(
             35,
-            vp9.handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ").split(";").count()
+            vp9.handle_stream_msg("random assumptions 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ").split(";").count()
         );
         // if the limit > the #remaining satisfiable configurations for given assumptions then there will by only #remaining satisfiable configurations
         assert_eq!(
-            vp9.handle_stream_msg("count p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").parse::<usize>().unwrap(),
-            vp9.handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 100000000 seed 42").split(";").count()
+            vp9.handle_stream_msg("count a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").parse::<usize>().unwrap(),
+            vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 l 100000000 s 42").split(";").count()
         );
-        let binding2 = vp9.handle_stream_msg("random p 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ");
+        let binding2 = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 l 35 ");
         let inter_res = binding2.split(";").collect::<Vec<&str>>();
         for res in inter_res {
             assert!(
@@ -522,7 +522,7 @@ mod test {
             vec![
                 "216000", "0", "72000"
             ].join(";")),
-            vp9.handle_stream_msg("count v 1 -2 3")
+            vp9.handle_stream_msg("count variables 1 -2 3")
         );
     }
 
@@ -541,6 +541,11 @@ mod test {
             String::from("E4 error: param \"path\" was used, but no value supplied"),
             vp9.handle_stream_msg("save path")
         );
+        assert_eq!(
+            String::from("E4 error: param \"p\" was used, but no value supplied"),
+            vp9.handle_stream_msg("save p")
+        );
+
 
         assert_eq!(
             String::from("E5 error: no file path was supplied"),
@@ -552,7 +557,7 @@ mod test {
         );
         assert_eq!(
             String::from("E5 error: file path is not absolute, but has to be"),
-            vp9.handle_stream_msg("save path ./")
+            vp9.handle_stream_msg("save p ./")
         );
 
         assert_eq!(
@@ -569,7 +574,7 @@ mod test {
 
         assert_eq!(
             String::from("exit"),
-            auto1.handle_stream_msg("exit seed 4 limit 10")
+            auto1.handle_stream_msg("exit s 4 l 10")
         );
     }
 
@@ -583,33 +588,37 @@ mod test {
         );
         assert_eq!(
             String::from("E4 error: the option \"5\" is not valid in this context"),
-            auto1.handle_stream_msg("random p 1 2 seed 13 5")
+            auto1.handle_stream_msg("random a 1 2 s 13 5")
         );
 
         assert_eq!(
             String::from("E4 error: option used but there was no value supplied"),
-            auto1.handle_stream_msg("random p")
+            auto1.handle_stream_msg("random a")
         );
         assert_eq!(
             String::from("E4 error: option used but there was no value supplied"),
-            auto1.handle_stream_msg("count p 1 2 3 v")
+            auto1.handle_stream_msg("count a 1 2 3 v")
         );
 
         assert_eq!(
             String::from("E1 error: not yet supported"),
-            auto1.handle_stream_msg("t-wise_sampling p 1 v 2")
+            auto1.handle_stream_msg("t-wise_sampling a 1 v 2")
         );
         assert_eq!(
             String::from("E2 error: the operation \"revive_dinosaurs\" is not supported"),
-            auto1.handle_stream_msg("revive_dinosaurs p 1 v 2")
+            auto1.handle_stream_msg("revive_dinosaurs a 1 v 2")
+        );
+        assert_eq!(
+            String::from("E4 error: the option \"params\" is not valid in this context"),
+            auto1.handle_stream_msg("count assumptions 1 v 2 params 3")
         );
         assert_eq!(
             String::from("E4 error: the option \"god_mode\" is not valid in this context"),
-            auto1.handle_stream_msg("count p 1 v 2 god_mode 3")
+            auto1.handle_stream_msg("count assumptions 1 v 2 god_mode 3")
         );
         assert_eq!(
             String::from("E4 error: the option \"BDDs\" is not valid in this context"),
-            auto1.handle_stream_msg("count p 1 2 BDDs 3")
+            auto1.handle_stream_msg("count a 1 2 BDDs 3")
         );  
     }
 
