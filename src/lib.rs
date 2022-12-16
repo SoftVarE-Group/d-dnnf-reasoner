@@ -1,6 +1,6 @@
 //#![warn(missing_docs)]
 #![warn(unused_qualifications)]
-#![deny(unreachable_pub)]
+//#![deny(unreachable_pub)]
 #![deny(deprecated)]
 #![deny(missing_copy_implementations)]
 
@@ -15,4 +15,4 @@ pub mod data_structure;
 pub use crate::data_structure::{Ddnnf, Node};
 
 pub mod stream;
-pub use crate::stream::handle_stream_msg;
+pub use crate::stream::*;

@@ -20,7 +20,6 @@ use std::time::Instant;
 
 use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser::{self as dparser, write_ddnnf};
-use ddnnf_lib::handle_stream_msg;
 
 fn main() {
     let mut matches = Command::new("ddnnife")
@@ -255,7 +254,7 @@ fn main() {
                 Ok(mut buffer) => {
                     buffer.pop();
 
-                    let response = handle_stream_msg(&buffer, &mut ddnnf);
+                    let response = ddnnf.handle_stream_msg(&buffer);
 
                     match response.as_str() {
                         "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
