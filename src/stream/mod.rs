@@ -132,7 +132,7 @@ impl Ddnnf {
                 &values
             ),
             "sat" => op_with_assumptions_and_vars(
-                |d, x, _| Some(Ddnnf::execute_query(d, x) > 0),
+                |d, x, _| Some(Ddnnf::is_sat_for(d, x)),
                 self,
                 &mut params,
                 &values

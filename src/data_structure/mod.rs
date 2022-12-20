@@ -232,22 +232,7 @@ impl Ddnnf {
     /// to the rules mentioned at the Nodetypes and returns the result.
     /// The function does not use the marking approach.
     /// This function trys to apply optimisations based on core and dead features.
-    ///
-    /// # Example
-    /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::data_structure::*;
-    /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
-    ///
-    /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
-    ///
-    /// assert_eq!(Integer::from(3), ddnnf.card_of_feature(3));
-    ///
-    /// ```
-    pub fn card_of_feature(&mut self, feature: i32) -> Integer {
+    fn _operate_on_single_feature(&mut self, feature: i32, operation: fn(&mut Ddnnf, usize)) -> Integer {
         if self.core.contains(&feature) {
             self.rc()
         } else if self.dead.contains(&feature) {
@@ -260,11 +245,11 @@ impl Ddnnf {
                         if feature == -*literal {
                             self.nodes[i].temp.assign(0);
                         } else {
-                            self.calc_count(i)   
+                            operation(self, i)   
                         }
                     }
                     // all other values stay the same, respectevly get adjusted because the count of the one node got changed
-                    _ => self.calc_count(i),
+                    _ => operation(self, i),
                 }
             }
             self.rt()
@@ -276,22 +261,7 @@ impl Ddnnf {
     /// according to the rules mentioned at the Nodetypes and returns the result.
     /// The function does not use the marking approach.
     /// This function trys to apply optimisations based on core and dead features.
-    ///
-    /// # Example
-    /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::data_structure::*;
-    /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
-    ///
-    /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
-    ///
-    /// assert_eq!(Integer::from(3), ddnnf.card_of_partial_config(&vec![1,3]));
-    ///
-    /// ```
-    pub fn card_of_partial_config(&mut self, features: &[i32]) -> Integer {
+    fn operate_on_partial_config_default(&mut self, features: &[i32], operation: fn(&mut Ddnnf, usize)) -> Integer {
         if self.query_is_not_sat(features) {
             Integer::ZERO
         } else {
@@ -303,10 +273,10 @@ impl Ddnnf {
                         if features.contains(&-literal) {
                             self.nodes[i].temp.assign(0);
                         } else {
-                            self.calc_count(i)   
+                            operation(self, i)   
                         }
                     }
-                    _ => self.calc_count(i),
+                    _ => operation(self, i),
                 }
             }
             self.rt()
@@ -348,7 +318,7 @@ impl Ddnnf {
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn calc_count_marker(&mut self, indize: &[usize]) -> Integer {
+    fn operate_on_marker(&mut self, indize: &[usize], operation: fn(&mut Ddnnf, usize)) -> Integer {
         for i in indize.iter().copied() {
             self.nodes[i].temp.assign(0); // change the value of the node
             self.mark_nodes(i); // go through the path til the root node is marked
@@ -360,13 +330,13 @@ impl Ddnnf {
         // calc the count for all marked nodes, respectevly all nodes that matter
         for j in 0..self.md.len() {
             if !indize.contains(&self.md[j]) {
-                self.calc_count_marked_node(self.md[j]);
+                operation(self, self.md[j]);
             }
         }
 
         // reset everything
-        for j in 0..self.md.len() {
-            self.nodes[self.md[j]].marker = false
+        for index in &self.md {
+            self.nodes[*index].marker = false
         }
         unsafe { COUNTER = self.md.len() as u64 }
         self.md.clear();
@@ -380,30 +350,14 @@ impl Ddnnf {
     /// The marking algorithm differs to the standard variation by only reomputing the
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
-    ///
-    /// # Example
-    /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::data_structure::*;
-    /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
-    ///
-    /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
-    ///
-    /// assert_eq!(Integer::from(3), ddnnf.card_of_feature_with_marker(3));
-    ///
-    /// ```
-    pub fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
+    fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) || self.dead.contains(&-feature) {
             self.rc()
-        } else if self.dead.contains(&feature) || self.core.contains(&-feature)
-        {
+        } else if self.dead.contains(&feature) || self.core.contains(&-feature) {
             Integer::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
-                Some(i) => self.calc_count_marker(&[i]),
+                Some(i) => self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
                 None => self.rc(),
             }
@@ -413,24 +367,10 @@ impl Ddnnf {
     #[inline]
     /// Computes the cardinality of a partial configuration using the marking algorithm.
     /// Works analog to the card_of_feature_with_marker()
-    ///
-    /// # Example
-    /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::data_structure::*;
-    /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
-    ///
-    /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
-    ///
-    /// assert_eq!(Integer::from(3), ddnnf.card_of_partial_config_with_marker(&vec![3,1]));
-    ///
-    /// ```
-    pub fn card_of_partial_config_with_marker(
+    fn operate_on_partial_config_marker(
         &mut self,
         features: &[i32],
+        operation: fn(&mut Ddnnf, usize)
     ) -> Integer {
         if self.query_is_not_sat(features) {
             Integer::ZERO
@@ -450,7 +390,7 @@ impl Ddnnf {
                 return self.rc();
             }
 
-            self.calc_count_marker(&indize)
+            self.operate_on_marker(&indize, operation)
         }
     }
 
@@ -509,7 +449,7 @@ impl Ddnnf {
         } else if features.len() <= 10 {
             let time = Instant::now();
             let res: Integer =
-                self.card_of_partial_config_with_marker(&features);
+                self.operate_on_partial_config_marker(&features, Ddnnf::calc_count_marked_node);
             let elapsed_time = time.elapsed().as_secs_f32();
             let count = unsafe { COUNTER };
 
@@ -525,7 +465,7 @@ impl Ddnnf {
             );
         } else {
             let time = Instant::now();
-            let res: Integer = self.card_of_partial_config(&features);
+            let res: Integer = self.operate_on_partial_config_default(&features, Ddnnf::calc_count);
             let elapsed_time = time.elapsed().as_secs_f32();
 
             println!(
@@ -559,8 +499,83 @@ impl Ddnnf {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]),
-            2..=9 => self.card_of_partial_config_with_marker(&features),
-            _ => self.card_of_partial_config(&features)
+            2..=50 => self.operate_on_partial_config_marker(&features, Ddnnf::calc_count_marked_node),
+            _ => self.operate_on_partial_config_default(&features, Ddnnf::calc_count)
+        }
+    }
+
+    #[inline]
+    // Computes if a node is satisfiable with the marking algorithm:
+    // Here, we use the number representation of 1 for true and 0 for false.
+    fn sat_marked_node(&mut self, i: usize) {
+        match &self.nodes[i].ntype {
+            And { children } => {
+                // if any child count is 0 => And has to be 0 too, because we multiply all children
+                self.nodes[i].temp = 
+                    if children.iter().any(|&index| {
+                            if self.nodes[index].marker {
+                                self.nodes[index].temp == Integer::ZERO
+                            } else {
+                                self.nodes[index].count == Integer::ZERO
+                            }}) {
+                        Integer::ZERO 
+                    } else {
+                        Integer::from(1)
+                    };
+            },
+            Or { children } => {
+                // if any child count is > 0 => Or has to be > 0 too, because we add all children
+                self.nodes[i].temp = 
+                    if children.iter().any(|&index| {
+                        if self.nodes[index].marker {
+                            self.nodes[index].temp > Integer::ZERO
+                        } else {
+                            self.nodes[index].count > Integer::ZERO
+                        }}) {
+                    Integer::from(1)
+                } else {
+                    Integer::ZERO
+                };
+            }
+            False => self.nodes[i].temp.assign(0),
+            _ => self.nodes[i].temp.assign(1) // True and Literal
+        }
+    }
+
+    #[inline]
+    // CComputes if a node is sat
+    fn sat_node_default(&mut self, i: usize) {
+        match &self.nodes[i].ntype {
+            And { children } => {
+                // if any child count is 0 => And has to be 0 too, because we multiply all children
+                self.nodes[i].temp = if children
+                    .iter()
+                    .any(|&indice| self.nodes[indice].temp == Integer::ZERO) {
+                    Integer::ZERO
+                } else {
+                    Integer::from(1)
+                }
+            },
+            Or { children } => {
+                // if any child count is > 0 => Or has to be > 0 too, because we add all children
+                self.nodes[i].temp = if children
+                    .iter()
+                    .any(|&indice| self.nodes[indice].temp > Integer::ZERO) {
+                    Integer::from(1)
+                } else {
+                    Integer::ZERO
+                };
+            }
+            False => self.nodes[i].temp.assign(0),
+            _ => self.nodes[i].temp.assign(1), // True and Literal
+        }
+    }
+
+    pub fn is_sat_for(&mut self, features: &[i32]) -> bool {
+        match features.len() {
+            0 => self.rc() > 0,
+            1..=20 => self.operate_on_partial_config_marker(features, Ddnnf::sat_marked_node) > 0,
+            _ => self.operate_on_partial_config_default(features, Ddnnf::sat_node_default) > 0
         }
     }
 }
@@ -755,20 +770,11 @@ impl Ddnnf {
                 // Loop while there's expected to be work, looking for work.
                 // If work is available, do that work.
                 while let Some(work) = t_queue.pull_work() {
-                    // Do some work.
-                    let result;
-                    if work.len() <= 100 {
-                        result =
-                            ddnnf.card_of_partial_config_with_marker(&work);
-                    } else {
-                        result = ddnnf.card_of_partial_config(&work);
-                    };
-
                     // Send the work and the result of that work.
                     //
                     // Sending could fail. If so, there's no use in
                     // doing any more work, so abort.
-                    match t_results_tx.send((work, result)) {
+                    match t_results_tx.send((work.clone(), ddnnf.execute_query(&work))) {
                         Ok(_) => (),
                         Err(_) => {
                             break;
