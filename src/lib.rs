@@ -13,3 +13,5 @@ pub use crate::parser::c2d_lexer;
 
 pub mod data_structure;
 pub use crate::data_structure::{Ddnnf, Node};
+
+pub mod sampler;
