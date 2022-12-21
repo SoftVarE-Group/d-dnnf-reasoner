@@ -1,5 +1,5 @@
 use crate::data_structure::NodeType;
-use crate::{Ddnnf, Node};
+use crate::{Ddnnf};
 
 /// This is a d-DNNF backed SAT-Solver.
 /// It works basically in the same way as the marking algorithm for partial configuration
