@@ -1,6 +1,6 @@
 extern crate ddnnf_lib;
 
-use ddnnf_lib::data_structure::Ddnnf;
+use ddnnf_lib::ddnnf::Ddnnf;
 use ddnnf_lib::parser;
 
 use file_diff::diff_files;

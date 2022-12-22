@@ -18,8 +18,8 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::{self};
 use std::time::Instant;
 
-use ddnnf_lib::data_structure::Ddnnf;
-use ddnnf_lib::parser::{self as dparser, write_ddnnf};
+use ddnnf_lib::ddnnf::Ddnnf;
+use ddnnf_lib::parser::{self as dparser, persisting::write_ddnnf};
 
 fn main() {
     let mut matches = Command::new("ddnnife")

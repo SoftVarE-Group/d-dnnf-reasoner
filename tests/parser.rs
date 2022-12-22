@@ -1,6 +1,6 @@
 extern crate ddnnf_lib;
 
-use ddnnf_lib::data_structure::{Ddnnf, NodeType::*};
+use ddnnf_lib::ddnnf::{Ddnnf, node::NodeType::*};
 use ddnnf_lib::parser;
 
 use rug::Integer;

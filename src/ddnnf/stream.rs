@@ -7,9 +7,9 @@ use rand::{Rng, SeedableRng};
 
 use rug::Assign;
 
-use crate::parser::write_ddnnf;
-
-use super::data_structure::*;
+use crate::Ddnnf;
+use crate::parser::persisting::write_ddnnf;
+use super::node::NodeType;
 
 impl Ddnnf {
     /// error codes:

@@ -5,11 +5,13 @@ pub mod d4_lexer;
 use colour::{red, green, yellow};
 use d4_lexer::{lex_line_d4, D4Token};
 
+pub mod persisting;
+
 use core::panic;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
-    rc::Rc, fs::File, io::{LineWriter, Write}, process
+    rc::Rc, process
 };
 
 use rug::{Integer, Complete};
@@ -17,7 +19,7 @@ use rug::{Integer, Complete};
 pub mod bufreader_for_big_files;
 use bufreader_for_big_files::BufReaderMl;
 
-use crate::data_structure::{Ddnnf, Node, NodeType};
+use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
 
 use petgraph::Graph;
 use petgraph::{
@@ -34,7 +36,7 @@ use petgraph::{
 /// ```
 /// extern crate ddnnf_lib;
 /// use ddnnf_lib::parser;
-/// use ddnnf_lib::data_structure::Ddnnf;
+/// use ddnnf_lib::Ddnnf;
 ///
 /// let file_path = "./tests/data/small_test.dimacs.nnf";
 ///
@@ -457,49 +459,6 @@ fn calc_or_count(
     indices: &[usize],
 ) -> Integer {
     Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()
-}
-
-/// Takes a d-DNNF and writes the string representation into a file with the provided name
-pub fn write_ddnnf(ddnnf: &mut Ddnnf, path_out: &str) -> std::io::Result<()> {    
-    let file = File::create(path_out)?;
-    let mut file = LineWriter::with_capacity(1000, file);
-    
-    file.write_all(format!("nnf {} {} {}\n", ddnnf.nodes.len(), 0, ddnnf.number_of_variables).as_bytes())?;
-    for node in &ddnnf.nodes {
-        file.write_all(deconstruct_node(node).as_bytes())?;
-    }
-
-    Ok(())
-}
-
-/// Takes a node of the ddnnf which is in the our representation of a flatted DAG
-/// and transforms it into the corresponding String.
-/// We use an adjusted version of the c2d format: Or nodes can have multiple children, there are no decision nodes
-fn deconstruct_node(node: &Node) -> String {
-    let mut str = match &node.ntype {
-        NodeType::And { children } => deconstruct_children(String::from("A "), &children),
-        NodeType::Or { children } => deconstruct_children(String::from("O 0 "), &children),
-        NodeType::Literal { literal } => format!("L {}", literal),
-        NodeType::True => String::from("A 0"),
-        NodeType::False => String::from("O 0 0"),
-    };
-    str.push('\n');
-    str
-}
-
-#[inline]
-fn deconstruct_children(mut str: String, children: &Vec<usize>) -> String {
-    str.push_str(&children.len().to_string());
-    str.push(' ');
-
-    for n in 0..children.len() {
-        str.push_str(&children[n].to_string());
-
-        if n != children.len() - 1 {
-            str.push(' ');
-        }
-    }
-    str
 }
 
 /// Is used to parse the queries in the config files
