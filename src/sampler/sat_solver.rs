@@ -1,10 +1,10 @@
 use crate::data_structure::NodeType;
-use crate::{Ddnnf};
+use crate::Ddnnf;
 
 /// This is a d-DNNF backed SAT-Solver.
 /// It works basically in the same way as the marking algorithm for partial configuration
 /// counting but with a few shortcuts. This solver also allows SAT-Solving
-/// for subgraphs of the d-DNNF and allows to cache the solvers state between calls.
+/// for sub graphs of the d-DNNF and allows to cache the solvers state between calls.
 /// The [SatSolver::is_sat()] function has different variants for when those features
 /// are needed or not.
 ///
@@ -31,6 +31,7 @@ use crate::{Ddnnf};
 /// Note: The caching variants mutate the given state. If you need the same state multiple times
 /// (which is likely because why would you cache it otherwise?) it is your responsibility as caller
 /// to copy the state beforehand.
+#[derive(Debug, Clone)]
 pub struct SatSolver<'a> {
     ddnnf: &'a Ddnnf,
 }
@@ -153,7 +154,7 @@ impl<'a> SatSolver<'a> {
             NodeType::Or { children } => children
                 .iter()
                 .all(|&child| *marked.get(child).expect(STATE_SIZE)),
-            _ => panic!("ntype of a parent node should be And or Or"),
+            _ => panic!("node type of a parent node should be And or Or"),
         }
     }
 }

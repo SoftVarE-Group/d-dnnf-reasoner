@@ -1,25 +1,32 @@
 use crate::sampler::data_structure::{Config, Sample};
 
+pub mod zipping_merger;
+
 pub trait SampleMerger {
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
-    fn merge(&self, left: &Sample, right: &Sample) -> Sample;
+    fn merge(&self, node_id: usize, left: &Sample, right: &Sample) -> Sample;
 
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
     ///
     /// This method only works in place if the used merger actually overrides this method.
     /// The default implementation calls [Self::merge()] and is therefore not in place.
-    fn merge_in_place(&self, left: Sample, right: &Sample) -> Sample {
-        self.merge(&left, right)
+    fn merge_in_place(
+        &self,
+        node_id: usize,
+        left: Sample,
+        right: &Sample,
+    ) -> Sample {
+        self.merge(node_id, &left, right)
     }
 
     /// Creates a new sample by merging all given samples.
     /// The merging follows the behaviour defined by the merger.
     /// Returns [Sample::empty] if the given slice is empty.
-    fn merge_all(&self, samples: &[&Sample]) -> Sample {
+    fn merge_all(&self, node_id: usize, samples: &[&Sample]) -> Sample {
         samples.iter().fold(Sample::empty(), |acc, &sample| {
-            self.merge_in_place(acc, sample)
+            self.merge_in_place(node_id, acc, sample)
         })
     }
 }
@@ -37,7 +44,7 @@ pub trait OrMerger: SampleMerger {}
 pub struct DummyAndMerger {}
 
 impl SampleMerger for DummyAndMerger {
-    fn merge(&self, left: &Sample, right: &Sample) -> Sample {
+    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -64,7 +71,7 @@ impl AndMerger for DummyAndMerger {}
 pub struct DummyOrMerger {}
 
 impl SampleMerger for DummyOrMerger {
-    fn merge(&self, left: &Sample, right: &Sample) -> Sample {
+    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
