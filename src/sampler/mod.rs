@@ -64,7 +64,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
 
         match &node.ntype {
             Literal { literal } => SamplingResult::ResultWithSample(
-                Sample::from_literal(literal.clone()),
+                Sample::from_literal(*literal),
             ),
             And { children } => {
                 self.sample_and(node_id, self.get_child_results(children))

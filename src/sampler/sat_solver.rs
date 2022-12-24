@@ -36,10 +36,10 @@ pub struct SatSolver<'a> {
     ddnnf: &'a Ddnnf,
 }
 
-const STATE_SIZE: &'static str =
+const STATE_SIZE: &str =
     "size of sat solver state vec should equal number of nodes in the ddnnf";
 
-const NODE_EXISTS: &'static str = "node should exist in the ddnnf";
+const NODE_EXISTS: &str = "node should exist in the ddnnf";
 
 impl<'a> SatSolver<'a> {
     /// Create a new [SatSolver] backed by the given d-DNNF
@@ -114,7 +114,7 @@ impl<'a> SatSolver<'a> {
                 }
             }
         }
-        return !cached_state.get(root).expect(STATE_SIZE).clone();
+        return !*cached_state.get(root).expect(STATE_SIZE);
     }
 
     /// Mark a node as *not sat* and then propagates up until no node can be marked anymore.

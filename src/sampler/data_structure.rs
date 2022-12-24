@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::iter;
 
 /// Represents a (partial) configuration
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct Config {
     /// A vector of selected features (positive values) and deselected features (negative values)
     literals: Vec<i32>,
@@ -113,7 +113,7 @@ impl Config {
         sat_solver.is_sat_in_subgraph_cached(
             &literals,
             root,
-            &mut self.get_sat_state()
+            self.get_sat_state()
                 .expect("sat_state should exist because we initialized it a few lines before"),
         );
     }
@@ -347,7 +347,7 @@ mod test {
     #[test]
     fn test_sample_covering() {
         let sample = Sample {
-            complete_configs: vec![Config::from(&vec![1, 2, 3, -4, -5])],
+            complete_configs: vec![Config::from(&[1, 2, 3, -4, -5])],
             partial_configs: vec![],
             vars: HashSet::from([1, 2, 3, 4, 5]),
             literals: HashSet::from([1, 2, 3, -4, -5]),
@@ -378,7 +378,7 @@ mod test {
         ];
 
         // config without sat state
-        let mut config = Config::from(&vec![3]);
+        let mut config = Config::from(&[3]);
         assert_eq!(config.sat_state, None);
 
         // update from None to Some(_)
