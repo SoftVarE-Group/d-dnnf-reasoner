@@ -251,6 +251,10 @@ impl Sample {
         &self.literals
     }
 
+    pub fn get_vars(&self) -> &HashSet<u32> {
+        &self.vars
+    }
+
     /// Adds a config to this sample. Only use this method if you know that the config is
     /// complete. The added config is treated as a complete config without checking
     /// if it actually is complete.

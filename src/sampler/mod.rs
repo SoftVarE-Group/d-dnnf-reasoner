@@ -140,14 +140,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     }
 }
 
-pub fn sample_t_wise(ddnnf: Ddnnf, t: usize) -> SamplingResult {
-    let sat_solver = SatSolver::new(&ddnnf);
+pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
+    let sat_solver = SatSolver::new(ddnnf);
     let and_merger = ZippingMerger {
         t,
         sat_solver: &sat_solver,
     };
     let or_merger = DummyOrMerger {};
-    let mut sampler = TWiseSampler::new(&ddnnf, and_merger, or_merger);
+    let mut sampler = TWiseSampler::new(ddnnf, and_merger, or_merger);
 
     for node_id in 0..sampler.ddnnf.number_of_nodes {
         let partial_sample = sampler.make_partial_sample(node_id);

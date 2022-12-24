@@ -1,6 +1,7 @@
 use crate::sampler::data_structure::{Config, Sample};
 
 pub mod zipping_merger;
+pub mod similarity_merger;
 
 pub trait SampleMerger {
     /// Creates a new sample by merging two samples.
