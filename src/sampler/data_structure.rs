@@ -29,8 +29,11 @@ impl Extend<i32> for Config {
 impl Config {
     /// Creates a new config with the given literals
     pub fn from(literals: &[i32]) -> Self {
+        let mut literals = Vec::from(literals);
+        literals.sort_unstable();
+        literals.dedup();
         Self {
-            literals: Vec::from(literals),
+            literals,
             sat_state: None,
             sat_state_complete: false,
         }
@@ -40,6 +43,8 @@ impl Config {
     pub fn from_disjoint(left: &Self, right: &Self) -> Self {
         let mut literals = left.literals.clone();
         literals.extend(right.literals.iter());
+        literals.sort_unstable();
+        literals.dedup();
 
         let sat_state = match (left.sat_state.clone(), right.sat_state.clone())
         {
@@ -121,16 +126,31 @@ impl Config {
     /// Checks if this config obviously conflicts with the interaction.
     /// This is the case when the config contains a literal *l* and the interaction contains *-l*
     pub fn conflicts_with(&self, interaction: &[i32]) -> bool {
-        interaction
-            .iter()
-            .any(|literal| self.literals.contains(&-literal))
+        interaction.iter()
+            .any(|&literal| self.contains(-literal))
     }
 
     /// Checks if this config covers the given interaction
     pub fn covers(&self, interaction: &[i32]) -> bool {
         interaction
             .iter()
-            .all(|literal| self.literals.contains(literal))
+            .all(|&literal| self.contains(literal))
+    }
+
+    fn contains(&self, literal: i32) -> bool {
+        debug_assert!(literal != 0);
+        if literal > 0 {
+            self.literals
+                .iter()
+                .rev()
+                .take_while(|i| **i > 0)
+                .any(|i| *i == literal)
+        } else {
+            self.literals
+                .iter()
+                .take_while(|i| **i < 0)
+                .any(|i| *i == literal)
+        }
     }
 }
 
