@@ -146,8 +146,9 @@ pub struct Sample {
     pub partial_configs: Vec<Config>,
     /// The variables that Configs of this sample may contain
     vars: HashSet<u32>,
-    /// The literals that actually occur in this sample
-    literals: HashSet<i32>,
+    /// The literals that actually occur in this sample, this is not a HashSet because we want
+    /// a stable iteration order.
+    literals: Vec<i32>,
 }
 
 impl Extend<Config> for Sample {
@@ -165,7 +166,7 @@ impl Sample {
             complete_configs: vec![],
             partial_configs: vec![],
             vars,
-            literals: HashSet::new(),
+            literals: vec![],
         }
     }
 
@@ -185,11 +186,13 @@ impl Sample {
     /// assert_eq!(None, iter.next());
     /// ```
     pub fn new_from_configs(configs: Vec<Config>) -> Self {
-        let literals: HashSet<i32> = configs
+        let mut literals: Vec<i32> = configs
             .iter()
             .flat_map(|c| c.literals.iter())
-            .cloned()
+            .copied()
             .collect();
+        literals.sort_unstable();
+        literals.dedup();
 
         let vars: HashSet<u32> =
             literals.iter().map(|x| x.unsigned_abs()).collect();
@@ -220,8 +223,10 @@ impl Sample {
     /// this sample contain the given literals.
     pub fn new_with_literals(
         vars: HashSet<u32>,
-        literals: HashSet<i32>,
+        mut literals: Vec<i32>,
     ) -> Self {
+        literals.sort_unstable();
+        literals.dedup();
         Self {
             complete_configs: vec![],
             partial_configs: vec![],
@@ -236,7 +241,7 @@ impl Sample {
             complete_configs: vec![],
             partial_configs: vec![],
             vars: HashSet::new(),
-            literals: HashSet::new(),
+            literals: vec![],
         }
     }
 
@@ -247,7 +252,7 @@ impl Sample {
         sample
     }
 
-    pub fn get_literals(&self) -> &HashSet<i32> {
+    pub fn get_literals(&self) -> &[i32] {
         &self.literals
     }
 
@@ -259,7 +264,9 @@ impl Sample {
     /// complete. The added config is treated as a complete config without checking
     /// if it actually is complete.
     pub fn add_complete(&mut self, config: Config) {
-        self.literals.extend(&config.literals);
+        self.literals.extend_from_slice(&config.literals);
+        self.literals.sort_unstable();
+        self.literals.dedup();
         self.complete_configs.push(config)
     }
 
@@ -267,7 +274,9 @@ impl Sample {
     /// partial. The added config is treated as a partial config without checking
     /// if it actually is partial.
     pub fn add_partial(&mut self, config: Config) {
-        self.literals.extend(&config.literals);
+        self.literals.extend_from_slice(&config.literals);
+        self.literals.sort_unstable();
+        self.literals.dedup();
         self.partial_configs.push(config)
     }
 
@@ -350,7 +359,7 @@ mod test {
             complete_configs: vec![Config::from(&[1, 2, 3, -4, -5])],
             partial_configs: vec![],
             vars: HashSet::from([1, 2, 3, 4, 5]),
-            literals: HashSet::from([1, 2, 3, -4, -5]),
+            literals: vec![1, 2, 3, -4, -5],
         };
 
         let covered_interaction = vec![1, 2, -4];

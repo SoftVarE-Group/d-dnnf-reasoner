@@ -28,19 +28,17 @@ impl SampleMerger for ZippingMerger<'_> {
         Iterate over the remaining interactions. Those are all interactions
         that contain at least one literal of the left and one of the right subgraph.
          */
-        let left_literals: Vec<i32> =
-            left.get_literals().iter().copied().collect();
-        let right_literals: Vec<i32> =
-            right.get_literals().iter().copied().collect();
+        let left_literals = left.get_literals();
+        let right_literals = right.get_literals();
 
         for k in 1..self.t {
             // take k literals of the left subgraph and t-k literals of the right subgraph
             let left_len = min(left_literals.len(), k);
             let right_len = min(right_literals.len(), self.t - k);
-            let left_iter = t_wise_over(&left_literals, left_len);
+            let left_iter = t_wise_over(left_literals, left_len);
 
             for left_part in left_iter {
-                let right_iter = t_wise_over(&right_literals, right_len);
+                let right_iter = t_wise_over(right_literals, right_len);
                 for mut right_part in right_iter {
                     right_part.extend(&left_part);
                     cover_with_caching(
@@ -131,7 +129,7 @@ mod test {
 
         let mut left_sample = Sample::new_with_literals(
             HashSet::from([2, 3]),
-            HashSet::from([-2, 3]),
+            vec![-2, 3],
         );
         left_sample.add_partial(Config::from(&[3]));
         let right_sample =
