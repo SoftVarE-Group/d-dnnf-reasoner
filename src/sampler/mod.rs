@@ -6,6 +6,7 @@ use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
 use crate::sampler::sample_merger::{AndMerger, DummyOrMerger, OrMerger};
 use crate::sampler::sat_solver::SatSolver;
 use crate::Ddnnf;
+use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 
 pub mod covering_strategies;
 pub mod data_structure;
@@ -146,7 +147,9 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
         t,
         sat_solver: &sat_solver,
     };
-    let or_merger = DummyOrMerger {};
+    let or_merger = SimilarityMerger {
+        t,
+    };
     let mut sampler = TWiseSampler::new(ddnnf, and_merger, or_merger);
 
     for node_id in 0..sampler.ddnnf.number_of_nodes {
