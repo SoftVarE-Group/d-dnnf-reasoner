@@ -1,4 +1,5 @@
 use crate::sampler::sat_solver::SatSolver;
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::iter;
 
@@ -13,6 +14,7 @@ pub struct Config {
 
 impl PartialEq for Config {
     fn eq(&self, other: &Self) -> bool {
+        debug_assert_eq!(self.literals.len(), other.literals.len());
         self.literals.eq(&other.literals)
     }
 }
@@ -20,32 +22,30 @@ impl PartialEq for Config {
 impl Extend<i32> for Config {
     fn extend<T: IntoIterator<Item=i32>>(&mut self, iter: T) {
         self.sat_state_complete = false;
-        self.literals.extend(iter);
-        self.literals.sort_unstable();
-        self.literals.dedup();
+        for literal in iter {
+            self.add(literal);
+        }
     }
 }
 
 impl Config {
     /// Creates a new config with the given literals
-    pub fn from(literals: &[i32]) -> Self {
-        let mut literals = Vec::from(literals);
-        literals.sort_unstable();
-        literals.dedup();
-        Self {
-            literals,
+    pub fn from(literals: &[i32], number_of_variables: usize) -> Self {
+        let mut config = Self {
+            literals: vec![0; number_of_variables],
             sat_state: None,
             sat_state_complete: false,
-        }
+        };
+        config.extend(literals.iter().copied());
+        config
     }
 
     /// Creates a new config from two disjoint configs.
-    pub fn from_disjoint(left: &Self, right: &Self) -> Self {
-        let mut literals = left.literals.clone();
-        literals.extend(right.literals.iter());
-        literals.sort_unstable();
-        literals.dedup();
-
+    pub fn from_disjoint(
+        left: &Self,
+        right: &Self,
+        number_of_variables: usize,
+    ) -> Self {
         let sat_state = match (left.sat_state.clone(), right.sat_state.clone())
         {
             (Some(left_state), Some(right_state)) => {
@@ -59,7 +59,9 @@ impl Config {
                 marker does not propagate upward to the AND. So the AND remains unmarked which
                 is wrong and may cause wrong results when SAT solving.
                  */
-                if left.literals.len() >= right.literals.len() {
+                if left.get_decided_literals().count()
+                    >= right.get_decided_literals().count()
+                {
                     Some(left_state)
                 } else {
                     Some(right_state)
@@ -69,16 +71,27 @@ impl Config {
             (None, None) => None,
         };
 
-        Self {
-            literals,
+        let mut config = Self {
+            literals: vec![0; number_of_variables],
             sat_state,
             sat_state_complete: false, // always false because we can not combine the states
-        }
+        };
+        config.extend(left.get_decided_literals());
+        config.extend(right.get_decided_literals());
+        config
     }
 
-    /// Returns a slice of this configs literals
+    /// Returns a slice of this configs literals (may contain zeros)
     pub fn get_literals(&self) -> &[i32] {
         &self.literals
+    }
+
+    /// Returns an iterator over the selected and unselected features
+    pub fn get_decided_literals(&self) -> impl Iterator<Item=i32> + '_ {
+        self.literals
+            .iter()
+            .copied()
+            .filter(|&literal| literal != 0)
     }
 
     /// Returns the cached sat state if there is one
@@ -109,7 +122,7 @@ impl Config {
         }
 
         // clone literals to avoid borrow problems in the sat solver call below
-        let literals = self.literals.clone();
+        let literals: Vec<i32> = self.get_decided_literals().collect();
 
         if self.sat_state.is_none() {
             self.set_sat_state(sat_solver.new_state());
@@ -126,7 +139,9 @@ impl Config {
     /// Checks if this config obviously conflicts with the interaction.
     /// This is the case when the config contains a literal *l* and the interaction contains *-l*
     pub fn conflicts_with(&self, interaction: &[i32]) -> bool {
-        interaction.iter()
+        interaction
+            .iter()
+            .filter(|&&literal| literal != 0)
             .any(|&literal| self.contains(-literal))
     }
 
@@ -134,23 +149,24 @@ impl Config {
     pub fn covers(&self, interaction: &[i32]) -> bool {
         interaction
             .iter()
+            .filter(|&&literal| literal != 0)
             .all(|&literal| self.contains(literal))
     }
 
     fn contains(&self, literal: i32) -> bool {
         debug_assert!(literal != 0);
-        if literal > 0 {
-            self.literals
-                .iter()
-                .rev()
-                .take_while(|i| **i > 0)
-                .any(|i| *i == literal)
-        } else {
-            self.literals
-                .iter()
-                .take_while(|i| **i < 0)
-                .any(|i| *i == literal)
+        let index = literal.unsigned_abs() as usize - 1;
+        self.literals[index] == literal
+    }
+
+    pub fn add(&mut self, literal: i32) {
+        if literal == 0 {
+            return;
         }
+        debug_assert!(literal != 0);
+        self.sat_state_complete = false;
+        let index = literal.unsigned_abs() as usize - 1;
+        self.literals[index] = literal;
     }
 }
 
@@ -171,8 +187,20 @@ pub struct Sample {
     literals: Vec<i32>,
 }
 
+impl PartialOrd<Self> for Sample {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.len().cmp(&other.len()))
+    }
+}
+
+impl Ord for Sample {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.len().cmp(&other.len())
+    }
+}
+
 impl Extend<Config> for Sample {
-    fn extend<T: IntoIterator<Item = Config>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item=Config>>(&mut self, iter: T) {
         for config in iter {
             self.add(config);
         }
@@ -196,20 +224,20 @@ impl Sample {
     /// ```
     /// use ddnnf_lib::sampler::data_structure::{Config, Sample};
     ///
-    /// let conf_a = Config::from(&[1,2]);
-    /// let conf_b = Config::from(&[1,2,3]);
+    /// let conf_a = Config::from(&[1,2], 3);
+    /// let conf_b = Config::from(&[1,2,3], 3);
     /// let sample = Sample::new_from_configs(vec![conf_a, conf_b]);
     ///
-    /// let mut iter = sample.iter();
-    /// assert_eq!(Some(&Config::from(&[1,2,3])), iter.next());
-    /// assert_eq!(Some(&Config::from(&[1,2])), iter.next());
-    /// assert_eq!(None, iter.next());
+    /// assert_eq!(2, sample.len());
+    /// assert_eq!(1, sample.complete_configs.len());
+    /// assert_eq!(1, sample.partial_configs.len());
+    /// assert_eq!(Some(&Config::from(&[1,2,3], 3)), sample.complete_configs.get(0));
+    /// assert_eq!(Some(&Config::from(&[1,2], 3)), sample.partial_configs.get(0));
     /// ```
     pub fn new_from_configs(configs: Vec<Config>) -> Self {
         let mut literals: Vec<i32> = configs
             .iter()
-            .flat_map(|c| c.literals.iter())
-            .copied()
+            .flat_map(|c| c.get_decided_literals())
             .collect();
         literals.sort_unstable();
         literals.dedup();
@@ -235,7 +263,15 @@ impl Sample {
             .cloned()
             .collect();
 
-        Self::new(vars)
+        let literals: HashSet<i32> = samples
+            .iter()
+            .flat_map(|sample| sample.get_literals().iter().copied())
+            .collect();
+
+        let mut sample = Self::new(vars);
+        sample.literals = literals.into_iter().collect();
+        sample.literals.sort_unstable();
+        sample
     }
 
     /// Create an empty sample that may contain the given variables and will certainly contain
@@ -266,9 +302,10 @@ impl Sample {
     }
 
     /// Create a sample that only contains a single configuration with a single literal
-    pub fn from_literal(literal: i32) -> Self {
+    pub fn from_literal(literal: i32, number_of_variables: usize) -> Self {
         let mut sample = Self::new(HashSet::from([literal.unsigned_abs()]));
-        sample.add_complete(Config::from(&[literal]));
+        sample.literals = vec![literal];
+        sample.add_complete(Config::from(&[literal], number_of_variables));
         sample
     }
 
@@ -284,9 +321,6 @@ impl Sample {
     /// complete. The added config is treated as a complete config without checking
     /// if it actually is complete.
     pub fn add_complete(&mut self, config: Config) {
-        self.literals.extend_from_slice(&config.literals);
-        self.literals.sort_unstable();
-        self.literals.dedup();
         self.complete_configs.push(config)
     }
 
@@ -294,19 +328,12 @@ impl Sample {
     /// partial. The added config is treated as a partial config without checking
     /// if it actually is partial.
     pub fn add_partial(&mut self, config: Config) {
-        self.literals.extend_from_slice(&config.literals);
-        self.literals.sort_unstable();
-        self.literals.dedup();
         self.partial_configs.push(config)
     }
 
     /// Adds a config to this sample and automatically determines whether the config is complete
     /// or partial.
     pub fn add(&mut self, config: Config) {
-        debug_assert!(
-            config.literals.len() <= self.vars.len(),
-            "Can not insert config with more vars than the sample defines"
-        );
         if self.is_config_complete(&config) {
             self.add_complete(config)
         } else {
@@ -315,12 +342,24 @@ impl Sample {
     }
 
     /// Determines whether the config is complete (true) or partial (false).
+    ///
+    /// # Examples
+    /// ```
+    /// use std::collections::HashSet;
+    /// use ddnnf_lib::sampler::data_structure::{Config, Sample};
+    ///
+    /// let sample = Sample::new_with_literals(HashSet::from([1,2,3]), vec![]);
+    ///
+    /// assert!(sample.is_config_complete(&Config::from(&[1,2,3], 3)));
+    /// assert!(!sample.is_config_complete(&Config::from(&[1,2], 3)));
+    /// ```
     pub fn is_config_complete(&self, config: &Config) -> bool {
+        let decided_literals = config.get_decided_literals().count();
         debug_assert!(
-            config.literals.len() <= self.vars.len(),
+            decided_literals <= self.vars.len(),
             "Can not insert config with more vars than the sample defines"
         );
-        config.literals.len() == self.vars.len()
+        decided_literals == self.vars.len()
     }
 
     /// Creates an iterator that first iterates over complete_configs and then over partial_configs
@@ -330,9 +369,16 @@ impl Sample {
             .chain(self.partial_configs.iter())
     }
 
+    /// Creates an iterator that first iterates over complete_configs and then over partial_configs
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Config> {
+        self.complete_configs
+            .iter_mut()
+            .chain(self.partial_configs.iter_mut())
+    }
+
     pub fn iter_with_completeness(
         &self,
-    ) -> impl Iterator<Item = (&Config, bool)> {
+    ) -> impl Iterator<Item=(&Config, bool)> {
         let partial_iter = self.partial_configs.iter().zip(iter::repeat(false));
 
         self.complete_configs
@@ -355,7 +401,7 @@ impl Sample {
     /// let mut s = Sample::new(HashSet::from([1,2,3]));
     ///
     /// assert!(s.is_empty());
-    /// s.add_partial(Config::from(&[1,3]));
+    /// s.add_partial(Config::from(&[1,3], 3));
     /// assert!(!s.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
@@ -364,6 +410,7 @@ impl Sample {
 
     /// Checks if this sample covers the given interaction
     pub fn covers(&self, interaction: &[i32]) -> bool {
+        debug_assert!(!interaction.contains(&0));
         self.iter().any(|conf| conf.covers(interaction))
     }
 }
@@ -376,7 +423,7 @@ mod test {
     #[test]
     fn test_sample_covering() {
         let sample = Sample {
-            complete_configs: vec![Config::from(&[1, 2, 3, -4, -5])],
+            complete_configs: vec![Config::from(&[1, 2, 3, -4, -5], 5)],
             partial_configs: vec![],
             vars: HashSet::from([1, 2, 3, 4, 5]),
             literals: vec![1, 2, 3, -4, -5],
@@ -407,7 +454,7 @@ mod test {
         ];
 
         // config without sat state
-        let mut config = Config::from(&[3]);
+        let mut config = Config::from(&[3], ddnnf.number_of_variables as usize);
         assert_eq!(config.sat_state, None);
 
         // update from None to Some(_)

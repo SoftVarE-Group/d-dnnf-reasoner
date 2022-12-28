@@ -1,12 +1,14 @@
+use rand::prelude::StdRng;
+use rand::SeedableRng;
 use std::collections::HashMap;
 
 use crate::data_structure::NodeType::{And, False, Literal, Or, True};
 use crate::sampler::data_structure::Sample;
+use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
-use crate::sampler::sample_merger::{AndMerger, DummyOrMerger, OrMerger};
+use crate::sampler::sample_merger::{AndMerger, OrMerger};
 use crate::sampler::sat_solver::SatSolver;
 use crate::Ddnnf;
-use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 
 pub mod covering_strategies;
 pub mod data_structure;
@@ -37,6 +39,20 @@ impl SamplingResult {
             None
         }
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            SamplingResult::True | SamplingResult::False => 0,
+            SamplingResult::ResultWithSample(sample) => sample.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            SamplingResult::True | SamplingResult::False => true,
+            SamplingResult::ResultWithSample(sample) => sample.is_empty(),
+        }
+    }
 }
 
 const EXPECT_SAMPLE: &str =
@@ -60,18 +76,25 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     ///
     /// # Panics
     /// Panics if one child does not have a [SamplingResult] in [TWiseSampler::partial_samples].
-    fn make_partial_sample(&self, node_id: usize) -> SamplingResult {
+    fn make_partial_sample(
+        &self,
+        node_id: usize,
+        rng: &mut StdRng,
+    ) -> SamplingResult {
         let node = self.ddnnf.nodes.get(node_id).expect("Node does not exist!");
 
         match &node.ntype {
-            Literal { literal } => SamplingResult::ResultWithSample(
-                Sample::from_literal(*literal),
-            ),
+            Literal { literal } => {
+                SamplingResult::ResultWithSample(Sample::from_literal(
+                    *literal,
+                    self.ddnnf.number_of_variables as usize,
+                ))
+            }
             And { children } => {
-                self.sample_and(node_id, self.get_child_results(children))
+                self.sample_and(node_id, self.get_child_results(children), rng)
             }
             Or { children } => {
-                self.sample_or(node_id, self.get_child_results(children))
+                self.sample_or(node_id, self.get_child_results(children), rng)
             }
             True => SamplingResult::True,
             False => SamplingResult::False,
@@ -92,6 +115,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         &self,
         node_id: usize,
         child_results: Vec<&SamplingResult>,
+        rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
             .iter()
@@ -105,7 +129,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
             .filter_map(SamplingResult::get_sample)
             .collect();
 
-        let sample = self.and_merger.merge_all(node_id, &child_samples);
+        let sample = self.and_merger.merge_all(node_id, &child_samples, rng);
         if sample.is_empty() {
             SamplingResult::True
         } else {
@@ -119,6 +143,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         &self,
         node_id: usize,
         child_results: Vec<&SamplingResult>,
+        rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
             .iter()
@@ -132,7 +157,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
             .filter_map(SamplingResult::get_sample)
             .collect();
 
-        let sample = self.or_merger.merge_all(node_id, &child_samples);
+        let sample = self.or_merger.merge_all(node_id, &child_samples, rng);
         if sample.is_empty() {
             SamplingResult::True
         } else {
@@ -146,14 +171,14 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
     let and_merger = ZippingMerger {
         t,
         sat_solver: &sat_solver,
+        ddnnf,
     };
-    let or_merger = SimilarityMerger {
-        t,
-    };
+    let or_merger = SimilarityMerger { t };
+    let mut rng = StdRng::seed_from_u64(42);
     let mut sampler = TWiseSampler::new(ddnnf, and_merger, or_merger);
 
     for node_id in 0..sampler.ddnnf.number_of_nodes {
-        let partial_sample = sampler.make_partial_sample(node_id);
+        let partial_sample = sampler.make_partial_sample(node_id, &mut rng);
         sampler.partial_samples.insert(node_id, partial_sample);
     }
 

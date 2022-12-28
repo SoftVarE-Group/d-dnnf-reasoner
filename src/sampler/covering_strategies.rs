@@ -7,7 +7,9 @@ pub fn cover_with_caching(
     interaction: &[i32],
     sat_solver: &SatSolver,
     node_id: usize,
+    number_of_vars: usize,
 ) {
+    debug_assert!(!interaction.iter().any(|x| *x == 0));
     if sample.covers(interaction) {
         return; // already covered
     }
@@ -55,7 +57,7 @@ pub fn cover_with_caching(
         }
     } else {
         // no config found - create new config
-        let mut config = Config::from(interaction);
+        let mut config = Config::from(interaction, number_of_vars);
         config.set_sat_state(interaction_sat_state);
         sample.add(config);
     }

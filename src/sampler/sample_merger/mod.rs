@@ -1,4 +1,6 @@
 use crate::sampler::data_structure::{Config, Sample};
+use crate::Ddnnf;
+use rand::prelude::StdRng;
 
 pub mod similarity_merger;
 pub mod zipping_merger;
@@ -6,7 +8,13 @@ pub mod zipping_merger;
 pub trait SampleMerger {
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
-    fn merge(&self, node_id: usize, left: &Sample, right: &Sample) -> Sample;
+    fn merge(
+        &self,
+        node_id: usize,
+        left: &Sample,
+        right: &Sample,
+        rng: &mut StdRng,
+    ) -> Sample;
 
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
@@ -18,16 +26,22 @@ pub trait SampleMerger {
         node_id: usize,
         left: Sample,
         right: &Sample,
+        rng: &mut StdRng,
     ) -> Sample {
-        self.merge(node_id, &left, right)
+        self.merge(node_id, &left, right, rng)
     }
 
     /// Creates a new sample by merging all given samples.
     /// The merging follows the behaviour defined by the merger.
     /// Returns [Sample::empty] if the given slice is empty.
-    fn merge_all(&self, node_id: usize, samples: &[&Sample]) -> Sample {
+    fn merge_all(
+        &self,
+        node_id: usize,
+        samples: &[&Sample],
+        rng: &mut StdRng,
+    ) -> Sample {
         samples.iter().fold(Sample::empty(), |acc, &sample| {
-            self.merge_in_place(node_id, acc, sample)
+            self.merge_in_place(node_id, acc, sample, rng)
         })
     }
 }
@@ -42,10 +56,18 @@ pub trait OrMerger: SampleMerger {}
 
 /// A simple [AndMerger] that just builds all valid configs
 #[derive(Debug, Clone, Copy)]
-pub struct DummyAndMerger {}
+pub struct DummyAndMerger<'a> {
+    ddnnf: &'a Ddnnf,
+}
 
-impl SampleMerger for DummyAndMerger {
-    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
+impl SampleMerger for DummyAndMerger<'_> {
+    fn merge(
+        &self,
+        _node_id: usize,
+        left: &Sample,
+        right: &Sample,
+        _rng: &mut StdRng,
+    ) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -56,7 +78,11 @@ impl SampleMerger for DummyAndMerger {
 
         for left_part in left.iter() {
             for right_part in right.iter() {
-                let new_config = Config::from_disjoint(left_part, right_part);
+                let new_config = Config::from_disjoint(
+                    left_part,
+                    right_part,
+                    self.ddnnf.number_of_variables as usize,
+                );
                 sample.add_complete(new_config);
             }
         }
@@ -65,14 +91,20 @@ impl SampleMerger for DummyAndMerger {
     }
 }
 
-impl AndMerger for DummyAndMerger {}
+impl AndMerger for DummyAndMerger<'_> {}
 
 /// A simple [OrMerger] that just builds all valid configs
 #[derive(Debug, Clone, Copy)]
 pub struct DummyOrMerger {}
 
 impl SampleMerger for DummyOrMerger {
-    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
+    fn merge(
+        &self,
+        _node_id: usize,
+        left: &Sample,
+        right: &Sample,
+        _rng: &mut StdRng,
+    ) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {

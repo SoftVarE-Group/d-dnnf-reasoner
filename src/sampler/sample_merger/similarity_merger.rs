@@ -1,9 +1,12 @@
 use crate::sampler::data_structure::{Config, Sample};
-use crate::sampler::iterator::t_wise_over;
+use crate::sampler::iterator::TInteractionIter;
 use crate::sampler::sample_merger::{OrMerger, SampleMerger};
+use std::cmp::{min, Ordering};
 
+use rand::prelude::{SliceRandom, StdRng};
 use std::collections::HashSet;
-use std::iter::zip;
+
+use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimilarityMerger {
@@ -14,7 +17,13 @@ pub struct SimilarityMerger {
 impl OrMerger for SimilarityMerger {}
 
 impl SampleMerger for SimilarityMerger {
-    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
+    fn merge<'a>(
+        &self,
+        _node_id: usize,
+        left: &Sample,
+        right: &Sample,
+        rng: &mut StdRng,
+    ) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -23,14 +32,12 @@ impl SampleMerger for SimilarityMerger {
 
         // init sample
         let mut new_sample = Sample::new_from_samples(&[left, right]);
-        let number_of_vars = new_sample.get_vars().len();
-        let mut sample_vector_sum = vec![0.0; number_of_vars];
 
         // init candidates
         let mut candidates: Vec<Candidate> = left
             .iter()
             .chain(right.iter())
-            .map(|config| Candidate::new(config, number_of_vars))
+            .map(Candidate::new)
             .collect();
 
         // (randomly) pick first candidate
@@ -38,111 +45,89 @@ impl SampleMerger for SimilarityMerger {
             .expect("There should be at least one candidate because we checked that both samples are not empty");
 
         candidates.iter_mut().for_each(|c| c.update(&next.literals));
-        update_sum(&mut sample_vector_sum, &next.vector);
         new_sample.add(next.config.clone());
 
-        while let Some(next) =
-            min_by_similarity(&candidates, &sample_vector_sum)
+        while let Some(next) = candidates
+            .iter()
+            .enumerate()
+            .max_by_key(snd)
+            .map(|(index, _)| index)
         {
             let next = candidates.swap_remove(next);
-
-            if next.is_t_wise_covered_by(&new_sample, self.t) {
+            if next.is_t_wise_covered_by(&new_sample, self.t, rng) {
                 continue;
             }
 
             new_sample.add(next.config.clone());
 
             candidates.iter_mut().for_each(|c| c.update(&next.literals));
-            update_sum(&mut sample_vector_sum, &next.vector);
         }
-
         new_sample
     }
 }
 
-/// Update sum in place by adding v to it.
-fn update_sum(sum: &mut [f64], v: &[f64]) {
-    debug_assert_eq!(sum.len(), v.len());
-    sum.iter_mut().zip(v.iter()).for_each(|(a, b)| *a += *b);
+fn snd<'a>((_, candidate): &(usize, &'a Candidate<'_>)) -> &'a Candidate<'a> {
+    candidate
 }
 
-/// Find the candidate with the least similarity to the sample vector and return its index.
-/// Returns None if candidates is empty.
-fn min_by_similarity(
-    candidates: &[Candidate],
-    sample_vector_sum: &[f64],
-) -> Option<usize> {
-    candidates
-        .iter()
-        .enumerate()
-        .map(|(index, candidate)| {
-            (index, similarity(sample_vector_sum, &candidate.vector))
-        })
-        .min_by(|left, right| {
-            let (_, left_sim) = left;
-            let (_, right_sim) = right;
-            debug_assert!(left_sim.is_finite());
-            debug_assert!(right_sim.is_finite());
-            left_sim.total_cmp(right_sim)
-        })
-        .map(|(index, _)| index)
-}
-
-/// Calculate the cos of the angle between the two vectors.
-fn similarity(u: &[f64], v: &[f64]) -> f64 {
-    assert_eq!(u.len(), v.len());
-    let angle = dot_product(u, v) / (magnitude(u) * magnitude(v));
-    angle.cos()
-}
-
-/// Calculate the magnitude of a vector.
-fn magnitude(v: &[f64]) -> f64 {
-    v.iter().map(|x| x.powi(2)).sum::<f64>().sqrt()
-}
-
-/// Calculate the dot product of two vectors.
-fn dot_product(u: &[f64], v: &[f64]) -> f64 {
-    zip(u, v).map(|(x, y)| x * y).sum()
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Candidate<'a> {
     config: &'a Config,
     literals: HashSet<i32>,
-    min_diff: HashSet<i32>,
-    vector: Vec<f64>,
+    max_intersect: usize,
+    total_intersect: usize,
+}
+
+impl PartialOrd<Self> for Candidate<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Candidate<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let compare = (self.total_intersect * self.literals.len())
+            .cmp(&(other.total_intersect * other.literals.len()));
+
+        if compare.is_eq() {
+            (self.max_intersect * self.literals.len())
+                .cmp(&(other.max_intersect * other.literals.len()))
+        } else {
+            compare
+        }
+    }
 }
 
 impl<'a> Candidate<'a> {
-    fn new(config: &'a Config, number_of_vars: usize) -> Self {
-        let literals = config.get_literals();
+    fn new(config: &'a Config) -> Self {
+        let literals: HashSet<i32> = config.get_decided_literals().collect();
+        debug_assert!(!literals.contains(&0));
+        debug_assert!(!literals.is_empty());
         Self {
-            vector: Candidate::calc_vector(literals, number_of_vars),
-            literals: literals.iter().copied().collect(),
-            min_diff: literals.iter().copied().collect(),
+            literals,
+            max_intersect: 0,
             config,
+            total_intersect: 0,
         }
-    }
-
-    fn calc_vector(literals: &[i32], number_of_vars: usize) -> Vec<f64> {
-        let mut similarity_vector = vec![0.0; number_of_vars];
-        for literal in literals {
-            similarity_vector[literal.unsigned_abs() as usize - 1] =
-                literal.signum() as f64;
-        }
-        similarity_vector
     }
 
     fn update(&mut self, other_literals: &HashSet<i32>) {
-        let diff: HashSet<i32> =
-            self.literals.difference(other_literals).copied().collect();
+        let intersect = self.literals.intersection(other_literals).count();
 
-        if diff.len() < self.min_diff.len() {
-            self.min_diff = diff;
+        self.total_intersect += intersect;
+
+        if intersect > self.max_intersect {
+            self.max_intersect = intersect;
         }
     }
 
-    fn is_t_wise_covered_by(&self, sample: &Sample, t: usize) -> bool {
-        if self.min_diff.is_empty() {
+    fn is_t_wise_covered_by(
+        &self,
+        sample: &Sample,
+        t: usize,
+        rng: &mut StdRng,
+    ) -> bool {
+        if self.max_intersect == self.literals.len() {
             return true;
         }
 
@@ -154,47 +139,70 @@ impl<'a> Candidate<'a> {
         Max intersect is [2] and has len < t.
         => No interaction of the candidate is covered.
          */
-        let max_intersect = self.literals.len() - self.min_diff.len();
-        if max_intersect < t {
+        if self.literals.len() >= t && self.max_intersect < t {
             return false;
         }
 
-        t_wise_over(&self.literals.iter().copied().collect::<Vec<i32>>(), t)
-            // only check interactions that intersect (are not disjoint) with min_diff
-            // because interactions that are disjoint with min_diff are already covered
-            .filter(|interaction| {
-                let interaction_set: HashSet<i32> =
-                    interaction.iter().copied().collect();
-                !self.min_diff.is_disjoint(&interaction_set)
-            })
-            .all(|interaction| sample.covers(&interaction))
+        let mut literals: Vec<i32> =
+            self.config.get_decided_literals().collect();
+        literals.shuffle(rng);
+        debug_assert!(!literals.contains(&0));
+
+        TInteractionIter::new(&literals, min(t, literals.len()))
+            .all(|interaction| sample.covers(interaction))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn test_update_sum() {
-        let mut sum = [1.0; 3];
-        let v = [0.5; 3];
-
-        update_sum(&mut sum, &v);
-
-        for x in sum {
-            let abs_difference = (x - 1.5).abs();
-            assert!(abs_difference < 1e-10);
-        }
-    }
+    use rand::SeedableRng;
 
     #[test]
     fn test_similarity_merger() {
         let merger = SimilarityMerger { t: 2 };
+        let mut rng = StdRng::seed_from_u64(42);
 
-        let left = Sample::new_from_configs(vec![Config::from(&[1])]);
-        let right = Sample::new_from_configs(vec![Config::from(&[1])]);
-        let merged = merger.merge(0, &left, &right);
-        assert_eq!(merged, Sample::new_from_configs(vec![Config::from(&[1])]));
+        let left = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
+        let right = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
+        let merged = merger.merge(0, &left, &right, &mut rng);
+        assert_eq!(
+            merged,
+            Sample::new_from_configs(vec![Config::from(&[1], 1)])
+        );
+    }
+
+    #[test]
+    fn test_is_t_wise_covered() {
+        let number_of_variables = 4;
+        let candidate_config = Config::from(&[1, 2, 3, 4], number_of_variables);
+        let mut candidate = Candidate::new(&candidate_config);
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let sample = Sample::new_from_configs(vec![
+            Config::from(&[1, 2, 3], number_of_variables),
+            Config::from(&[1, 4], number_of_variables),
+            Config::from(&[2, 4], number_of_variables),
+            Config::from(&[3, 4], number_of_variables),
+        ]);
+
+        sample.iter().for_each(|c| {
+            candidate.update(&c.get_decided_literals().collect())
+        });
+
+        assert!(candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
+
+        let mut candidate = Candidate::new(&candidate_config);
+        let sample = Sample::new_from_configs(vec![
+            Config::from(&[1, 2, 3], number_of_variables),
+            Config::from(&[1, 4], number_of_variables),
+            Config::from(&[2, 4], number_of_variables),
+        ]);
+
+        sample.iter().for_each(|c| {
+            candidate.update(&c.get_decided_literals().collect())
+        });
+
+        assert!(!candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
     }
 }
