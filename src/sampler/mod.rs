@@ -1,20 +1,21 @@
-use rand::prelude::{SliceRandom, StdRng};
-use rand::SeedableRng;
+use std::{io, iter};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
-use std::{io, iter};
+
+use rand::prelude::{SliceRandom, StdRng};
+use rand::SeedableRng;
 use streaming_iterator::StreamingIterator;
 
 use crate::data_structure::NodeType::{And, False, Literal, Or, True};
+use crate::Ddnnf;
 use crate::sampler::covering_strategies::cover_with_caching;
 use crate::sampler::data_structure::Sample;
 use crate::sampler::iterator::TInteractionIter;
+use crate::sampler::sample_merger::{AndMerger, OrMerger};
 use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
-use crate::sampler::sample_merger::{AndMerger, OrMerger};
-use crate::sampler::sat_solver::SatSolver;
 use crate::sampler::SamplingResult::ResultWithSample;
-use crate::Ddnnf;
+use crate::sampler::sat_solver::SatSolver;
 
 pub mod covering_strategies;
 pub mod data_structure;
@@ -83,7 +84,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     /// # Panics
     /// Panics if one child does not have a [SamplingResult] in [TWiseSampler::partial_samples].
     fn make_partial_sample(
-        &self,
+        &mut self,
         node_id: usize,
         rng: &mut StdRng,
     ) -> SamplingResult {
@@ -95,13 +96,30 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 self.ddnnf.number_of_variables as usize,
             )),
             And { children } => {
-                self.sample_and(node_id, self.get_child_results(children), rng)
+                let sample = self.sample_and(node_id, self.get_child_results(children), rng);
+                self.remove_not_needed_samples(node_id, children);
+                sample
             }
             Or { children } => {
-                self.sample_or(node_id, self.get_child_results(children), rng)
+                let sample = self.sample_or(node_id, self.get_child_results(children), rng);
+                self.remove_not_needed_samples(node_id, children);
+                sample
             }
             True => SamplingResult::True,
             False => SamplingResult::False,
+        }
+    }
+
+    /// Remove samples that are no longer needed to reduce memory usage. A sample is no
+    /// longer needed if all it's parent nodes have a sample.
+    fn remove_not_needed_samples(&mut self, node_id: usize, children: &[usize]) {
+        for child in children {
+            let node =
+                self.ddnnf.nodes.get(*child).expect(EXPECT_SAMPLE);
+            if node.parents.iter().all(|parent| *parent <= node_id) {
+                // delete no longer needed sample
+                self.partial_samples.remove(child);
+            }
         }
     }
 
