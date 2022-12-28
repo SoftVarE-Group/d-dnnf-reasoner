@@ -4,7 +4,7 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate clap;
-use clap::{AppSettings, Arg, arg, Command, value_parser};
+use clap::{arg, value_parser, AppSettings, Arg, Command};
 
 extern crate colour;
 use colour::{green, yellow_ln};
@@ -18,15 +18,17 @@ use std::time::Instant;
 use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser::{self as dparser, write_ddnnf};
 
+use ddnnf_lib::sampler::sample_t_wise;
+
 fn main() {
     let mut matches = Command::new("ddnnife")
-    .global_settings(&[AppSettings::ColoredHelp])
-    .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
-    .version("0.5.0")
-    .setting(AppSettings::ArgRequiredElseHelp)
-    .arg(Arg::with_name("file_path")
-        .value_name("FILE PATH")
-        .help("The path to the file in dimacs format. The d-dnnf has to be smooth to work properly!")
+        .global_settings(&[AppSettings::ColoredHelp])
+        .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
+        .version("0.5.0")
+        .setting(AppSettings::ArgRequiredElseHelp)
+        .arg(Arg::with_name("file_path")
+            .value_name("FILE PATH")
+            .help("The path to the file in dimacs format. The d-dnnf has to be smooth to work properly!")
         .takes_value(true))
     .arg(arg!(-f --features "The numbers of the features that should be included or excluded (positive number to include, negative to exclude). Can be one or multiple. A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace! This should be the last option, because of the ambiguity of a hyphen as signed int and another option or flag")
         .requires("file_path")
@@ -60,14 +62,25 @@ fn main() {
         .requires("file_path")
         .value_parser(value_parser!(String))
         .min_values(0))
-    .arg(arg!(-n --threads "Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
-        .requires("file_path")
-        .value_parser(value_parser!(u16).range(1..33))
-        .value_name("NUMBER OF THREADS")
-        .takes_value(true))
-    .arg(arg!(--heuristics "Provides information about the type of nodes, their connection and the different paths.")
-        .requires("file_path")
-        .takes_value(false))
+        .arg(arg!(-n --threads "Specify how many threads should be used. Default is 4. Possible values are between 1 and 32.")
+            .requires("file_path")
+            .value_parser(value_parser!(u16).range(1..33))
+            .value_name("NUMBER OF THREADS")
+            .takes_value(true))
+        .arg(arg!(--heuristics "Provides information about the type of nodes, their connection and the different paths.")
+            .requires("file_path")
+            .takes_value(false))
+        .arg(arg!(-S --sample "Computes a sample that has full t-wise (default: t=2) coverage and saves it in a file.")
+            .requires("file_path")
+            .value_parser(value_parser!(String))
+            .value_name("OUTPUT FILE")
+            .takes_value(true))
+        .arg(arg!(-t --interaction_size "Set the interaction size (t) to compute a sample with full t-wise coverage.")
+            .requires("sample")
+            .default_value("2")
+            .value_parser(value_parser!(usize))
+            .value_name("t")
+            .takes_value(true))
     .get_matches();
 
     // create the ddnnf based of the input file that is required
@@ -75,7 +88,8 @@ fn main() {
     let mut ddnnf: Ddnnf;
 
     if matches.contains_id("ommited_features") {
-        let ommited_features: u32 = *matches.get_one("ommited_features").unwrap();
+        let ommited_features: u32 =
+            *matches.get_one("ommited_features").unwrap();
         ddnnf = dparser::build_d4_ddnnf_tree(
             matches.value_of("file_path").unwrap(),
             ommited_features,
@@ -113,14 +127,23 @@ fn main() {
 
     // computes the cardinality for the partial configuration that can be mentioned with parameters
     if matches.contains_id("features") {
-        let features: Vec<i32> =
-                matches.get_many("features")
-                .expect("invalid format for features").copied().collect();
+        let features: Vec<i32> = matches
+            .get_many("features")
+            .expect("invalid format for features")
+            .copied()
+            .collect();
         ddnnf.execute_query(features);
     }
 
     // file path without last extension
-    let file_path = String::from(Path::new(matches.value_of("file_path").unwrap()).with_extension("").file_name().unwrap().to_str().unwrap());
+    let file_path = String::from(
+        Path::new(matches.value_of("file_path").unwrap())
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    );
 
     // computes the cardinality of partial configurations and saves the results in a .txt file
     // the results do not have to be in the same order if the number of threads is greater than one
@@ -128,7 +151,10 @@ fn main() {
         let file_path_in = matches.remove_one::<String>("queries").unwrap();
         let file_path_out = &format!(
             "{}-queries.txt",
-            matches.remove_one::<String>("queries").get_or_insert(file_path.clone()).as_str()
+            matches
+                .remove_one::<String>("queries")
+                .get_or_insert(file_path.clone())
+                .as_str()
         );
 
         let time = Instant::now();
@@ -152,7 +178,10 @@ fn main() {
     if matches.contains_id("card_of_fs") {
         let file_path = &format!(
             "{}-features.csv",
-            matches.get_one::<String>("card_of_fs").get_or_insert(&file_path).as_str()
+            matches
+                .get_one::<String>("card_of_fs")
+                .get_or_insert(&file_path)
+                .as_str()
         );
 
         let time = Instant::now();
@@ -168,6 +197,22 @@ fn main() {
             file_path,
             elapsed_time,
             elapsed_time / ddnnf.number_of_variables as f64
+        );
+    }
+
+    // compute t-wise sample and write it to file
+    if matches.contains_id("sample") {
+        let t: usize = *matches
+            .get_one("interaction_size")
+            .expect("interaction_size should always be Some(value) because it has a default value");
+        println!("\nComputing a sample with full {}-wise coverage and saving it in {}.", t, "DUMMY");
+        let time = Instant::now();
+        let sample = sample_t_wise(&ddnnf, t);
+        let elapsed_time = time.elapsed().as_secs_f64();
+        println!(
+            "It took {} seconds. The sample has {} configurations.",
+            elapsed_time,
+            sample.len(),
         );
     }
 
@@ -236,9 +281,15 @@ fn main() {
     if matches.contains_id("save_ddnnf") {
         let path = &format!(
             "{}-saved.nnf",
-            matches.get_one::<String>("save_ddnnf").get_or_insert(&file_path).as_str()
+            matches
+                .get_one::<String>("save_ddnnf")
+                .get_or_insert(&file_path)
+                .as_str()
         );
         write_ddnnf(ddnnf, path).unwrap();
-        println!("The smooth d-DNNF was written into the c2d format in {}.", path);
+        println!(
+            "The smooth d-DNNF was written into the c2d format in {}.",
+            path
+        );
     }
 }
