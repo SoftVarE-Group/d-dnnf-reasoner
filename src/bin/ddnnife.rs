@@ -18,7 +18,7 @@ use std::time::Instant;
 use ddnnf_lib::data_structure::Ddnnf;
 use ddnnf_lib::parser::{self as dparser, write_ddnnf};
 
-use ddnnf_lib::sampler::sample_t_wise;
+use ddnnf_lib::sampler::{sample_t_wise, save_sample_to_file};
 
 fn main() {
     let mut matches = Command::new("ddnnife")
@@ -205,9 +205,18 @@ fn main() {
         let t: usize = *matches
             .get_one("interaction_size")
             .expect("interaction_size should always be Some(value) because it has a default value");
-        println!("\nComputing a sample with full {}-wise coverage and saving it in {}.", t, "DUMMY");
+        let sample_file_path = matches.remove_one::<String>("sample").expect(
+            "sample file path should exist because it is a required parameter",
+        );
+        println!("\nComputing a sample with full {}-wise coverage and saving it in {}", t, &sample_file_path);
         let time = Instant::now();
         let sample = sample_t_wise(&ddnnf, t);
+        save_sample_to_file(
+            &sample,
+            ddnnf.number_of_variables,
+            &sample_file_path,
+        )
+            .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
         println!(
             "It took {} seconds. The sample has {} configurations.",

@@ -2,6 +2,7 @@ use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
+use std::{io, iter};
 use streaming_iterator::StreamingIterator;
 
 use crate::data_structure::NodeType::{And, False, Literal, Or, True};
@@ -194,6 +195,10 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 }
             }
         }
+
+        debug_assert!(sample
+            .iter()
+            .all(|config| !config.get_literals().contains(&0)));
     }
 }
 
@@ -343,4 +348,49 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
     } else {
         sampling_result
     }
+}
+
+pub fn save_sample_to_file(
+    sampling_result: &SamplingResult,
+    number_of_variables: u32,
+    file_path: &str,
+) -> io::Result<()> {
+    let mut wtr = csv::Writer::from_path(file_path)?;
+
+    // write the header - it looks like
+    // Configuration;1;2;3
+    let names = (1..=number_of_variables).map(|name| name.to_string());
+    let header = iter::once(String::from("Configuration")).chain(names);
+    wtr.write_record(header)?;
+
+    match sampling_result {
+        /*
+        Writing "true" and "false" to the file does not really fit the format of the file but we
+        want to somehow distinguish between true and false sampling results.
+        True means that the feature model contains no variables and therefore an empty sample
+        covers all t-wise interactions.
+        False means that the feature model is void.
+        */
+        SamplingResult::True => wtr.write_record(iter::once("true"))?,
+        SamplingResult::False => wtr.write_record(iter::once("false"))?,
+        ResultWithSample(sample) => {
+            for (index, config) in sample.iter().enumerate() {
+                /*
+                write the index of the config then a 0 (deselected) or 1 (selected) for each feature
+                 */
+                let literals = config.get_literals().iter().map(|literal| {
+                    if *literal < 0 {
+                        "0"
+                    } else {
+                        "1"
+                    }
+                });
+                let index = index.to_string();
+                let record = iter::once(index.as_str()).chain(literals);
+                wtr.write_record(record)?;
+            }
+        }
+    }
+
+    wtr.flush()
 }
