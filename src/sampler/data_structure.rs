@@ -153,7 +153,7 @@ impl Config {
             .all(|&literal| self.contains(literal))
     }
 
-    fn contains(&self, literal: i32) -> bool {
+    pub fn contains(&self, literal: i32) -> bool {
         debug_assert!(literal != 0);
         let index = literal.unsigned_abs() as usize - 1;
         self.literals[index] == literal

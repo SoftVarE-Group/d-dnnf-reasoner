@@ -8,6 +8,7 @@ use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
 use crate::sampler::sample_merger::{AndMerger, OrMerger};
 use crate::sampler::sat_solver::SatSolver;
+use crate::sampler::SamplingResult::ResultWithSample;
 use crate::Ddnnf;
 
 pub mod covering_strategies;
@@ -33,7 +34,7 @@ pub enum SamplingResult {
 
 impl SamplingResult {
     pub fn get_sample(&self) -> Option<&Sample> {
-        if let SamplingResult::ResultWithSample(sample) = self {
+        if let ResultWithSample(sample) = self {
             Some(sample)
         } else {
             None
@@ -43,14 +44,14 @@ impl SamplingResult {
     pub fn len(&self) -> usize {
         match self {
             SamplingResult::True | SamplingResult::False => 0,
-            SamplingResult::ResultWithSample(sample) => sample.len(),
+            ResultWithSample(sample) => sample.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
             SamplingResult::True | SamplingResult::False => true,
-            SamplingResult::ResultWithSample(sample) => sample.is_empty(),
+            ResultWithSample(sample) => sample.is_empty(),
         }
     }
 }
@@ -84,12 +85,10 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         let node = self.ddnnf.nodes.get(node_id).expect("Node does not exist!");
 
         match &node.ntype {
-            Literal { literal } => {
-                SamplingResult::ResultWithSample(Sample::from_literal(
-                    *literal,
-                    self.ddnnf.number_of_variables as usize,
-                ))
-            }
+            Literal { literal } => ResultWithSample(Sample::from_literal(
+                *literal,
+                self.ddnnf.number_of_variables as usize,
+            )),
             And { children } => {
                 self.sample_and(node_id, self.get_child_results(children), rng)
             }
@@ -133,7 +132,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         if sample.is_empty() {
             SamplingResult::True
         } else {
-            SamplingResult::ResultWithSample(sample)
+            ResultWithSample(sample)
         }
     }
 
@@ -161,7 +160,35 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         if sample.is_empty() {
             SamplingResult::True
         } else {
-            SamplingResult::ResultWithSample(sample)
+            ResultWithSample(sample)
+        }
+    }
+
+    fn complete_partial_configs(
+        &self,
+        sample: &mut Sample,
+        t: usize,
+        sat_solver: &SatSolver,
+    ) {
+        let vars: Vec<i32> =
+            (1..=self.ddnnf.number_of_variables as i32).collect();
+        for config in sample.partial_configs.iter_mut() {
+            for &var in vars.iter() {
+                if config.contains(var) || config.contains(-var) {
+                    continue;
+                }
+
+                config.update_sat_state(sat_solver, t);
+                let sat_state = config.get_sat_state().expect(
+                    "sat state should exist after calling update_sat_state()",
+                );
+
+                if sat_solver.is_sat_cached(&[var], sat_state) {
+                    config.add(var);
+                } else {
+                    config.add(-var);
+                }
+            }
         }
     }
 }
@@ -184,8 +211,15 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
 
     let root_id = sampler.ddnnf.number_of_nodes - 1;
 
-    sampler
+    let sampling_result = sampler
         .partial_samples
         .remove(&root_id)
-        .expect("Root sample does not exist!")
+        .expect("Root sample does not exist!");
+
+    if let ResultWithSample(mut sample) = sampling_result {
+        sampler.complete_partial_configs(&mut sample, t, &sat_solver);
+        ResultWithSample(sample)
+    } else {
+        sampling_result
+    }
 }
