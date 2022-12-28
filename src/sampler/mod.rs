@@ -1,9 +1,13 @@
-use rand::prelude::StdRng;
+use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
-use std::collections::HashMap;
+use std::cmp::min;
+use std::collections::{HashMap, HashSet};
+use streaming_iterator::StreamingIterator;
 
 use crate::data_structure::NodeType::{And, False, Literal, Or, True};
+use crate::sampler::covering_strategies::cover_with_caching;
 use crate::sampler::data_structure::Sample;
+use crate::sampler::iterator::TInteractionIter;
 use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
 use crate::sampler::sample_merger::{AndMerger, OrMerger};
@@ -193,6 +197,115 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     }
 }
 
+#[inline]
+fn trim_and_resample(
+    node_id: usize,
+    sample: Sample,
+    t: usize,
+    number_of_variables: usize,
+    sat_solver: &SatSolver,
+    rng: &mut StdRng,
+) -> Sample {
+    if sample.is_empty() {
+        return sample;
+    }
+
+    let t = min(sample.get_vars().len(), t);
+    let (ranks, avg_rank) = calc_stats(&sample, t);
+
+    let (mut new_sample, literals_to_resample) =
+        trim_sample(&sample, &ranks, avg_rank);
+
+    let mut literals_to_resample: Vec<i32> =
+        literals_to_resample.into_iter().collect();
+    literals_to_resample.sort_unstable();
+    literals_to_resample.shuffle(rng);
+
+    let mut iter = TInteractionIter::new(&literals_to_resample, t);
+    while let Some(interaction) = iter.next() {
+        cover_with_caching(
+            &mut new_sample,
+            interaction,
+            sat_solver,
+            node_id,
+            number_of_variables,
+        );
+    }
+
+    if new_sample.len() < sample.len() {
+        new_sample
+    } else {
+        sample
+    }
+}
+
+#[inline]
+fn trim_sample(
+    sample: &Sample,
+    ranks: &[f64],
+    avg_rank: f64,
+) -> (Sample, HashSet<i32>) {
+    let mut literals_to_resample: HashSet<i32> = HashSet::new();
+    let mut new_sample = Sample::new_from_samples(&[sample]);
+    let complete_len = sample.complete_configs.len();
+
+    for (index, config) in sample.iter().enumerate() {
+        if ranks[index] < avg_rank {
+            literals_to_resample.extend(config.get_decided_literals());
+        } else if index < complete_len {
+            new_sample.add_complete(config.clone());
+        } else {
+            new_sample.add_partial(config.clone());
+        }
+    }
+    (new_sample, literals_to_resample)
+}
+
+#[inline]
+fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
+    let mut unique_coverage = vec![0; sample.len()];
+    let mut iter = TInteractionIter::new(sample.get_literals(), t);
+    while let Some(interaction) = iter.next() {
+        if let Some(conf_index) = find_unique_covering_conf(sample, interaction)
+        {
+            unique_coverage[conf_index] += 1;
+        }
+    }
+
+    let mut ranks = vec![0.0; sample.len()];
+    let mut sum: f64 = 0.0;
+
+    for (index, config) in sample.iter().enumerate() {
+        let config_size = config.get_decided_literals().count();
+        ranks[index] =
+            unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
+        sum += ranks[index];
+    }
+
+    let avg_rank = sum / sample.len() as f64;
+    (ranks, avg_rank)
+}
+
+#[inline]
+fn find_unique_covering_conf(
+    sample: &Sample,
+    interaction: &[i32],
+) -> Option<usize> {
+    let mut result = None;
+
+    for (index, config) in sample.iter().enumerate() {
+        if config.covers(interaction) {
+            if result.is_none() {
+                result = Some(index);
+            } else {
+                return None;
+            }
+        }
+    }
+
+    result
+}
+
 pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
     let sat_solver = SatSolver::new(ddnnf);
     let and_merger = ZippingMerger {
@@ -217,6 +330,14 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
         .expect("Root sample does not exist!");
 
     if let ResultWithSample(mut sample) = sampling_result {
+        sample = trim_and_resample(
+            root_id,
+            sample,
+            t,
+            ddnnf.number_of_variables as usize,
+            &sat_solver,
+            &mut rng,
+        );
         sampler.complete_partial_configs(&mut sample, t, &sat_solver);
         ResultWithSample(sample)
     } else {
