@@ -34,6 +34,7 @@ use crate::Ddnnf;
 #[derive(Debug, Clone)]
 pub struct SatSolver<'a> {
     ddnnf: &'a Ddnnf,
+    new_state: Vec<bool>,
 }
 
 const STATE_SIZE: &str =
@@ -44,12 +45,36 @@ const NODE_EXISTS: &str = "node should exist in the ddnnf";
 impl<'a> SatSolver<'a> {
     /// Create a new [SatSolver] backed by the given d-DNNF
     pub fn new(ddnnf: &'a Ddnnf) -> Self {
-        Self { ddnnf }
+        let mut result = Self {
+            ddnnf,
+            new_state: vec![],
+        };
+
+        // Find and mark all False nodes
+        let mut new_state = vec![false; ddnnf.number_of_nodes];
+        ddnnf
+            .nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(node_id, node)| {
+                if let NodeType::False = &node.ntype {
+                    Some(node_id)
+                } else {
+                    None
+                }
+            })
+            .for_each(|node_id| {
+                result.mark(node_id, ddnnf.number_of_nodes - 1, &mut new_state);
+            });
+
+        result.new_state = new_state;
+        result
     }
 
     /// Create a new state vec for this solver
     pub fn new_state(&self) -> Vec<bool> {
-        vec![false; self.ddnnf.number_of_nodes]
+        // clone the state where the false nodes are already marked
+        self.new_state.clone()
     }
 
     /// Calculates if the given config is SAT.
