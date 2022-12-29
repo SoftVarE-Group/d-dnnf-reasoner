@@ -1,6 +1,7 @@
-use std::{io, iter};
+use std::{fs, io, iter};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
@@ -373,6 +374,10 @@ pub fn save_sample_to_file(
     number_of_variables: u32,
     file_path: &str,
 ) -> io::Result<()> {
+    let file_path = Path::new(file_path);
+    if let Some(dir) = file_path.parent() {
+        fs::create_dir_all(dir)?;
+    }
     let mut wtr = csv::Writer::from_path(file_path)?;
 
     // write the header - it looks like
