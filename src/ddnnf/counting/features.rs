@@ -7,7 +7,7 @@ use super::super::Ddnnf;
 
 impl Ddnnf {
     #[inline]
-    /// Computes the cardinality of features for all features in a modell.
+    /// Computes the cardinality of features for all features in a model.
     /// The results are saved in the file_path. The .csv ending always gets added to the user input.
     /// The function exclusively uses the marking based function.
     /// Here the number of threads influence the speed by using a shared work queue.
@@ -22,12 +22,50 @@ impl Ddnnf {
     /// // create a ddnnf
     /// // and run the queries
     /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
-    /// ddnnf.card_of_each_feature_to_csv("./tests/data/smt_out.csv")
+    /// ddnnf.card_of_each_feature("./tests/data/smt_out.csv")
     ///      .unwrap_or_default();
     /// let _rm = fs::remove_file("./tests/data/smt_out.csv");
     ///
     /// ```
-    pub fn card_of_each_feature_to_csv(
+    pub fn card_of_each_feature(
+        &mut self,
+        file_path: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.max_worker == 1 {
+            self.card_of_each_feature_single(file_path)
+        } else {
+            self.card_of_each_feature_multi(file_path)
+        }
+    }
+
+    /// Computes the cardinality of features for all features in a model
+    /// in a single threaded environment
+    fn card_of_each_feature_single(
+        &mut self,
+        file_path: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        // start the csv writer with the file_path
+        let mut wtr = csv::Writer::from_path(file_path)?;
+
+        for work in 1_i32..self.number_of_variables as i32 + 1 {
+            let cardinality = self.card_of_feature_with_marker(work).1;
+            wtr.write_record(vec![
+                work.to_string(),
+                cardinality.to_string(),
+                format!("{:.20}", Float::with_val(200, cardinality) / self.rc()
+            )])?;
+        }
+
+        Ok(())
+    }
+
+    /// Computes the cardinality of features for all features in a model
+    /// in a multi threaded environment.
+    /// Here we have to take into account:
+    ///     1) using channels for communication
+    ///     2) cloning the ddnnf
+    ///     3) sorting our results
+    fn card_of_each_feature_multi(
         &mut self,
         file_path: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -127,5 +165,66 @@ impl Ddnnf {
 
         // If everything worked as expected, then we can return Ok(()) and we are happy :D
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::fs::{self, File};
+
+    use file_diff::diff_files;
+
+    use crate::parser::build_d4_ddnnf_tree;
+
+    use super::*;
+
+    #[test]
+    fn card_multi_queries() {
+        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        ddnnf.max_worker = 1;
+        ddnnf.card_of_each_feature("./tests/data/fcs.csv").unwrap();
+
+        ddnnf.max_worker = 4;
+        ddnnf.card_of_each_feature("./tests/data/fcm.csv").unwrap();
+
+        let mut is_single = File::open("./tests/data/fcs.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/fcm.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_fs.csv").unwrap();
+
+        // diff_files is true if the files are identical
+        assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
+        is_single = File::open("./tests/data/fcs.csv").unwrap();
+        assert!(diff_files(&mut is_single, &mut should_be), "card of features results differ from the expected results");
+
+        fs::remove_file("./tests/data/fcs.csv").unwrap();
+        fs::remove_file("./tests/data/fcm.csv").unwrap();
+    }
+
+    #[test]
+    fn test_equality_single_and_multi() {
+        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        ddnnf.max_worker = 1;
+
+        ddnnf.card_of_each_feature_single("./tests/data/fcs1.csv").unwrap();
+        ddnnf.card_of_each_feature_single("./tests/data/fcm1.csv").unwrap();
+
+        ddnnf.max_worker = 4;
+        ddnnf.card_of_each_feature_multi("./tests/data/fcm4.csv").unwrap();
+
+        let mut is_single = File::open("./tests/data/fcs1.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/fcm1.csv").unwrap();
+        let mut is_multi4 = File::open("./tests/data/fcm4.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_fs.csv").unwrap();
+    
+        // diff_files is true if the files are identical
+        assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
+        is_single = File::open("./tests/data/fcs1.csv").unwrap();
+        is_multi = File::open("./tests/data/fcm1.csv").unwrap();
+        assert!(diff_files(&mut is_multi, &mut is_multi4), "card of features for multiple threads differs when using multiple threads");
+        assert!(diff_files(&mut is_single, &mut should_be), "card of features results differ from the expected results");
+
+        fs::remove_file("./tests/data/fcs1.csv").unwrap();
+        fs::remove_file("./tests/data/fcm1.csv").unwrap();
+        fs::remove_file("./tests/data/fcm4.csv").unwrap();
     }
 }

@@ -166,7 +166,7 @@ fn main() {
 
         let time = Instant::now();
         ddnnf
-            .card_of_each_feature_to_csv(file_path)
+            .card_of_each_feature(file_path)
             .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
 

@@ -472,22 +472,22 @@ fn calc_or_count(
 /// use ddnnf_lib::parser::parse_queries_file;
 ///
 /// let config_path = "./tests/data/auto1.config";
-/// let queries: Vec<Vec<i32>> = parse_queries_file(config_path);
+/// let queries: Vec<(usize, Vec<i32>)> = parse_queries_file(config_path);
 ///
-/// assert_eq!(vec![1044, 885], queries[0]);
-/// assert_eq!(vec![1284, -537], queries[1]);
-/// assert_eq!(vec![-1767, 675], queries[2]);
+/// assert_eq!((0, vec![1044, 885]), queries[0]);
+/// assert_eq!((1, vec![1284, -537]), queries[1]);
+/// assert_eq!((2, vec![-1767, 675]), queries[2]);
 /// ```
 /// # Panic
 ///
 /// Panics for a path to a non existing file
-pub fn parse_queries_file(path: &str) -> Vec<Vec<i32>> {
+pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
     let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
-    let mut parsed_queries: Vec<Vec<i32>> = Vec::new();
+    let mut parsed_queries: Vec<(usize, Vec<i32>)> = Vec::new();
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
-    for line in buf_reader {
+    for (line_number, line) in buf_reader.enumerate() {
         let l = line.expect("Unable to read line");
 
         // takes a line of the file and parses the i32 values
@@ -495,7 +495,7 @@ pub fn parse_queries_file(path: &str) -> Vec<Vec<i32>> {
         .map(|elem| elem.to_string().parse::<i32>()
             .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
         ).collect();
-        parsed_queries.push(res);
+        parsed_queries.push((line_number, res));
     }
     parsed_queries
 }
