@@ -19,6 +19,7 @@ valcom
 build.rs
 *.csv
 *.zip
+*-mermaid.md
 
 # docker
 dockerfile
