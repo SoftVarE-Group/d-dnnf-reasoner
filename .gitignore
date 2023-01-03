@@ -19,7 +19,7 @@ valcom
 build.rs
 *.csv
 *.zip
-*-mermaid.md
+*mermaid.md
 
 # docker
 dockerfile
@@ -27,3 +27,6 @@ dockerfile
 
 # vsc
 .idea
+
+# jetbrains
+*.iml
