@@ -93,7 +93,7 @@ impl Ddnnf {
             let res: (usize, Integer) = self.card_of_feature_with_marker(f);
             let elapsed_time = time.elapsed().as_secs_f32();
 
-            println!("Feature count for feature number {:?}: {:#?}", f, res);
+            println!("Feature count for feature number {:?}: {:#?}", f, res.1);
             println!("{:?} nodes were marked (note that nodes which are on multiple paths are only marked once). That are ≈{:.2}% of the ({}) total nodes",
                 res.0, f64::from(res.0 as u32)/self.number_of_nodes as f64 * 100.0, self.number_of_nodes);
             println!(

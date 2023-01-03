@@ -9,6 +9,7 @@ use clap::{AppSettings, Arg, arg, Command, value_parser};
 extern crate colour;
 use colour::{green, yellow_ln};
 
+use ddnnf_lib::parser::persisting::write_as_mermaid_md;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -62,7 +63,11 @@ fn main() {
         .value_parser(value_parser!(u32))
         .value_name("OMMITED FEATURES")
         .takes_value(true))
-    .arg(arg!(-s --save_ddnnf "Save the smooth ddnnf in the c2d format. Default output file is '{FILE_NAME}.nnf'. Alternatively, you can choose a name. The .nnf ending is added automatically")
+    .arg(arg!(-s --save_ddnnf "Save the smooth ddnnf in the c2d format. Default output file is '{FILE_NAME}-saved.nnf'. Alternatively, you can choose a name. The .nnf ending is added automatically")
+        .requires("file_path")
+        .value_parser(value_parser!(String))
+        .min_values(0))
+    .arg(arg!(-m --mermaidify_ddnnf "Transform the smooth ddnnf in the mermaid markdown format. Default output file is '{FILE_NAME}-mermaid.md'. Alternatively, you can choose a name. The .md ending is added automatically")
         .requires("file_path")
         .value_parser(value_parser!(String))
         .min_values(0))
@@ -278,8 +283,18 @@ fn main() {
             "{}-saved.nnf",
             matches.get_one::<String>("save_ddnnf").get_or_insert(&file_path).as_str()
         );
-        write_ddnnf(&mut ddnnf, path).unwrap();
+        write_ddnnf(&ddnnf, path).unwrap();
         println!("The smooth d-DNNF was written into the c2d format in {}.", path);
+    }
+
+    // transforms the d-DNNF to mermaid markdown
+    if matches.contains_id("mermaidify_ddnnf") {
+        let path = &format!(
+            "{}-mermaid.md",
+            matches.get_one::<String>("mermaidify_ddnnf").get_or_insert(&file_path).as_str()
+        );
+        write_as_mermaid_md(&ddnnf, path).unwrap();
+        println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", path);
     }
 }
 
