@@ -5,11 +5,8 @@ pub mod counting;
 pub mod anomalies;
 
 use rug::{Integer};
-
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::{time::Instant};
 
 use self::node::{Node};
 
@@ -18,36 +15,36 @@ use self::node::{Node};
 pub struct Ddnnf {
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
-    pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
-    pub number_of_variables: u32,
-    pub number_of_nodes: usize,
-    /// The number of threads
-    pub max_worker: u16,
+    pub literals: FxHashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    /// The core features of the modell corresponding with this ddnnf
+    pub core: FxHashSet<i32>,
+    /// The dead features of the modell
+    pub dead: FxHashSet<i32>,
     /// An interim save for the marking algorithm
     pub md: Vec<usize>,
-    /// The core features of the modell corresponding with this ddnnf
-    pub core: HashSet<i32>,
-    /// The dead features of the modell
-    pub dead: HashSet<i32>,
+    pub number_of_nodes: usize,
+    pub number_of_variables: u32,
+    /// The number of threads
+    pub max_worker: u16,
 }
 
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
     pub fn new(
         nodes: Vec<Node>,
-        literals: HashMap<i32, usize>,
+        literals: FxHashMap<i32, usize>,
         number_of_variables: u32,
         number_of_nodes: usize,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
             literals,
-            number_of_variables,
-            number_of_nodes,
-            max_worker: 4,
+            core: FxHashSet::default(),
+            dead: FxHashSet::default(),
             md: Vec::new(),
-            core: HashSet::new(),
-            dead: HashSet::new(),
+            number_of_nodes,
+            number_of_variables,
+            max_worker: 4,
         };
         ddnnf.get_core();
         ddnnf.get_dead();
@@ -152,8 +149,8 @@ impl Ddnnf {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]).1,
-            2..=50 => self.operate_on_partial_config_marker(&features, Ddnnf::calc_count_marked_node).1,
-            _ => self.operate_on_partial_config_default(&features, Ddnnf::calc_count)
+            2..=20 => self.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node).1,
+            _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count)
         }
     }
 

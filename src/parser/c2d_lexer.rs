@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
@@ -32,7 +32,7 @@ pub type TId = TokenIdentifier;
 
 use C2DToken::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Every C2DToken gets an enum instance for the lexing progress
 pub enum C2DToken {
     /// The header of the nnf file

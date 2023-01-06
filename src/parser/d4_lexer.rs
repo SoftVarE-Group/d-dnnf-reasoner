@@ -10,7 +10,7 @@ use nom::{
 
 use D4Token::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Every token gets an enum instance for the D4lexing progress
 pub enum D4Token {
     /// An inner node that contains atleast one child

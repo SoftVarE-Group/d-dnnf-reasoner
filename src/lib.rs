@@ -4,6 +4,7 @@
 #![deny(deprecated)]
 #![deny(missing_copy_implementations)]
 
+#![warn(clippy::disallowed_types)]
 #[cfg(all(test, feature = "benchmarks"))]
 extern crate test;
 

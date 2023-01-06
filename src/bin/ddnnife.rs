@@ -256,10 +256,7 @@ fn main() {
 
                     let response = ddnnf.handle_stream_msg(&buffer);
 
-                    match response.as_str() {
-                        "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
-                        _ => (),
-                    }
+                    if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
                     
                     handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();

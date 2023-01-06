@@ -1,11 +1,12 @@
 use std::cmp::max;
 use std::iter::FromIterator;
-use std::{path::Path, collections::HashSet};
+use std::{path::Path};
 
 use rand_pcg::{Pcg32, Lcg64Xsh32};
 use rand::{Rng, SeedableRng};
 
 use rug::Assign;
+use rustc_hash::FxHashSet;
 
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
@@ -87,38 +88,36 @@ impl Ddnnf {
                 |d, assumptions, vars| {
                     if vars {
                         let could_be_core = assumptions.pop().unwrap();
-                        let without_cf = Ddnnf::execute_query(d, &assumptions);
+                        let without_cf = Ddnnf::execute_query(d, assumptions);
                         assumptions.push(could_be_core);
-                        let with_cf = Ddnnf::execute_query(d, &assumptions);
+                        let with_cf = Ddnnf::execute_query(d, assumptions);
 
                         if with_cf == without_cf {
                             Some(could_be_core.to_string())
                         } else {
                             None
                         }
+                    } else if assumptions.is_empty() {
+                        let mut core = Vec::from_iter(&d.core);
+                        let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
+                        core.extend(dead);
+                        core.sort_by_key(|a| a.abs());
+                        Some(format_vec(core.iter()))
                     } else {
-                        if assumptions.is_empty() {
-                            let mut core = Vec::from_iter(&d.core);
-                            let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
-                            core.extend(dead);
-                            core.sort_by(|a, b| a.abs().cmp(&b.abs()));
-                            Some(format_vec(core.iter()))
-                        } else {
-                            let mut core = Vec::new();
-                            let reference = Ddnnf::execute_query(d, &assumptions);
-                            for i in 1_i32..=d.number_of_variables as i32 {
-                                assumptions.push(i);
-                                let inter = Ddnnf::execute_query(d, &assumptions);
-                                if reference == inter {
-                                    core.push(i);
-                                }
-                                if inter == 0 {
-                                    core.push(-i);
-                                }
-                                assumptions.pop();
+                        let mut core = Vec::new();
+                        let reference = Ddnnf::execute_query(d, assumptions);
+                        for i in 1_i32..=d.number_of_variables as i32 {
+                            assumptions.push(i);
+                            let inter = Ddnnf::execute_query(d, assumptions);
+                            if reference == inter {
+                                core.push(i);
                             }
-                            Some(format_vec(core.iter()))
+                            if inter == 0 {
+                                core.push(-i);
+                            }
+                            assumptions.pop();
                         }
+                        Some(format_vec(core.iter()))
                     }
                 },
                 self,
@@ -159,20 +158,20 @@ impl Ddnnf {
         }
     }
 
-    fn enumerate(&mut self, assumptions: &mut Vec<i32>,
+    fn enumerate(&mut self, assumptions: &mut [i32],
         seed: u64,
         limit: usize,
     ) -> String {
-        let mut sol: HashSet<Vec<i32>> = HashSet::new();
-        let assumptions_set: HashSet<i32> = HashSet::from_iter(assumptions.iter().cloned());
-        let configs = self.execute_query(&assumptions);
+        let mut sol: FxHashSet<Vec<i32>> = FxHashSet::default();
+        let assumptions_set: FxHashSet<i32> = FxHashSet::from_iter(assumptions.iter().cloned());
+        let configs = self.execute_query(assumptions);
         let mut rng = if seed != u64::MAX {
             Some(Pcg32::seed_from_u64(seed))
         } else {
             None
         };
 
-        self.enumeration_pre_step(assumptions_set.clone(), &mut rng, (limit, max(usize::MAX, configs.to_usize_wrapping())), &mut sol);
+        self.enumeration_pre_step(assumptions_set, &mut rng, (limit, max(usize::MAX, configs.to_usize_wrapping())), &mut sol);
         for n in self.nodes.iter_mut() {
             n.marker = false;
         }
@@ -183,10 +182,10 @@ impl Ddnnf {
 
     fn enumeration_pre_step(
         &mut self,
-        mut assumptions: HashSet<i32>,
+        assumptions: FxHashSet<i32>,
         rng: &mut Option<Lcg64Xsh32>,
         limits: (usize, usize),
-        sol: &mut HashSet<Vec<i32>>
+        sol: &mut FxHashSet<Vec<i32>>
     ) {
         if sol.len() >= limits.0 || sol.len() >= limits.1 {
             return;
@@ -197,25 +196,25 @@ impl Ddnnf {
             n.marker = false;
         }
         self.md.clear();
-        for (f, index) in self.literals.iter() {
+        for (f, &index) in self.literals.iter() {
             if assumptions.contains(&-f.to_owned()) {
-                self.nodes[*index].temp.assign(0);
-                self.nodes[*index].marker = true;
+                self.nodes[index].temp.assign(0);
+                self.nodes[index].marker = true;
             } else if assumptions.contains(&f.to_owned()){
-                self.nodes[*index].temp.assign(1);
-                self.nodes[*index].marker = true;
+                self.nodes[index].temp.assign(1);
+                self.nodes[index].marker = true;
             } else {
-                self.nodes[*index].temp.assign(1);
+                self.nodes[index].temp.assign(1);
             }
         }
 
         let mut save = assumptions.clone();
-        self.enumeration_step(self.number_of_nodes-1, &mut assumptions);
+        self.enumeration_step(self.number_of_nodes-1);
         
         if self.nodes[self.number_of_nodes-1].temp > 0 {
             if assumptions.len() == self.number_of_variables as usize {
                 let mut vec = Vec::from_iter(assumptions.iter().cloned());
-                vec.sort_by(|a, b| a.abs().cmp(&b.abs()));
+                vec.sort_by_key(|a| a.abs());
                 sol.insert(vec);
                 return;
             }
@@ -242,7 +241,6 @@ impl Ddnnf {
     fn enumeration_step(
         &mut self,
         index: usize,
-        set_features: &mut HashSet<i32>
     ) {
         if self.nodes[index].marker {
             return;
@@ -251,7 +249,7 @@ impl Ddnnf {
         match self.nodes[index].ntype.clone() {
             NodeType::And { children } => {
                 for c in &children {
-                    self.enumeration_step(*c, set_features);
+                    self.enumeration_step(*c);
                     if self.nodes[*c].temp == 0 {
                         self.nodes[index].temp.assign(0);
                         return;
@@ -261,7 +259,7 @@ impl Ddnnf {
             },
             NodeType::Or { children } => {
                 for c in &children {
-                    self.enumeration_step(*c, set_features);
+                    self.enumeration_step(*c);
                     if self.nodes[*c].temp > 0 {
                         self.nodes[index].temp.assign(1);
                         return;
@@ -282,19 +280,13 @@ fn op_with_assumptions_and_vars<T: ToString>(
     vars: &[i32],
 ) -> String {
     if vars.is_empty() {
-        match operation(ddnnf, assumptions, false) {
-            Some(v) => return v.to_string(),
-            None => (),
-        }
+        if let Some(v) = operation(ddnnf, assumptions, false) { return v.to_string() }
     }
 
     let mut response = Vec::new();
     for var in vars {
         assumptions.push(*var);
-        match operation(ddnnf, assumptions, true) {
-            Some(v) => response.push(v.to_string()),
-            None => (),
-        }
+        if let Some(v) = operation(ddnnf, assumptions, true) { response.push(v.to_string()) }
         assumptions.pop();
     }
 

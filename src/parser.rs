@@ -10,11 +10,11 @@ pub mod persisting;
 use core::panic;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
     rc::Rc, process
 };
 
 use rug::{Integer, Complete};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub mod bufreader_for_big_files;
 use bufreader_for_big_files::BufReaderMl;
@@ -67,7 +67,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
 
-    let mut literals: HashMap<i32, usize> = HashMap::new();
+    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
@@ -103,7 +103,7 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
                     parsed_nodes[i].parents.push(next_indize);
                 }
             }
-            // fill the HashMap with the literals
+            // fill the FxHashMap with the literals
             NodeType::Literal { literal } => {
                 literals.insert(*literal, parsed_nodes.len());
             }
@@ -132,10 +132,10 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let nx_literals: Rc<RefCell<HashMap<NodeIndex, i32>>> =
-        Rc::new(RefCell::new(HashMap::new()));
-    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
-        Rc::new(RefCell::new(HashMap::new()));
+    let nx_literals: Rc<RefCell<FxHashMap<NodeIndex, i32>>> =
+        Rc::new(RefCell::new(FxHashMap::default()));
+    let literals_nx: Rc<RefCell<FxHashMap<i32, NodeIndex>>> =
+        Rc::new(RefCell::new(FxHashMap::default()));
 
     let get_literal_indices = |ddnnf_graph: &mut Graph<TId, ()>,
                                literals: Vec<i32>|
@@ -214,7 +214,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
         match next {
             Edge { from, to, features } => {
                 for f in &features {
-                    literal_occurences.borrow_mut()[f.abs() as usize] = true;
+                    literal_occurences.borrow_mut()[f.unsigned_abs() as usize] = true;
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
@@ -266,7 +266,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     let balance_or_children =
         |ddnnf_graph: &mut Graph<TId, ()>,
          from: NodeIndex,
-         children: Vec<(NodeIndex, HashSet<u32>)>| {
+         children: Vec<(NodeIndex, FxHashSet<u32>)>| {
             for child in children {
                 let and_node = ddnnf_graph.add_node(TId::And);
 
@@ -309,7 +309,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut safe: HashMap<NodeIndex, HashSet<u32>> = HashMap::new();
+    let mut safe: FxHashMap<NodeIndex, FxHashSet<u32>> = FxHashMap::default();
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
@@ -329,10 +329,10 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
     dfs = DfsPostOrder::new(&ddnnf_graph, root);
-    let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
+    let mut nd_to_usize: FxHashMap<NodeIndex, usize> = FxHashMap::default();
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
-    let mut literals: HashMap<i32, usize> = HashMap::new();
+    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
     let nx_lit = nx_literals.borrow();
 
     while let Some(nx) = dfs.next(&ddnnf_graph) {
@@ -370,7 +370,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
                     parsed_nodes[i].parents.push(next_indize);
                 }
             }
-            // fill the HashMap with the literals
+            // fill the FxHashMap with the literals
             NodeType::Literal { literal } => {
                 literals.insert(*literal, parsed_nodes.len());
             }
@@ -387,10 +387,10 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 // determine the differences in literal-nodes occuring in the child nodes
 fn get_literal_diff(
     graph: &Graph<TId, ()>,
-    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
-    nx_literals: &HashMap<NodeIndex, i32>,
+    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
+    nx_literals: &FxHashMap<NodeIndex, i32>,
     or_node: NodeIndex,
-) -> Vec<(NodeIndex, HashSet<u32>)> {
+) -> Vec<(NodeIndex, FxHashSet<u32>)> {
     let mut inter_res = Vec::new();
     let neighbors = graph.neighbors_directed(or_node, Outgoing);
 
@@ -399,9 +399,9 @@ fn get_literal_diff(
             .push((neighbor, get_literals(graph, safe, nx_literals, neighbor)));
     }
 
-    let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
+    let mut res: Vec<(NodeIndex, FxHashSet<u32>)> = Vec::new();
     for i in 0..inter_res.len() {
-        let mut val: HashSet<u32> = HashSet::new();
+        let mut val: FxHashSet<u32> = FxHashSet::default();
         for (j, i_res) in inter_res.iter().enumerate() {
             if i != j {
                 val.extend(&i_res.1);
@@ -418,16 +418,16 @@ fn get_literal_diff(
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
     graph: &Graph<TId, ()>,
-    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
-    nx_literals: &HashMap<NodeIndex, i32>,
+    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
+    nx_literals: &FxHashMap<NodeIndex, i32>,
     or_child: NodeIndex,
-) -> HashSet<u32> {
+) -> FxHashSet<u32> {
     let lookup = safe.get(&or_child);
     if let Some(x) = lookup {
         return x.clone();
     }
 
-    let mut res = HashSet::new();
+    let mut res = FxHashSet::default();
     use c2d_lexer::TokenIdentifier::*;
     match graph[or_child] {
         And | Or => {
@@ -437,7 +437,7 @@ fn get_literals(
             safe.insert(or_child, res.clone());
         }
         PositiveLiteral | NegativeLiteral => {
-            res.insert(nx_literals.get(&or_child).unwrap().abs() as u32);
+            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs() as u32);
             safe.insert(or_child, res.clone());
         }
         _ => (),
@@ -447,7 +447,7 @@ fn get_literals(
 
 // multiplies the count of all child Nodes of an And Node
 #[inline]
-fn calc_and_count(nodes: &mut Vec<Node>, indices: &[usize]) -> Integer {
+fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
     Integer::product(indices.iter().map(|&index| &nodes[index].count))
         .complete()
 }
@@ -455,7 +455,7 @@ fn calc_and_count(nodes: &mut Vec<Node>, indices: &[usize]) -> Integer {
 // adds up the count of all child Nodes of an And Node
 #[inline]
 fn calc_or_count(
-    nodes: &mut Vec<Node>,
+    nodes: &mut [Node],
     indices: &[usize],
 ) -> Integer {
     Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()

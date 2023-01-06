@@ -4,6 +4,38 @@ use super::super::node::{NodeType::*};
 use crate::Ddnnf;
 
 impl Ddnnf {
+
+    // TODO tests/*.rs Dateien in src umlagern
+        // CI anpassen => nur noch ein job für alle tests
+    // TODO test schreiben, doku schreiben
+
+
+    /* alte version
+        self.nodes[i].temp = Integer::product(
+            children.iter().map(
+                |&index| {
+                    if self.nodes[index].marker {
+                        &self.nodes[index].temp
+                    } else {
+                        &self.nodes[index].count
+            }
+        }))
+        .complete()
+    */
+
+    /* // TODO in calc_count_node einbauen, wenn für alle queries performant
+        self.nodes[i].temp = children.iter()
+        .fold(self.nodes[i].count.clone(), |mut acc, &index| {
+            if self.nodes[index].marker {
+                if &self.nodes[index].count != &0 {
+                    acc /= &self.nodes[index].count;
+                }
+                acc *= &self.nodes[index].temp;
+            }
+            acc
+        });
+    */
+
     #[inline]
     // Computes the cardinality of a node using the marking algorithm:
     // And and Or nodes that base the computation on their child nodes use the
@@ -11,23 +43,25 @@ impl Ddnnf {
     pub(crate) fn calc_count_marked_node(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {
-                self.nodes[i].temp = Integer::product(
-                    children.iter().map(
-                        |&index| {
-                            if self.nodes[index].marker {
-                                &self.nodes[index].temp
-                            } else {
-                                &self.nodes[index].count
+                self.nodes[i].temp = children.iter()
+                .fold(self.nodes[i].count.clone(), |mut acc, &index| {
+                    let node = &self.nodes[index];
+                    if node.marker {
+                        if node.count != 0 {
+                            acc /= &node.count;
+                        }
+                        acc *= &node.temp;
                     }
-                }))
-                .complete()
+                    acc
+                });
             }
             Or { children } => {
                 self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
-                    if self.nodes[index].marker {
-                        &self.nodes[index].temp
+                    let node = &self.nodes[index];
+                    if node.marker {
+                        &node.temp
                     } else {
-                        &self.nodes[index].count
+                        &node.count
                     }
                 }))
                 .complete()
@@ -39,10 +73,10 @@ impl Ddnnf {
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn operate_on_marker(&mut self, indize: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
-        for i in indize.iter().copied() {
-            self.nodes[i].temp.assign(0); // change the value of the node
-            self.mark_nodes(i); // go through the path til the root node is marked
+    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
+        for index in indexes.iter().copied() {
+            self.nodes[index].temp.assign(0); // change the value of the node
+            self.mark_nodes(index); // go through the path til the root node is marked
         }
 
         // sort the marked nodes so that we make sure to first calculate the childnodes and then their parents
@@ -50,7 +84,7 @@ impl Ddnnf {
 
         // calc the count for all marked nodes, respectevly all nodes that matter
         for j in 0..self.md.len() {
-            if !indize.contains(&self.md[j]) {
+            if !indexes.contains(&self.md[j]) {
                 operation(self, self.md[j]);
             }
         }
@@ -98,20 +132,20 @@ impl Ddnnf {
         } else {
             let features: Vec<i32> = self.reduce_query(features);
 
-            let mut indize: Vec<usize> = Vec::new();
+            let mut indexes: Vec<usize> = Vec::new();
 
             for number in features {
                 // we set the negative occurences to 0 for the features we want to include
                 if let Some(i) = self.literals.get(&-number).cloned() {
-                    indize.push(i)
+                    indexes.push(i)
                 }
             }
 
-            if indize.is_empty() {
+            if indexes.is_empty() {
                 return (0, self.rc());
             }
 
-            self.operate_on_marker(&indize, operation)
+            self.operate_on_marker(&indexes, operation)
         }
     }
 
