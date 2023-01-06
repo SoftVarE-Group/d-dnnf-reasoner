@@ -36,6 +36,26 @@ impl Ddnnf {
         });
     */
 
+    /*
+        let marked_children = children.iter().filter(|&&child| self.nodes[child].marker).collect::<Vec<&usize>>();
+        self.nodes[i].temp = if marked_children.len() < children.len() / 20 {
+            marked_children.iter().fold(self.nodes[i].count.clone(), |mut acc, &&index| {
+                let node = &self.nodes[index];
+                if node.count != 0 {
+                    acc /= &node.count;
+                }
+                acc *= &node.temp;
+                acc
+            })
+        } else {
+            Integer::product(marked_children
+                .iter()
+                .map(|&&index| { &self.nodes[index].temp }))
+                .complete()
+        }
+    
+    */
+
     #[inline]
     // Computes the cardinality of a node using the marking algorithm:
     // And and Or nodes that base the computation on their child nodes use the
@@ -43,17 +63,22 @@ impl Ddnnf {
     pub(crate) fn calc_count_marked_node(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {
-                self.nodes[i].temp = children.iter()
-                .fold(self.nodes[i].count.clone(), |mut acc, &index| {
-                    let node = &self.nodes[index];
-                    if node.marker {
+                let marked_children = children.iter().filter(|&&child| self.nodes[child].marker).collect::<Vec<&usize>>();
+                self.nodes[i].temp = if marked_children.len() < children.len() / 10 {
+                    marked_children.iter().fold(self.nodes[i].count.clone(), |mut acc, &&index| {
+                        let node = &self.nodes[index];
                         if node.count != 0 {
                             acc /= &node.count;
                         }
                         acc *= &node.temp;
-                    }
-                    acc
-                });
+                        acc
+                    })
+                } else {
+                    Integer::product(marked_children
+                        .iter()
+                        .map(|&&index| { &self.nodes[index].temp }))
+                        .complete()
+                }
             }
             Or { children } => {
                 self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
@@ -76,7 +101,7 @@ impl Ddnnf {
     fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
         for index in indexes.iter().copied() {
             self.nodes[index].temp.assign(0); // change the value of the node
-            self.mark_nodes(index); // go through the path til the root node is marked
+            self.mark_nodes_start(index); // go through the path til the root node is marked
         }
 
         // sort the marked nodes so that we make sure to first calculate the childnodes and then their parents
@@ -84,14 +109,15 @@ impl Ddnnf {
 
         // calc the count for all marked nodes, respectevly all nodes that matter
         for j in 0..self.md.len() {
-            if !indexes.contains(&self.md[j]) {
-                operation(self, self.md[j]);
-            }
+            operation(self, self.md[j]);
         }
 
         // reset everything
         for index in &self.md {
-            self.nodes[*index].marker = false
+            self.nodes[*index].marker = false;
+        }
+        for &index in indexes {
+            self.nodes[index].marker = false;
         }
         let marked_nodes = self.md.len();
         self.md.clear();
@@ -152,16 +178,30 @@ impl Ddnnf {
     #[inline]
     // marks the nodes starting from an initial Literal. All parents and parents of parents til
     // the root nodes get marked
+    fn mark_nodes_start(&mut self, i: usize) {
+        self.nodes[i].marker = true;
+
+        for parent in self.nodes[i].parents.clone() {
+            // check for parent nodes and adjust their count resulting of the changes to their children
+            if !self.nodes[parent].marker {
+                // only mark those nodes which aren't already marked to specificly avoid marking nodes near the root multple times
+                self.mark_nodes(parent);
+            }
+        }
+    }
+
+    #[inline]
+    // marks the nodes starting from an initial Literal. All parents and parents of parents til
+    // the root nodes get marked
     fn mark_nodes(&mut self, i: usize) {
         self.nodes[i].marker = true;
         self.md.push(i);
 
-        for j in 0..self.nodes[i].parents.len() {
+        for parent in self.nodes[i].parents.clone() {
             // check for parent nodes and adjust their count resulting of the changes to their children
-            let index = self.nodes[i].parents[j];
-            if !self.nodes[index].marker {
+            if !self.nodes[parent].marker {
                 // only mark those nodes which aren't already marked to specificly avoid marking nodes near the root multple times
-                self.mark_nodes(index);
+                self.mark_nodes(parent);
             }
         }
     }
