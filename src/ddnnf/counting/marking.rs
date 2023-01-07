@@ -64,7 +64,7 @@ impl Ddnnf {
         match &self.nodes[i].ntype {
             And { children } => {
                 let marked_children = children.iter().filter(|&&child| self.nodes[child].marker).collect::<Vec<&usize>>();
-                self.nodes[i].temp = if marked_children.len() < children.len() / 10 {
+                self.nodes[i].temp = if marked_children.len() <= children.len() / 2 {
                     marked_children.iter().fold(self.nodes[i].count.clone(), |mut acc, &&index| {
                         let node = &self.nodes[index];
                         if node.count != 0 {
@@ -74,9 +74,16 @@ impl Ddnnf {
                         acc
                     })
                 } else {
-                    Integer::product(marked_children
+                    Integer::product(children
                         .iter()
-                        .map(|&&index| { &self.nodes[index].temp }))
+                        .map(|&index| {
+                            let node = &self.nodes[index];
+                            if node.marker {
+                                &node.temp
+                            } else {
+                                &node.count
+                            }
+                        }))
                         .complete()
                 }
             }
