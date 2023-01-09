@@ -35,7 +35,7 @@ impl Ddnnf{
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
-        if self.max_worker != 1 {
+        if self.max_worker == 1 {
             self.card_multi_queries_single(path_in, path_out)
         } else {
             self.card_multi_queries_multi(path_in, path_out)
