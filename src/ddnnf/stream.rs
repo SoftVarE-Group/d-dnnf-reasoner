@@ -1,15 +1,17 @@
 use std::cmp::max;
-use std::iter::FromIterator;
+use std::iter::{FromIterator};
 use std::{path::Path, collections::HashSet};
 
+use rand::seq::SliceRandom;
+use rand_distr::{WeightedAliasIndex, Distribution, Binomial};
 use rand_pcg::{Pcg32, Lcg64Xsh32};
 use rand::{Rng, SeedableRng};
 
-use rug::Assign;
+use rug::{Assign, Rational};
 
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
-use super::node::NodeType;
+use super::node::NodeType::*;
 
 impl Ddnnf {
     /// error codes:
@@ -17,7 +19,8 @@ impl Ddnnf {
     /// E2 Operation does not exist. Neither now nor in the future
     /// E3 Parse error
     /// E4 Syntax error
-    /// E5 file or path error
+    /// E5 Operation was not able to be done, because of wrong input
+    /// E6 File or path error
     pub fn handle_stream_msg(&mut self, msg: &str) -> String {
         let args: Vec<&str> = msg.split_whitespace().collect();
         if args.is_empty() {
@@ -138,18 +141,24 @@ impl Ddnnf {
                 &values
             ),
             "enum" => self.enumerate(&mut params, u64::MAX, usize::MAX),
-            "random" => self.enumerate(&mut params, seed, limit),
+            "random" => {
+                let samples = self.uniform_random_sampling(&mut params, limit, seed);
+                match samples {
+                    Some(s) => format_vec_vec(s.iter()),
+                    None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
+                }
+            }
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
-                    return String::from("E5 error: no file path was supplied");
+                    return String::from("E6 error: no file path was supplied");
                 }
                 if !path.is_absolute() {
-                    return String::from("E5 error: file path is not absolute, but has to be");
+                    return String::from("E6 error: file path is not absolute, but has to be");
                 }
                 match write_ddnnf(self, path.to_str().unwrap()) {
                     Ok(_) => String::from(""),
-                    Err(e) => format!("E5 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
+                    Err(e) => format!("E6 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
                 }
             },
             "atomic" | "uni_random" | "t-wise_sampling" => {
@@ -197,15 +206,15 @@ impl Ddnnf {
             n.marker = false;
         }
         self.md.clear();
-        for (f, index) in self.literals.iter() {
+        for (f, &index) in self.literals.iter() {
             if assumptions.contains(&-f.to_owned()) {
-                self.nodes[*index].temp.assign(0);
-                self.nodes[*index].marker = true;
+                self.nodes[index].temp.assign(0);
+                self.nodes[index].marker = true;
             } else if assumptions.contains(&f.to_owned()){
-                self.nodes[*index].temp.assign(1);
-                self.nodes[*index].marker = true;
+                self.nodes[index].temp.assign(1);
+                self.nodes[index].marker = true;
             } else {
-                self.nodes[*index].temp.assign(1);
+                self.nodes[index].temp.assign(1);
             }
         }
 
@@ -249,7 +258,7 @@ impl Ddnnf {
         }
         self.nodes[index].marker = true;
         match self.nodes[index].ntype.clone() {
-            NodeType::And { children } => {
+            And { children } => {
                 for c in &children {
                     self.enumeration_step(*c, set_features);
                     if self.nodes[*c].temp == 0 {
@@ -259,7 +268,7 @@ impl Ddnnf {
                 }
                 self.nodes[index].temp.assign(1);
             },
-            NodeType::Or { children } => {
+            Or { children } => {
                 for c in &children {
                     self.enumeration_step(*c, set_features);
                     if self.nodes[*c].temp > 0 {
@@ -269,9 +278,103 @@ impl Ddnnf {
                 }
                 self.nodes[index].temp.assign(0);
             },
-            NodeType::True => self.nodes[index].temp.assign(1),
+            True => self.nodes[index].temp.assign(1),
             _ => (),
         }
+    }
+
+    /// Generates amount many uniform random samples under a given set of assumptions and a seed.
+    /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
+    /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned. 
+    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &mut Vec<i32>, amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
+        for node in self.nodes.iter_mut() {
+            node.temp.assign(&node.count);
+        }
+        
+        if self.execute_query(&assumptions) > 0 {
+            let mut sample_list = self.sample_node(amount, self.number_of_nodes-1, &mut Pcg32::seed_from_u64(seed));
+            for sample in sample_list.iter_mut() {
+                sample.sort_unstable_by_key(|f| f.abs());
+            }
+            return Some(sample_list);
+        }
+        None
+    }
+
+    // Performs the operations needed to generate random samples.
+    // The algorithm is based upon KUS's uniform random sampling algorithm.
+    fn sample_node(&self, amount: usize, index: usize, rng: &mut Lcg64Xsh32) -> Vec<Vec<i32>> {
+        let mut sample_list = Vec::new();
+        if amount == 0 { return sample_list; }
+        match &self.nodes[index].ntype {
+            And { children } => {
+                for _ in 0..amount {
+                    sample_list.push(Vec::new());
+                }
+                for &child in children {
+                    let mut child_sample_list = self.sample_node(amount, child, rng);
+                    // shuffle operation from KUS algorithm
+                    child_sample_list.shuffle(rng);
+                    
+                    // stitch operation
+                    for (index, sample) in child_sample_list.iter_mut().enumerate() {
+                        sample_list[index].append(sample);
+                    }
+                }
+            },
+            Or { children } => {
+                let mut pick_amount = vec![0; children.len()];
+                let mut choices = Vec::new();
+                let mut weights = Vec::new();
+                
+                // compute the probability of getting a sample of a child node
+                let parent_count_as_float = Rational::from((&self.nodes[index].temp, 1));
+                for child_index in 0..children.len() {
+                    let child_count_as_float = Rational::from((&self.nodes[children[child_index]].temp, 1));
+                    
+                    // can't get a sample of a children with no more valid configuration
+                    if child_count_as_float != 0 {
+                        let child_amount = (&parent_count_as_float / child_count_as_float).to_f64() * amount as f64;
+                        choices.push(child_index);
+                        weights.push(child_amount);
+                    }
+                }
+
+                // choice some sort of weighted distribution depending on the number of children with count > 0
+                match weights.len() {
+                    1 => pick_amount[choices[0]] += amount,
+                    2 => {
+                        let binomial_dist = Binomial::new(amount as u64, weights[0]/(weights[0] + weights[1])).unwrap();
+                        pick_amount[choices[0]] += binomial_dist.sample(rng) as usize;
+                        pick_amount[choices[1]] = amount - pick_amount[choices[0]];
+                    },
+                    _ => {
+                        let weighted_dist = WeightedAliasIndex::new(weights).unwrap();
+                        for _ in 0..amount {
+                            pick_amount[choices[weighted_dist.sample(rng)]] += 1;
+                        }
+                    }
+                }
+
+                for &choice in choices.iter() {
+                    sample_list.append(&mut self.sample_node(pick_amount[choice], children[choice], rng));
+                }
+
+                // add empty lists for child nodes that have a count of zero
+                while sample_list.len() != amount {
+                    sample_list.push(Vec::new());
+                }
+
+                sample_list.shuffle(rng);
+            },
+            Literal { literal } => {
+                for _ in 0..amount {
+                    sample_list.push(vec![*literal]);
+                } 
+            },
+            _ => (),
+        }
+        sample_list
     }
 }
 
@@ -476,54 +579,54 @@ mod test {
 
     #[test]
     fn handle_stream_msg_random_test() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
-            vp9.handle_stream_msg("random s banana")
+            vp9.handle_stream_msg("random seed banana")
         );
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
-            vp9.handle_stream_msg("random l eight")
+            vp9.handle_stream_msg("random limit eight")
+        );
+        
+        assert_eq!(
+            String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
+            vp9.handle_stream_msg("random a 1 -1")
         );
 
-        let mut binding = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 69");
+        let mut binding = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 42");
+        println!("{}", binding);
         let mut res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
-        assert!(
-            vp9.execute_query(&res) == 1
-        );
+        assert_eq!(1, vp9.execute_query(&res));
+        assert_eq!(vp9.number_of_variables as usize, res.len());
+        
         binding = vp9.handle_stream_msg("random");
         res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
-        assert!(
-            vp9.execute_query(&res) == 1
-        );
+        assert_eq!(1, vp9.execute_query(&res));
+        assert_eq!(vp9.number_of_variables as usize, res.len());
 
-        assert_eq!(
-            35,
-            vp9.handle_stream_msg("random assumptions 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 limit 35 ").split(";").count()
-        );
-        // if the limit > the #remaining satisfiable configurations for given assumptions then there will by only #remaining satisfiable configurations
-        assert_eq!(
-            vp9.handle_stream_msg("count a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").parse::<usize>().unwrap(),
-            vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 l 100000000 s 42").split(";").count()
-        );
-        let binding2 = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 l 35 ");
-        let inter_res = binding2.split(";").collect::<Vec<&str>>();
-        for res in inter_res {
-            assert!(
-                vp9.execute_query(&res.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>()) == 1
-            );
+        binding = auto1.handle_stream_msg("random assumptions 1 3 -4 270 122 -2000 limit 135");
+        let results = binding.split(";")
+            .map(|v| v.split(" ").map(|v_inner| v_inner.parse::<i32>().unwrap()).collect::<Vec<i32>>())
+            .collect::<Vec<Vec<i32>>>();
+        for result in results.iter() {
+            assert_eq!(auto1.number_of_variables as usize, result.len());
+
+            // contains the assumptions
+            for elem in vec![1,3,-4,270,122,-2000].iter() {
+                assert!(result.contains(elem));
+            }
+            for elem in vec![-1,-3,4,-270,-122,2000].iter() {
+                assert!(!result.contains(elem));
+            }
+
+            assert!(auto1.execute_query(result) == 1);
         }
-
-        // make sure that counting still works and the marked nodes aren't bad
-        assert_eq!(
-            String::from(
-            vec![
-                "216000", "0", "72000"
-            ].join(";")),
-            vp9.handle_stream_msg("count variables 1 -2 3")
-        );
+        assert_eq!(135, results.len());
     }
 
     #[test]
@@ -548,15 +651,15 @@ mod test {
 
 
         assert_eq!(
-            String::from("E5 error: no file path was supplied"),
+            String::from("E6 error: no file path was supplied"),
             vp9.handle_stream_msg("save")
         );
         assert_eq!(
-            String::from("E5 error: No such file or directory (os error 2) while trying to write ddnnf to /home/ferris/Documents/crazy_project/out.nnf"),
+            String::from("E6 error: No such file or directory (os error 2) while trying to write ddnnf to /home/ferris/Documents/crazy_project/out.nnf"),
             vp9.handle_stream_msg("save path /home/ferris/Documents/crazy_project/out.nnf")
         );
         assert_eq!(
-            String::from("E5 error: file path is not absolute, but has to be"),
+            String::from("E6 error: file path is not absolute, but has to be"),
             vp9.handle_stream_msg("save p ./")
         );
 
