@@ -1,22 +1,22 @@
-use std::{fs, io, iter};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::{fs, io, iter};
 
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use streaming_iterator::StreamingIterator;
 
 use crate::data_structure::NodeType::{And, False, Literal, Or, True};
-use crate::Ddnnf;
 use crate::sampler::covering_strategies::cover_with_caching;
 use crate::sampler::data_structure::Sample;
 use crate::sampler::iterator::TInteractionIter;
-use crate::sampler::sample_merger::{AndMerger, OrMerger};
 use crate::sampler::sample_merger::similarity_merger::SimilarityMerger;
 use crate::sampler::sample_merger::zipping_merger::ZippingMerger;
-use crate::sampler::SamplingResult::ResultWithSample;
+use crate::sampler::sample_merger::{AndMerger, OrMerger};
 use crate::sampler::sat_solver::SatSolver;
+use crate::sampler::SamplingResult::ResultWithSample;
+use crate::Ddnnf;
 
 pub mod covering_strategies;
 pub mod data_structure;
@@ -34,8 +34,13 @@ struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SamplingResult {
-    True,
-    False,
+    /// An empty result that is *valid* (i.e., a regular sample that contains 0 configurations).
+    /// This is used to indicate that a subgraph evaluates to true.
+    Empty,
+    /// An empty result that is *invalid*.
+    /// This is used to indicate that a subgraph evaluates to false.
+    Void,
+    /// A *valid* Result that just has a regular sample, nothing special.
     ResultWithSample(Sample),
 }
 
@@ -50,14 +55,14 @@ impl SamplingResult {
 
     pub fn len(&self) -> usize {
         match self {
-            SamplingResult::True | SamplingResult::False => 0,
+            SamplingResult::Empty | SamplingResult::Void => 0,
             ResultWithSample(sample) => sample.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
-            SamplingResult::True | SamplingResult::False => true,
+            SamplingResult::Empty | SamplingResult::Void => true,
             ResultWithSample(sample) => sample.is_empty(),
         }
     }
@@ -97,26 +102,37 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 self.ddnnf.number_of_variables as usize,
             )),
             And { children } => {
-                let sample = self.sample_and(node_id, self.get_child_results(children), rng);
+                let sample = self.sample_and(
+                    node_id,
+                    self.get_child_results(children),
+                    rng,
+                );
                 self.remove_not_needed_samples(node_id, children);
                 sample
             }
             Or { children } => {
-                let sample = self.sample_or(node_id, self.get_child_results(children), rng);
+                let sample = self.sample_or(
+                    node_id,
+                    self.get_child_results(children),
+                    rng,
+                );
                 self.remove_not_needed_samples(node_id, children);
                 sample
             }
-            True => SamplingResult::True,
-            False => SamplingResult::False,
+            True => SamplingResult::Empty,
+            False => SamplingResult::Void,
         }
     }
 
     /// Remove samples that are no longer needed to reduce memory usage. A sample is no
     /// longer needed if all it's parent nodes have a sample.
-    fn remove_not_needed_samples(&mut self, node_id: usize, children: &[usize]) {
+    fn remove_not_needed_samples(
+        &mut self,
+        node_id: usize,
+        children: &[usize],
+    ) {
         for child in children {
-            let node =
-                self.ddnnf.nodes.get(*child).expect(EXPECT_SAMPLE);
+            let node = self.ddnnf.nodes.get(*child).expect(EXPECT_SAMPLE);
             if node.parents.iter().all(|parent| *parent <= node_id) {
                 // delete no longer needed sample
                 self.partial_samples.remove(child);
@@ -142,9 +158,9 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     ) -> SamplingResult {
         if child_results
             .iter()
-            .any(|result| matches!(result, SamplingResult::False))
+            .any(|result| matches!(result, SamplingResult::Void))
         {
-            return SamplingResult::False;
+            return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
@@ -154,7 +170,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
 
         let sample = self.and_merger.merge_all(node_id, &child_samples, rng);
         if sample.is_empty() {
-            SamplingResult::True
+            SamplingResult::Empty
         } else {
             ResultWithSample(sample)
         }
@@ -170,9 +186,9 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     ) -> SamplingResult {
         if child_results
             .iter()
-            .all(|result| matches!(result, SamplingResult::False))
+            .all(|result| matches!(result, SamplingResult::Void))
         {
-            return SamplingResult::False;
+            return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
@@ -182,7 +198,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
 
         let sample = self.or_merger.merge_all(node_id, &child_samples, rng);
         if sample.is_empty() {
-            SamplingResult::True
+            SamplingResult::Empty
         } else {
             ResultWithSample(sample)
         }
@@ -191,7 +207,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     fn complete_partial_configs(
         &self,
         sample: &mut Sample,
-        t: usize,
+        root: usize,
         sat_solver: &SatSolver,
     ) {
         let vars: Vec<i32> =
@@ -202,12 +218,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                     continue;
                 }
 
-                config.update_sat_state(sat_solver, t);
-                let sat_state = config.get_sat_state().expect(
+                config.update_sat_state(sat_solver, root);
+
+                // clone sat state so that we don't change the state that is cached in the config
+                let mut sat_state = config.get_sat_state().cloned().expect(
                     "sat state should exist after calling update_sat_state()",
                 );
 
-                if sat_solver.is_sat_cached(&[var], sat_state) {
+                if sat_solver.is_sat_cached(&[var], &mut sat_state) {
                     config.add(var);
                 } else {
                     config.add(-var);
@@ -362,7 +380,7 @@ pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
             &sat_solver,
             &mut rng,
         );
-        sampler.complete_partial_configs(&mut sample, t, &sat_solver);
+        sampler.complete_partial_configs(&mut sample, root_id, &sat_solver);
         ResultWithSample(sample)
     } else {
         sampling_result
@@ -394,8 +412,8 @@ pub fn save_sample_to_file(
         covers all t-wise interactions.
         False means that the feature model is void.
         */
-        SamplingResult::True => wtr.write_record(iter::once("true"))?,
-        SamplingResult::False => wtr.write_record(iter::once("false"))?,
+        SamplingResult::Empty => wtr.write_record(iter::once("true"))?,
+        SamplingResult::Void => wtr.write_record(iter::once("false"))?,
         ResultWithSample(sample) => {
             for (index, config) in sample.iter().enumerate() {
                 /*

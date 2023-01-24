@@ -446,11 +446,11 @@ mod test {
         // expected outcomes
         let expected_for_3 = vec![
             true, false, false, true, false, false, false, false, false, false,
-            false, false, false, false, false, false, false,
+            false, true, false, false, false, false, false,
         ];
         let expected_for_2_3 = vec![
             true, true, false, true, false, false, false, false, false, false,
-            true, false, false, false, false, false, false,
+            true, true, false, false, false, false, false,
         ];
 
         // config without sat state

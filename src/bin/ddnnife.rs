@@ -23,7 +23,7 @@ use ddnnf_lib::sampler::{sample_t_wise, save_sample_to_file};
 fn main() {
     let mut matches = Command::new("ddnnife")
         .global_settings(&[AppSettings::ColoredHelp])
-        .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
+        .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de\nLars Licha; lars.licha@uni-ulm.de")
         .version("0.5.0")
         .setting(AppSettings::ArgRequiredElseHelp)
         .arg(Arg::with_name("file_path")
