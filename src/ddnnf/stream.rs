@@ -1,13 +1,13 @@
-use std::cmp::max;
 use std::iter::{FromIterator};
-use std::{path::Path, collections::HashSet};
+use std::{path::Path};
 
+use itertools::Itertools;
 use rand::seq::SliceRandom;
 use rand_distr::{WeightedAliasIndex, Distribution, Binomial};
 use rand_pcg::{Pcg32, Lcg64Xsh32};
-use rand::{Rng, SeedableRng};
+use rand::{SeedableRng};
 
-use rug::{Assign, Rational};
+use rug::{Assign, Rational, Integer};
 
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
@@ -140,7 +140,13 @@ impl Ddnnf {
                 &mut params,
                 &values
             ),
-            "enum" => self.enumerate(&mut params, u64::MAX, usize::MAX),
+            "enum" => {
+                let configs = self.enumerate(&mut params, limit);
+                match configs {
+                    Some(s) => format_vec_vec(s.iter()),
+                    None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
+                }
+            },
             "random" => {
                 let samples = self.uniform_random_sampling(&mut params, limit, seed);
                 match samples {
@@ -168,119 +174,72 @@ impl Ddnnf {
         }
     }
 
-    fn enumerate(&mut self, assumptions: &mut Vec<i32>,
-        seed: u64,
-        limit: usize,
-    ) -> String {
-        let mut sol: HashSet<Vec<i32>> = HashSet::new();
-        let assumptions_set: HashSet<i32> = HashSet::from_iter(assumptions.iter().cloned());
-        let configs = self.execute_query(&assumptions);
-        let mut rng = if seed != u64::MAX {
-            Some(Pcg32::seed_from_u64(seed))
-        } else {
-            None
-        };
-
-        self.enumeration_pre_step(assumptions_set.clone(), &mut rng, (limit, max(usize::MAX, configs.to_usize_wrapping())), &mut sol);
-        for n in self.nodes.iter_mut() {
-            n.marker = false;
+    /// Creates satisfiable complete configurations for a ddnnf and given assumptions
+    /// If the ddnnf on itself or in combination with the assumption is unsatisfiable,
+    /// then we can not create any satisfiable configuration and simply return None.
+    pub(crate) fn enumerate(&mut self, assumptions: &mut Vec<i32>, _amount: usize) -> Option<Vec<Vec<i32>>> {
+        for node in self.nodes.iter_mut() {
+            node.temp.assign(&node.count);
         }
-        self.md.clear();
+
+        for literal in assumptions.iter() {
+            match self.literals.get(&-literal) {
+                Some(&x) => self.nodes[x].temp.assign(0),
+                None => (),
+            }
+        }
         
-        format_vec_vec(sol.iter())
+        if self.execute_query(&assumptions) > 0 {
+            let mut sample_list = 
+                self.enumerate_node(&self.rt(), self.number_of_nodes-1);
+            for sample in sample_list.iter_mut() {
+                sample.sort_unstable_by_key(|f| f.abs());
+            }
+            return Some(sample_list);
+        }
+        None
     }
 
-    fn enumeration_pre_step(
-        &mut self,
-        mut assumptions: HashSet<i32>,
-        rng: &mut Option<Lcg64Xsh32>,
-        limits: (usize, usize),
-        sol: &mut HashSet<Vec<i32>>
-    ) {
-        if sol.len() >= limits.0 || sol.len() >= limits.1 {
-            return;
-        }
-
-        // reseting all previous assignments of literals
-        for n in self.nodes.iter_mut() {
-            n.marker = false;
-        }
-        self.md.clear();
-        for (f, &index) in self.literals.iter() {
-            if assumptions.contains(&-f.to_owned()) {
-                self.nodes[index].temp.assign(0);
-                self.nodes[index].marker = true;
-            } else if assumptions.contains(&f.to_owned()){
-                self.nodes[index].temp.assign(1);
-                self.nodes[index].marker = true;
-            } else {
-                self.nodes[index].temp.assign(1);
-            }
-        }
-
-        let mut save = assumptions.clone();
-        self.enumeration_step(self.number_of_nodes-1, &mut assumptions);
-        
-        if self.nodes[self.number_of_nodes-1].temp > 0 {
-            if assumptions.len() == self.number_of_variables as usize {
-                let mut vec = Vec::from_iter(assumptions.iter().cloned());
-                vec.sort_by(|a, b| a.abs().cmp(&b.abs()));
-                sol.insert(vec);
-                return;
-            }
-
-            let mut next = 1;
-            while save.contains(&next) || save.contains(&-next) {
-                match rng {
-                    Some(x) => next = x.gen_range(1..=self.number_of_variables) as i32,
-                    None => next += 1,
-                }
-            }
-
-            if next <= self.number_of_variables as i32 {
-                save.insert(next);
-                self.enumeration_pre_step(save.clone(), rng, limits, sol); 
-
-                save.remove(&next);
-                save.insert(-next);
-                self.enumeration_pre_step(save.clone(), rng, limits, sol);
-            }
-        }
-    }
-
-    fn enumeration_step(
-        &mut self,
-        index: usize,
-        set_features: &mut HashSet<i32>
-    ) {
-        if self.nodes[index].marker {
-            return;
-        }
-        self.nodes[index].marker = true;
-        match self.nodes[index].ntype.clone() {
+    // Handles a node appropiate depending on its kind to produce complete
+    // satisfiable configurations
+    fn enumerate_node(&self, amount: &Integer, index: usize) -> Vec<Vec<i32>> {
+        let mut enumeration_list = Vec::new();
+        if *amount == 0 { return enumeration_list; }
+        match &self.nodes[index].ntype {
             And { children } => {
-                for c in &children {
-                    self.enumeration_step(*c, set_features);
-                    if self.nodes[*c].temp == 0 {
-                        self.nodes[index].temp.assign(0);
-                        return;
+                let mut enumeration_child_lists = Vec::new();
+                for &child in children {
+                    let child_enum = self.enumerate_node(&self.nodes[child].temp, child);
+                    if !child_enum.is_empty() {
+                        enumeration_child_lists.push(child_enum);
                     }
                 }
-                self.nodes[index].temp.assign(1);
+                // combine all combinations of children
+                // example:
+                //      enumeration_child_lists: Vec<Vec<Vec<i32>>>
+                //          [[[1,2],[3]],[[4,5,-5]]]
+                //      enumeration_list: Vec<Vec<i32>>
+                //          [[1,2,4],[1,2,5],[1,2,-5],[3,4],[3,5],[3,-5]]
+                enumeration_list = enumeration_child_lists
+                    .into_iter()
+                    .multi_cartesian_product()
+                    .map(|elem| elem.into_iter().flatten().collect())
+                    .collect();
             },
             Or { children } => {
-                for c in &children {
-                    self.enumeration_step(*c, set_features);
-                    if self.nodes[*c].temp > 0 {
-                        self.nodes[index].temp.assign(1);
-                        return;
+                for &child in children {
+                    let mut child_enum = self.enumerate_node(&self.nodes[child].temp, child);
+                    if !child_enum.is_empty() {
+                        enumeration_list.append(&mut child_enum);
                     }
                 }
-                self.nodes[index].temp.assign(0);
             },
-            True => self.nodes[index].temp.assign(1),
+            Literal { literal } => {
+                enumeration_list.push(vec![*literal]);
+            },
             _ => (),
         }
+        enumeration_list
     }
 
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
@@ -444,7 +403,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<Vec<i32>, String> {
 
 #[cfg(test)]
 mod test {
-    use std::{env, fs};
+    use std::{env, fs, collections::HashSet};
 
     use super::*;
     use crate::parser::build_d4_ddnnf_tree;
@@ -567,14 +526,29 @@ mod test {
             && res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42")
         );
 
-        assert_eq!(
-            80,
-            vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27").split(";").count()
-        );
-        assert_eq!(
-            216000,
-            vp9.handle_stream_msg("enum").split(";").count()
-        );
+        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27");
+        let res: Vec<&str> = binding.split(";").collect();
+        assert_eq!(80, res.len());
+
+        let mut res_set = HashSet::new();
+        for config_str in res {
+            let config: Vec<i32> = config_str.split(" ").map(|f| f.parse::<i32>().unwrap()).collect();
+            assert_eq!(vp9.number_of_variables as usize, config.len(), "the config is partial");
+            assert!(vp9.is_sat_for(&config), "the config is not satisfiable");
+            res_set.insert(config);
+        }
+
+        let binding = vp9.handle_stream_msg("enum");
+        let res: Vec<&str> = binding.split(";").collect();
+        assert_eq!(216000, res.len());
+
+        let mut res_set = HashSet::new();
+        for config_str in res {
+            let config: Vec<i32> = config_str.split(" ").map(|f| f.parse::<i32>().unwrap()).collect();
+            assert_eq!(vp9.number_of_variables as usize, config.len(), "the config is partial");
+            res_set.insert(config);
+        }
+        assert_eq!(216000, res_set.len(), "at least one config occurs twice or more often");
     }
 
     #[test]
