@@ -3,6 +3,7 @@ pub mod node;
 pub mod heuristics;
 pub mod counting;
 pub mod anomalies;
+pub mod config_creation;
 
 use rug::{Integer};
 
