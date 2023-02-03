@@ -79,12 +79,13 @@ fn main() {
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
     let mut ddnnf: Ddnnf;
+    let file_path_ddnnf = matches.value_of("file_path").expect("expected the file path of a ddnnf");
 
     if matches.contains_id("ommited_features") {
         let ommited_features: u32 = *matches.get_one("ommited_features").unwrap();
         ddnnf = dparser::build_d4_ddnnf_tree(
-            matches.value_of("file_path").unwrap(),
-            ommited_features,
+            file_path_ddnnf,
+            ommited_features
         );
 
         if !matches.contains_id("stream") {
@@ -96,9 +97,7 @@ fn main() {
             );
         }
     } else {
-        ddnnf = dparser::build_ddnnf_tree_with_extras(
-            matches.value_of("file_path").unwrap(),
-        );
+        ddnnf = dparser::build_ddnnf_tree_with_extras(file_path_ddnnf);
 
         if !matches.contains_id("stream") {
             let elapsed_time = time.elapsed().as_secs_f32();
@@ -134,30 +133,33 @@ fn main() {
     // computes the cardinality of partial configurations and saves the results in a .txt file
     // the results do not have to be in the same order if the number of threads is greater than one
     if matches.contains_id("queries") {
-        let file_path_in = matches.remove_one::<String>("queries").unwrap();
-        let file_path_out = &format!(
-            "{}-queries.txt",
-            matches.remove_one::<String>("queries").get_or_insert(file_path.clone()).as_str()
-        );
+        let params: Vec<String> = matches.remove_many::<String>("queries").unwrap().collect();
+        let config_path = &params[0];
+        let file_path_out = &format!("{}-queries.txt",
+            if params.len() == 2 {
+                &params[1]
+            } else {
+                &file_path
+            });
 
         let time = Instant::now();
         ddnnf
-            .card_multi_queries(file_path_in.as_str(), file_path_out)
+            .card_multi_queries(config_path, file_path_out)
             .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
 
         println!(
             "Computed values of all queries in {} and the results are saved in {}\n
             It took {} seconds. That is an average of {} seconds per query",
-            file_path_in,
+            config_path,
             file_path_out,
             elapsed_time,
-            elapsed_time / dparser::parse_queries_file(file_path_in.as_str()).len() as f64
+            elapsed_time / dparser::parse_queries_file(config_path.as_str()).len() as f64
         );
     }
 
     // computes the cardinality of features and saves the results in a .csv file
-    // the cardinalities are always sorted from lowest to highest (also for multiple threadss)
+    // the cardinalities are always sorted from lowest to highest (also for multiple threads)
     if matches.contains_id("card_of_fs") {
         let file_path = &format!(
             "{}-features.csv",

@@ -213,7 +213,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_lex_lines() {
+    fn lex_lines() {
         let and_str = "A 3 11 12 13";
         let or_str = "O 10 2 40 44";
         let positive_literal_str = "L 3";
@@ -226,7 +226,7 @@ mod test {
     }
 
     #[test]
-    fn test_individual_lexer() {
+    fn individual_lexer() {
         let header_str = "nnf 32 13 23";
         assert_eq!(
             lex_header(header_str).unwrap().1, 
@@ -278,7 +278,7 @@ mod test {
     }
 
     #[test]
-    fn test_serialization() {
+    fn serialization() {
         let header: C2DToken = Header { nodes: 10, edges: 20, variables: 30};
         let header_s: String = String::from("nnf 10 20 30\n");
         assert_eq!(deconstruct_C2DToken(header), header_s);

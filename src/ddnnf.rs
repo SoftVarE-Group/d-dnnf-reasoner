@@ -3,6 +3,7 @@ pub mod node;
 pub mod heuristics;
 pub mod counting;
 pub mod anomalies;
+pub mod config_creation;
 
 use rug::{Integer};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -16,6 +17,7 @@ pub struct Ddnnf {
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
     pub literals: FxHashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
     /// The core features of the modell corresponding with this ddnnf
     pub core: FxHashSet<i32>,
     /// The dead features of the modell
@@ -33,12 +35,14 @@ impl Ddnnf {
     pub fn new(
         nodes: Vec<Node>,
         literals: FxHashMap<i32, usize>,
+        true_nodes: Vec<usize>,
         number_of_variables: u32,
         number_of_nodes: usize,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
             literals,
+            true_nodes,
             core: FxHashSet::default(),
             dead: FxHashSet::default(),
             md: Vec::new(),
