@@ -243,7 +243,6 @@ fn main() {
         rl.save_history("history.txt").unwrap();
     }
 
-
     // switch in the stream mode
     if matches.contains_id("stream") {
         let stdin_channel = spawn_stdin_channel();
