@@ -52,7 +52,7 @@ impl Ddnnf {
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
     /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
     /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned. 
-    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &mut Vec<i32>, amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
+    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &Vec<i32>, amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
         if !self.preprocess_config_creation(assumptions) {
             return None;
         }
@@ -256,6 +256,8 @@ impl Ddnnf {
 mod test {
     use std::{collections::HashSet};
 
+    use rand::thread_rng;
+
     use super::*;
     use crate::parser::build_d4_ddnnf_tree;
 
@@ -318,6 +320,9 @@ mod test {
                 res_all.insert(inter);
             }
             assert_eq!(i, res_all.len(), "there are duplicates");
+
+            // shuffeling the assumptions should have no effect on the caching of the number of configs that we already looked at
+            assumptions.shuffle(&mut thread_rng())
         }
     }
 
@@ -343,6 +348,9 @@ mod test {
             }
             assert_eq!(i, res_all.len(), "there are duplicates");
         }
+
+        // changing the order of the assumptions. This should have no effect on the position
+        assumptions = vec![42, -35];
 
         // vp9.rt() under the assumptions is 86400. Hence, we should never get more than 86400 different configs
         for i in (1_000..=100_000).step_by(2_000) {
@@ -375,5 +383,77 @@ mod test {
         assert!(auto1.enumerate(&mut vec![1, -1], 1).is_none());
         assert!(auto1.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1).is_none());
         assert!(auto1.enumerate(&mut vec![-10_000], 1).is_none());
+    }
+
+    #[test]
+    fn sampling_validity() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        let vp9_assumptions= vec![38, 2, -14];
+        let vp9_samples = vp9.uniform_random_sampling(&vp9_assumptions, 1_000, 42).unwrap();
+        for sample in vp9_samples {
+            assert!(vp9.is_sat_for(&sample));
+            assert_eq!(vp9.number_of_variables as usize, sample.len());
+        }
+
+        let auto1_samples = auto1.uniform_random_sampling(&mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111], 1_000, 42).unwrap();
+        for sample in auto1_samples {
+            assert!(auto1.is_sat_for(&sample));
+            assert_eq!(auto1.number_of_variables as usize, sample.len());
+        }
+    }
+
+    #[test]
+    fn sampling_seeding() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        // same seeding should yield same results, different seeding should (normally) yield different results
+        assert_eq!(
+            vp9.uniform_random_sampling(&mut vec![], 100, 42),
+            vp9.uniform_random_sampling(&mut vec![], 100, 42)
+        );
+        assert_eq!(
+            vp9.uniform_random_sampling(&mut vec![23, 4, -17], 100, 99),
+            vp9.uniform_random_sampling(&mut vec![23, 4, -17], 100, 99),
+        );
+        assert_ne!(
+            vp9.uniform_random_sampling(&mut vec![38, 2, -14], 100, 99),
+            vp9.uniform_random_sampling(&mut vec![38, 2, -14], 100, 50),
+        );
+
+        assert_eq!(
+            auto1.uniform_random_sampling(&mut vec![], 100, 42),
+            auto1.uniform_random_sampling(&mut vec![], 100, 42)
+        );
+        assert_eq!(
+            auto1.uniform_random_sampling(&mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111], 100, 1970),
+            auto1.uniform_random_sampling(&mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111], 100, 1970),
+        );
+        assert_ne!(
+            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 1),
+            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 2)
+        );
+    }
+
+    #[test]
+    fn sampling_is_not_possible() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        assert!(vp9.uniform_random_sampling(&mut vec![1, -1], 1, 42).is_none());
+        assert!(vp9.uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42).is_none());
+        assert!(vp9.uniform_random_sampling(&mut vec![100], 1, 42).is_none());
+
+        assert!(auto1.uniform_random_sampling(&mut vec![1, -1], 1, 42).is_none());
+        assert!(auto1.uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42).is_none());
+        assert!(auto1.uniform_random_sampling(&mut vec![-10_000], 1, 42).is_none());
     }
 }
