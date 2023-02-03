@@ -13,7 +13,7 @@ fn card_of_features_test() {
     let mut ddnnf: Ddnnf =
         parser::build_ddnnf_tree_with_extras("./tests/data/auto1_c2d.nnf");
     ddnnf
-        .card_of_each_feature_to_csv(c2d_out)
+        .card_of_each_feature(c2d_out)
         .unwrap_or_default();
 
     let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
@@ -27,7 +27,7 @@ fn card_of_features_test() {
     let mut ddnnf: Ddnnf =
         parser::build_d4_ddnnf_tree("./tests/data/auto1_d4.nnf", 2513);
     ddnnf
-        .card_of_each_feature_to_csv(d4_out)
+        .card_of_each_feature(d4_out)
         .unwrap_or_default();
 
     let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
@@ -57,7 +57,7 @@ fn card_of_pc_test() {
 
     // diff_files is true if the files are identical
     assert!(diff_files(&mut should, &mut is));
-    let _res = fs::remove_file(c2d_out);
+    fs::remove_file(c2d_out).unwrap();
 
     let mut ddnnf: Ddnnf =
         parser::build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
@@ -71,7 +71,7 @@ fn card_of_pc_test() {
 
     // diff_files is true if the files are identical
     assert!(diff_files(&mut should, &mut is));
-    let _res = fs::remove_file(d4_out);
+    fs::remove_file(d4_out).unwrap();
 }
 
 #[test]

@@ -168,7 +168,7 @@ fn main() {
 
         let time = Instant::now();
         ddnnf
-            .card_of_each_feature_to_csv(file_path)
+            .card_of_each_feature(file_path)
             .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
 
@@ -258,10 +258,7 @@ fn main() {
 
                     let response = ddnnf.handle_stream_msg(&buffer);
 
-                    match response.as_str() {
-                        "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
-                        _ => (),
-                    }
+                    if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
                     
                     handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();

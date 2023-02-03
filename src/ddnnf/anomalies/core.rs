@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{Ddnnf};
 
@@ -11,7 +11,7 @@ impl Ddnnf {
                 self.literals.get(f).is_some()
                     && self.literals.get(&-f).is_none()
             })
-            .collect::<HashSet<i32>>()
+            .collect::<FxHashSet<i32>>()
     }
 
     /// Computes all dead features
@@ -22,7 +22,7 @@ impl Ddnnf {
                 self.literals.get(f).is_none()
                     && self.literals.get(&-f).is_some()
             })
-            .collect::<HashSet<i32>>()
+            .collect::<FxHashSet<i32>>()
     }
 
     #[inline]

@@ -82,38 +82,36 @@ impl Ddnnf {
                 |d, assumptions, vars| {
                     if vars {
                         let could_be_core = assumptions.pop().unwrap();
-                        let without_cf = Ddnnf::execute_query(d, &assumptions);
+                        let without_cf = Ddnnf::execute_query(d, assumptions);
                         assumptions.push(could_be_core);
-                        let with_cf = Ddnnf::execute_query(d, &assumptions);
+                        let with_cf = Ddnnf::execute_query(d, assumptions);
 
                         if with_cf == without_cf {
                             Some(could_be_core.to_string())
                         } else {
                             None
                         }
+                    } else if assumptions.is_empty() {
+                        let mut core = Vec::from_iter(&d.core);
+                        let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
+                        core.extend(dead);
+                        core.sort_by_key(|a| a.abs());
+                        Some(format_vec(core.iter()))
                     } else {
-                        if assumptions.is_empty() {
-                            let mut core = Vec::from_iter(&d.core);
-                            let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
-                            core.extend(dead);
-                            core.sort_by(|a, b| a.abs().cmp(&b.abs()));
-                            Some(format_vec(core.iter()))
-                        } else {
-                            let mut core = Vec::new();
-                            let reference = Ddnnf::execute_query(d, &assumptions);
-                            for i in 1_i32..=d.number_of_variables as i32 {
-                                assumptions.push(i);
-                                let inter = Ddnnf::execute_query(d, &assumptions);
-                                if reference == inter {
-                                    core.push(i);
-                                }
-                                if inter == 0 {
-                                    core.push(-i);
-                                }
-                                assumptions.pop();
+                        let mut core = Vec::new();
+                        let reference = Ddnnf::execute_query(d, assumptions);
+                        for i in 1_i32..=d.number_of_variables as i32 {
+                            assumptions.push(i);
+                            let inter = Ddnnf::execute_query(d, assumptions);
+                            if reference == inter {
+                                core.push(i);
                             }
-                            Some(format_vec(core.iter()))
+                            if inter == 0 {
+                                core.push(-i);
+                            }
+                            assumptions.pop();
                         }
+                        Some(format_vec(core.iter()))
                     }
                 },
                 self,
@@ -182,19 +180,13 @@ fn op_with_assumptions_and_vars<T: ToString>(
     vars: &[i32],
 ) -> String {
     if vars.is_empty() {
-        match operation(ddnnf, assumptions, false) {
-            Some(v) => return v.to_string(),
-            None => (),
-        }
+        if let Some(v) = operation(ddnnf, assumptions, false) { return v.to_string() }
     }
 
     let mut response = Vec::new();
     for var in vars {
         assumptions.push(*var);
-        match operation(ddnnf, assumptions, true) {
-            Some(v) => response.push(v.to_string()),
-            None => (),
-        }
+        if let Some(v) = operation(ddnnf, assumptions, true) { response.push(v.to_string()) }
         assumptions.pop();
     }
 

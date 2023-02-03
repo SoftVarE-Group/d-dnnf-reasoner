@@ -20,8 +20,8 @@ pub fn write_ddnnf(ddnnf: &mut Ddnnf, path_out: &str) -> std::io::Result<()> {
 /// We use an adjusted version of the c2d format: Or nodes can have multiple children, there are no decision nodes
 fn deconstruct_node(node: &Node) -> String {
     let mut str = match &node.ntype {
-        NodeType::And { children } => deconstruct_children(String::from("A "), &children),
-        NodeType::Or { children } => deconstruct_children(String::from("O 0 "), &children),
+        NodeType::And { children } => deconstruct_children(String::from("A "), children),
+        NodeType::Or { children } => deconstruct_children(String::from("O 0 "), children),
         NodeType::Literal { literal } => format!("L {}", literal),
         NodeType::True => String::from("A 0"),
         NodeType::False => String::from("O 0 0"),

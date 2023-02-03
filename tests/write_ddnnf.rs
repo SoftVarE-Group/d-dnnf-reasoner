@@ -14,7 +14,7 @@ fn card_of_features_normal_and_reloaded_test() {
     let mut ddnnf: Ddnnf =
         parser::build_d4_ddnnf_tree("./tests/data/auto1_d4.nnf", 2513);
     ddnnf
-        .card_of_each_feature_to_csv(d4_out)
+        .card_of_each_feature(d4_out)
         .unwrap_or_default();
     
     // save nnf in c2d format
@@ -26,7 +26,7 @@ fn card_of_features_normal_and_reloaded_test() {
     let mut ddnnf: Ddnnf =
         parser::build_ddnnf_tree_with_extras(saved_nnf);
     ddnnf
-        .card_of_each_feature_to_csv(saved_out)
+        .card_of_each_feature(saved_out)
         .unwrap_or_default();
 
     // compare the results
@@ -35,7 +35,7 @@ fn card_of_features_normal_and_reloaded_test() {
     
     assert!(diff_files(&mut is_d4, &mut is_saved));
 
-    let _res = fs::remove_file(d4_out);
-    let _res = fs::remove_file(saved_nnf);
-    let _res = fs::remove_file(saved_out);
+    fs::remove_file(d4_out).unwrap();
+    fs::remove_file(saved_nnf).unwrap();
+    fs::remove_file(saved_out).unwrap();
 }
