@@ -251,3 +251,129 @@ impl Ddnnf {
         sample_list
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashSet};
+
+    use super::*;
+    use crate::parser::build_d4_ddnnf_tree;
+
+    #[test]
+    fn enumeration_small_ddnnf() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+
+        let mut res_all = HashSet::new();
+        let mut res_assumptions = HashSet::new();
+
+        let mut assumptions = vec![1, 2, 3, -4, -5, 6, 7, -8, -9, 10, 11, -12, -13, -14, 15, 16, -17, -18, 19, 20, 27];
+        let inter_res_assumptions_1 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        for inter in inter_res_assumptions_1 {
+            assert!(vp9.is_sat_for(&inter));
+            assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
+            res_assumptions.insert(inter);
+        }
+        assert_eq!(40, res_assumptions.len(), "we did not get as many configs as we requested");
+
+        for i in 1..=4 {
+            let inter_res_all = vp9.enumerate(&mut vec![], 50000).unwrap();
+            assert_eq!(50000, inter_res_all.len());
+            for inter in inter_res_all {
+                res_all.insert(inter);
+            }
+            assert_eq!(i*50000, res_all.len(), "there are duplicates");
+        }
+        let inter_res = vp9.enumerate(&mut vec![], 50000).unwrap();
+        assert_eq!(16000, inter_res.len(), "there are only 16000 configs left");
+        for inter in inter_res {
+            res_all.insert(inter);
+        }
+        assert_eq!(vp9.rt(), res_all.len(), "there are duplicates");
+
+
+        let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        assert_eq!(40, inter_res_assumptions_2.len());
+        
+        // the cycle for that set of assumptions starts again
+        let inter_res_assumptions_3 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        for inter in inter_res_assumptions_3.clone() {
+            res_assumptions.insert(inter);
+        }
+        assert_eq!(40, inter_res_assumptions_3.len());
+        assert_eq!(40, res_assumptions.len(), "because of the cycle we should have gotten duplicates");
+    }
+
+    #[test]
+    fn enumeration_big_ddnnf() {
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        let mut res_all = HashSet::new();
+        let mut assumptions = vec![1, -2, -3, 4, -5, 6, 7, 8, -9, -10, 11, -12, -13, 100, -101, 102];
+
+        for i in (1_000..=10_000).step_by(1_000) {
+            let configs = auto1.enumerate(&mut assumptions, 1_000).unwrap();
+            for inter in configs {
+                res_all.insert(inter);
+            }
+            assert_eq!(i, res_all.len(), "there are duplicates");
+        }
+    }
+
+    #[test]
+    fn enumeration_step_by_step() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);  
+
+        let mut res_all = HashSet::new();
+        let mut assumptions = vec![-35, 42];
+
+        for i in 1..=1_000 {
+            let configs = vp9.enumerate(&mut assumptions, 1).unwrap();
+            for inter in configs {
+                assert!(vp9.is_sat_for(&inter));
+                assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
+                
+                // ensure that the assumptions are fulfilled
+                assert!(inter.contains(&-35) && inter.contains(&42));
+                assert!(!inter.contains(&35) && !inter.contains(&-42));
+
+                res_all.insert(inter);
+            }
+            assert_eq!(i, res_all.len(), "there are duplicates");
+        }
+
+        // vp9.rt() under the assumptions is 86400. Hence, we should never get more than 86400 different configs
+        for i in (1_000..=100_000).step_by(2_000) {
+            let configs = vp9.enumerate(&mut assumptions, 2_000).unwrap();
+            for inter in configs {
+                assert!(vp9.is_sat_for(&inter));
+                assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
+                
+                // ensure that the assumptions are fulfilled
+                assert!(inter.contains(&-35) && inter.contains(&42));
+                assert!(!inter.contains(&35) && !inter.contains(&-42));
+                
+                res_all.insert(inter);
+            }
+            assert_eq!(min(86400, 2000+i), res_all.len(), "there are duplicates or more configs then wanted");
+        }
+    }
+
+    #[test]
+    fn enumeration_is_not_possible() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+        let mut auto1: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+
+        assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
+        assert!(vp9.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1).is_none());
+        assert!(vp9.enumerate(&mut vec![100], 1).is_none());
+
+        assert!(auto1.enumerate(&mut vec![1, -1], 1).is_none());
+        assert!(auto1.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1).is_none());
+        assert!(auto1.enumerate(&mut vec![-10_000], 1).is_none());
+    }
+}

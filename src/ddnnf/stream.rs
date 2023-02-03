@@ -1,4 +1,5 @@
 use std::iter::{FromIterator};
+use std::usize::MAX;
 use std::{path::Path};
 
 use crate::Ddnnf;
@@ -23,7 +24,7 @@ impl Ddnnf {
         let mut params = Vec::new();
         let mut values = Vec::new();
         let mut seed = 42;
-        let mut limit = 1;
+        let mut limit = None;
         let mut path = Path::new("");
 
         // go through all possible extra values that can be provided til
@@ -56,7 +57,7 @@ impl Ddnnf {
                             },
                             "limit" | "l" => {
                                 limit = match args[param_index].parse::<usize>() {
-                                    Ok(x) => x,
+                                    Ok(x) => Some(x),
                                     Err(e) => return format!("E3 error: {}", e),
                                 };
                                 param_index += 1;
@@ -132,14 +133,22 @@ impl Ddnnf {
                 &values
             ),
             "enum" => {
-                let configs = self.enumerate(&mut params, limit);
+                let limit_interpretation = match limit {
+                    Some(limit) => limit,
+                    None => MAX,
+                };
+                let configs = self.enumerate(&mut params, limit_interpretation);
                 match configs {
                     Some(s) => format_vec_vec(s.iter()),
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             },
             "random" => {
-                let samples = self.uniform_random_sampling(&mut params, limit, seed);
+                let limit_interpretation = match limit {
+                    Some(limit) => limit,
+                    None => 1,
+                };
+                let samples = self.uniform_random_sampling(&mut params, limit_interpretation, seed);
                 match samples {
                     Some(s) => format_vec_vec(s.iter()),
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
@@ -234,11 +243,13 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<Vec<i32>, String> {
 mod test {
     use std::{env, fs, collections::HashSet};
 
+    use itertools::Itertools;
+
     use super::*;
     use crate::parser::build_d4_ddnnf_tree;
 
     #[test]
-    fn handle_stream_msg_core_test() {
+    fn handle_stream_msg_core() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
@@ -286,7 +297,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_count_test() {
+    fn handle_stream_msg_count() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
@@ -315,7 +326,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_sat_test() {
+    fn handle_stream_msg_sat() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
@@ -341,21 +352,24 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_enum_test() {
+    fn handle_stream_msg_enum() {
         let mut _auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
-        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39");
-        let res: Vec<&str> = binding.split(";").collect();
+        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
+        let res: Vec<&str> = binding.split(";").collect_vec();
 
         assert!(
             res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42")
-            && res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42")
         );
+        assert!(
+            res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42")
+        );
+        assert_eq!(res.len(), 2, "there should be only 2 configs although we wanted 10, because there are only 2 individual and valid configs");
 
-        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27");
+        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 27 l 80");
         let res: Vec<&str> = binding.split(";").collect();
         assert_eq!(80, res.len());
 
@@ -381,7 +395,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_random_test() {
+    fn handle_stream_msg_random() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
@@ -433,7 +447,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_save_test() {
+    fn handle_stream_msg_save() {
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
         let binding = env::current_dir().unwrap();
@@ -474,7 +488,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_other_test() {
+    fn handle_stream_msg_other() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
@@ -485,7 +499,7 @@ mod test {
     }
 
     #[test]
-    fn handle_stream_msg_error_test() {
+    fn handle_stream_msg_error() {
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         assert_eq!(

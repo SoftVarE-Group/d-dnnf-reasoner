@@ -99,7 +99,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_individual_lexer_d4() {
+    fn individual_lexer_d4() {
         let and_str = "a 1 0";
         let or_str = "o 2 0";
         let true_str = "t 3 0";
