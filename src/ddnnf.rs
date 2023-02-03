@@ -20,6 +20,7 @@ pub struct Ddnnf {
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
     pub number_of_variables: u32,
     pub number_of_nodes: usize,
     /// The number of threads
@@ -37,12 +38,14 @@ impl Ddnnf {
     pub fn new(
         nodes: Vec<Node>,
         literals: HashMap<i32, usize>,
+        true_nodes: Vec<usize>,
         number_of_variables: u32,
         number_of_nodes: usize,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
             literals,
+            true_nodes,
             number_of_variables,
             number_of_nodes,
             max_worker: 4,
