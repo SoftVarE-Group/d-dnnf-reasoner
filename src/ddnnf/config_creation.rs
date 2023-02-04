@@ -253,6 +253,7 @@ impl Ddnnf {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, no_coverage)]
 mod test {
     use std::{collections::HashSet};
 

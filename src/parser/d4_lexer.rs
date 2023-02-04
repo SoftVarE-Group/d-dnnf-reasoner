@@ -10,7 +10,7 @@ use nom::{
 
 use D4Token::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 /// Every token gets an enum instance for the D4lexing progress
 pub enum D4Token {
     /// An inner node that contains atleast one child
@@ -54,9 +54,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                 .split_whitespace()
                 .map(|num: &str| {
                     num.parse::<i32>().unwrap_or_else(|_| {
-                        panic!(
-            "Was not able to parse i32 for edge: \"o \". String was {}",
-            out)
+                        panic!("Was not able to parse i32 for edge. String was {}", out)
                     })
                 })
                 .collect::<Vec<i32>>();
@@ -105,6 +103,7 @@ mod test {
         let true_str = "t 3 0";
         let false_str = "f 4 0";
         let edge_str = "2 3 4 -5 0";
+        let failed_edge = "2 3 -5 THREE 0";
 
         assert_eq!(lex_and(and_str).unwrap().1, And);
         assert_eq!(lex_line_d4(and_str).unwrap().1, And,);
@@ -137,5 +136,11 @@ mod test {
                 features: vec![4, -5]
             },
         );
+
+        let result = std::panic::catch_unwind(|| lex_edge(failed_edge)).unwrap();
+        assert!(result.is_err());
+
+        let result = std::panic::catch_unwind(|| lex_line_d4(failed_edge)).unwrap();
+        assert!(result.is_err());
     }
 }

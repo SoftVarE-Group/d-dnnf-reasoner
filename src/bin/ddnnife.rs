@@ -124,7 +124,7 @@ fn main() {
         let features: Vec<i32> =
                 matches.get_many("features")
                 .expect("invalid format for features").copied().collect();
-        ddnnf.execute_query_interactive(features);
+        ddnnf.execute_query_interactive(&features);
     }
 
     // file path without last extension
@@ -221,7 +221,7 @@ fn main() {
                                 },
                             }).collect();
                             if let Some(f) = features {
-                                ddnnf.execute_query_interactive(f)
+                                ddnnf.execute_query_interactive(&f);
                             }
                         }
                     }

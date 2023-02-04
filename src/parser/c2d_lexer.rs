@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
@@ -217,12 +217,16 @@ mod test {
         let and_str = "A 3 11 12 13";
         let or_str = "O 10 2 40 44";
         let positive_literal_str = "L 3";
+        let failed_and_str = "A THREE 11 TWELVE 13";
 
         assert_eq!(lex_line(and_str).unwrap().1, And { children: vec![11,12,13] });
 
         assert_eq!(lex_line(or_str).unwrap().1, Or { decision: 10, children: vec![40,44] } );
 
         assert_eq!(lex_line(positive_literal_str).unwrap().1, Literal { feature: 3 } );
+
+        let result = std::panic::catch_unwind(|| lex_line(failed_and_str)).unwrap();
+        assert!(result.is_err());
     }
 
     #[test]

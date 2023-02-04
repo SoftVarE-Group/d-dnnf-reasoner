@@ -372,7 +372,7 @@ mod test {
             res_set.insert(config);
         }
 
-        let binding = vp9.handle_stream_msg("enum l 216000");
+        let binding = vp9.handle_stream_msg("enum a 1 l 216000");
         let res: Vec<&str> = binding.split(";").collect();
         assert_eq!(216000, res.len());
 

@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 /// Represents all types of Nodes with its different parts
 pub struct Node {
     pub(crate) marker: bool,
@@ -12,7 +12,7 @@ pub struct Node {
     pub ntype: NodeType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 /// The Type of the Node declares how we handle the computation for the different types of cardinalities
 pub enum NodeType {
     /// The cardinality of an And node is always the product of its childs
@@ -73,5 +73,39 @@ impl Node {
         } else {
             Node::new_node(Integer::ZERO, False)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rug::Integer;
+    use super::*;
+
+    #[test]
+    fn build_nodes() {
+        assert_eq!(
+            Node::new_and(Integer::from(42), vec![1, 5, 10]),
+            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: And { children: vec![1, 5, 10] } }
+        );
+        assert_eq!(
+            Node::new_node(Integer::from(42), And { children: vec![1, 5, 10] }),
+            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: And { children: vec![1, 5, 10] } }
+        );
+        assert_eq!(
+            Node::new_or(42, Integer::from(42), vec![1, 5, 10]),
+            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: Or { children: vec![1, 5, 10] } }
+        );
+        assert_eq!(
+            Node::new_literal(42),
+            Node { marker: false, count: Integer::from(1), temp: Integer::ZERO, parents: vec![], ntype: Literal { literal: 42 } }
+        );
+        assert_eq!(
+            Node::new_bool(true),
+            Node { marker: false, count: Integer::from(1), temp: Integer::ZERO, parents: vec![], ntype: True }
+        );
+        assert_eq!(
+            Node::new_bool(false),
+            Node { marker: false, count: Integer::from(0), temp: Integer::ZERO, parents: vec![], ntype: False }
+        );
     }
 }

@@ -160,7 +160,6 @@ fn get_depth(nodes: &[Node], indize: usize, count: u64) -> Vec<u64> {
 #[allow(dead_code)]
 fn average(data: &[u64]) -> f64 {
     let sum = data.iter().sum::<u64>() as f64;
-    println!("{}", sum);
     let count = data.len();
 
     match count {
@@ -205,5 +204,30 @@ fn std_deviation(data: &[u64]) -> f64 {
             variance.sqrt()
         }
         _ => -1.0,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::ddnnf::heuristics::{median, std_deviation};
+
+    use super::average;
+
+    #[test]
+    fn math_functions() {
+        let mut data = vec![2, 5, 100, 23415, 0, 4123, 20, 5];
+        assert_eq!(3458.75, average(&data));
+        assert_eq!((5.0 + 20.0) / 2.0, median(&mut data)); // [0, 2, 5, 5, 20, 100, 4123, 23415]
+        assert!(7661.333071828949 - std_deviation(&data) < 0.001);
+
+        let mut data_2 = vec![5, 5, 5];
+        assert_eq!(5.0, average(&data_2));
+        assert_eq!(5.0, median(&mut data_2));
+        assert_eq!(0.0, std_deviation(&data_2));
+
+        let mut data_3 = vec![];
+        assert_eq!(-1.0, average(&data_3));
+        assert_eq!(-1.0, median(&mut data_3));
+        assert_eq!(-1.0, std_deviation(&data_3));
     }
 }
