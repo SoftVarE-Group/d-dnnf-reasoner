@@ -1,7 +1,7 @@
 extern crate ddnnf_lib;
 
-use ddnnf_lib::data_structure::Ddnnf;
-use ddnnf_lib::parser::{self, write_ddnnf};
+use ddnnf_lib::ddnnf::Ddnnf;
+use ddnnf_lib::parser::{self, persisting::write_ddnnf};
 
 use file_diff::diff_files;
 use std::fs;
@@ -14,19 +14,19 @@ fn card_of_features_normal_and_reloaded_test() {
     let mut ddnnf: Ddnnf =
         parser::build_d4_ddnnf_tree("./tests/data/auto1_d4.nnf", 2513);
     ddnnf
-        .card_of_each_feature_to_csv(d4_out)
+        .card_of_each_feature(d4_out)
         .unwrap_or_default();
     
     // save nnf in c2d format
     let saved_nnf = "./tests/data/auto1_d4_to_c2d.nnf";
-    write_ddnnf(ddnnf, saved_nnf).unwrap();
+    write_ddnnf(&mut ddnnf, saved_nnf).unwrap();
 
     // compute the cardinality of features for the saved file
     let saved_out = "./tests/data/auto1_d4_to_c2d_fs.csv";
     let mut ddnnf: Ddnnf =
         parser::build_ddnnf_tree_with_extras(saved_nnf);
     ddnnf
-        .card_of_each_feature_to_csv(saved_out)
+        .card_of_each_feature(saved_out)
         .unwrap_or_default();
 
     // compare the results
@@ -35,7 +35,7 @@ fn card_of_features_normal_and_reloaded_test() {
     
     assert!(diff_files(&mut is_d4, &mut is_saved));
 
-    let _res = fs::remove_file(d4_out);
-    let _res = fs::remove_file(saved_nnf);
-    let _res = fs::remove_file(saved_out);
+    fs::remove_file(d4_out).unwrap();
+    fs::remove_file(saved_nnf).unwrap();
+    fs::remove_file(saved_out).unwrap();
 }

@@ -4,8 +4,8 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 extern crate clap;
 use clap::{App, AppSettings, Arg};
 use ddnnf_lib::parser::bufreader_for_big_files::BufReaderMl;
+use rustc_hash::FxHashMap;
 
-use std::collections::HashMap;
 use std::time::Instant;
 
 use std::fs::File;
@@ -28,7 +28,7 @@ fn main() {
     let matches = App::new("dhone")
     .global_settings(&[AppSettings::ColoredHelp])
     .author("Heiko Raab; heiko.raab@uni-ulm-de\nChico Sundermann; chico.sundermann@uni-ulm.de")
-    .version("0.4.0")
+    .version("0.5.0")
     .setting(AppSettings::ArgRequiredElseHelp)
     .arg(Arg::with_name("FILE PATH")
         .display_order(1)
@@ -93,7 +93,7 @@ fn main() {
 fn preprocess(path: &str) -> Vec<C2DToken> {
     let mut token_stream: Vec<C2DToken> = get_token_stream(path);
 
-    let mut literals: HashMap<i32, usize> = HashMap::with_capacity(1000);
+    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
 
     // indices of nodes that should be replaced with true nodes
     let mut changes: Vec<usize> = Vec::new();
@@ -102,7 +102,7 @@ fn preprocess(path: &str) -> Vec<C2DToken> {
         // if we find a literal we save the number and its position
         let unique: i32 = match token {
             C2DToken::Literal { feature: f } => {
-                if literals.get(&f).is_some() {
+                if literals.get(f).is_some() {
                     *f
                 } else {
                     literals.insert(*f, index);

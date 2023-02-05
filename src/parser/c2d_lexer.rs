@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
@@ -32,7 +32,7 @@ pub type TId = TokenIdentifier;
 
 use C2DToken::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Every C2DToken gets an enum instance for the lexing progress
 pub enum C2DToken {
     /// The header of the nnf file
@@ -213,20 +213,24 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_lex_lines() {
+    fn lex_lines() {
         let and_str = "A 3 11 12 13";
         let or_str = "O 10 2 40 44";
         let positive_literal_str = "L 3";
+        let failed_and_str = "A THREE 11 TWELVE 13";
 
         assert_eq!(lex_line(and_str).unwrap().1, And { children: vec![11,12,13] });
 
         assert_eq!(lex_line(or_str).unwrap().1, Or { decision: 10, children: vec![40,44] } );
 
         assert_eq!(lex_line(positive_literal_str).unwrap().1, Literal { feature: 3 } );
+
+        let result = std::panic::catch_unwind(|| lex_line(failed_and_str)).unwrap();
+        assert!(result.is_err());
     }
 
     #[test]
-    fn test_individual_lexer() {
+    fn individual_lexer() {
         let header_str = "nnf 32 13 23";
         assert_eq!(
             lex_header(header_str).unwrap().1, 
@@ -278,7 +282,7 @@ mod test {
     }
 
     #[test]
-    fn test_serialization() {
+    fn serialization() {
         let header: C2DToken = Header { nodes: 10, edges: 20, variables: 30};
         let header_s: String = String::from("nnf 10 20 30\n");
         assert_eq!(deconstruct_C2DToken(header), header_s);
