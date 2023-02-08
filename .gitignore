@@ -6,9 +6,7 @@
 **/*.rs.bk
 
 # Local files for testing, debugging and analysing the code
-.vscode/
 complete_exa/
-ideas/
 in*
 out*
 perf_analyse.sh
@@ -17,9 +15,14 @@ tarpaulin-report.html
 tmp/
 valcom
 build.rs
-*.csv
 *.zip
-*mermaid.md
+
+# ddnnife output files (direct and indirect)
+*-features.csv
+*-queries.txt
+*-saved.nnf
+*-mermaid.md
+*.svg
 
 # docker
 dockerfile
@@ -27,6 +30,8 @@ dockerfile
 
 # vsc
 .idea
+.vscode/
 
-# jetbrains
+# intellij
+ideas/
 *.iml

@@ -11,23 +11,37 @@ impl Ddnnf {
     pub(crate) fn calc_count_marked_node(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {
-                self.nodes[i].temp = Integer::product(
-                    children.iter().map(
-                        |&index| {
-                            if self.nodes[index].marker {
-                                &self.nodes[index].temp
+                let marked_children = children.iter().filter(|&&child| self.nodes[child].marker).collect::<Vec<&usize>>();
+                self.nodes[i].temp = if marked_children.len() <= children.len() / 2 {
+                    marked_children.iter().fold(self.nodes[i].count.clone(), |mut acc, &&index| {
+                        let node = &self.nodes[index];
+                        if node.count != 0 {
+                            acc /= &node.count;
+                        }
+                        acc *= &node.temp;
+                        acc
+                    })
+                } else {
+                    Integer::product(children
+                        .iter()
+                        .map(|&index| {
+                            let node = &self.nodes[index];
+                            if node.marker {
+                                &node.temp
                             } else {
-                                &self.nodes[index].count
-                    }
-                }))
-                .complete()
+                                &node.count
+                            }
+                        }))
+                        .complete()
+                }
             }
             Or { children } => {
                 self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
-                    if self.nodes[index].marker {
-                        &self.nodes[index].temp
+                    let node = &self.nodes[index];
+                    if node.marker {
+                        &node.temp
                     } else {
-                        &self.nodes[index].count
+                        &node.count
                     }
                 }))
                 .complete()
@@ -39,10 +53,10 @@ impl Ddnnf {
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn operate_on_marker(&mut self, indize: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
-        for i in indize.iter().copied() {
-            self.nodes[i].temp.assign(0); // change the value of the node
-            self.mark_nodes(i); // go through the path til the root node is marked
+    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
+        for index in indexes.iter().copied() {
+            self.nodes[index].temp.assign(0); // change the value of the node
+            self.mark_nodes_start(index); // go through the path til the root node is marked
         }
 
         // sort the marked nodes so that we make sure to first calculate the childnodes and then their parents
@@ -50,14 +64,15 @@ impl Ddnnf {
 
         // calc the count for all marked nodes, respectevly all nodes that matter
         for j in 0..self.md.len() {
-            if !indize.contains(&self.md[j]) {
-                operation(self, self.md[j]);
-            }
+            operation(self, self.md[j]);
         }
 
         // reset everything
         for index in &self.md {
-            self.nodes[*index].marker = false
+            self.nodes[*index].marker = false;
+        }
+        for &index in indexes {
+            self.nodes[index].marker = false;
         }
         let marked_nodes = self.md.len();
         self.md.clear();
@@ -98,20 +113,35 @@ impl Ddnnf {
         } else {
             let features: Vec<i32> = self.reduce_query(features);
 
-            let mut indize: Vec<usize> = Vec::new();
+            let mut indexes: Vec<usize> = Vec::new();
 
             for number in features {
                 // we set the negative occurences to 0 for the features we want to include
                 if let Some(i) = self.literals.get(&-number).cloned() {
-                    indize.push(i)
+                    indexes.push(i)
                 }
             }
 
-            if indize.is_empty() {
+            if indexes.is_empty() {
                 return (0, self.rc());
             }
 
-            self.operate_on_marker(&indize, operation)
+            self.operate_on_marker(&indexes, operation)
+        }
+    }
+
+    #[inline]
+    // marks the nodes starting from an initial Literal. All parents and parents of parents til
+    // the root nodes get marked
+    fn mark_nodes_start(&mut self, i: usize) {
+        self.nodes[i].marker = true;
+
+        for parent in self.nodes[i].parents.clone() {
+            // check for parent nodes and adjust their count resulting of the changes to their children
+            if !self.nodes[parent].marker {
+                // only mark those nodes which aren't already marked to specificly avoid marking nodes near the root multple times
+                self.mark_nodes(parent);
+            }
         }
     }
 
@@ -122,12 +152,11 @@ impl Ddnnf {
         self.nodes[i].marker = true;
         self.md.push(i);
 
-        for j in 0..self.nodes[i].parents.len() {
+        for parent in self.nodes[i].parents.clone() {
             // check for parent nodes and adjust their count resulting of the changes to their children
-            let index = self.nodes[i].parents[j];
-            if !self.nodes[index].marker {
+            if !self.nodes[parent].marker {
                 // only mark those nodes which aren't already marked to specificly avoid marking nodes near the root multple times
-                self.mark_nodes(index);
+                self.mark_nodes(parent);
             }
         }
     }

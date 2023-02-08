@@ -1,6 +1,6 @@
 use std::{error::Error, sync::mpsc, thread, io::{BufWriter, Write}, fs::File};
 
-use workctl::WorkQueue;
+use workctl::{WorkQueue};
 
 use crate::{Ddnnf, parser};
 
@@ -35,7 +35,52 @@ impl Ddnnf{
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let work: Vec<Vec<i32>> = parser::parse_queries_file(path_in);
+        if self.max_worker == 1 {
+            self.card_multi_queries_single(path_in, path_out)
+        } else {
+            self.card_multi_queries_multi(path_in, path_out)
+        }
+    }
+
+    /// Computes the cardinality of partial configurations for all queries in path_in
+    /// in a multi threaded environment
+    /// Here we have to take into account:
+    ///     1) using channels for communication
+    ///     2) cloning the ddnnf
+    ///     3) sorting our results
+    fn card_multi_queries_single(
+        &mut self,
+        path_in: &str,
+        path_out: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        // start the file writer with the file_path
+        let f = File::create(path_out).expect("Unable to create file");
+        let mut wtr = BufWriter::new(f);
+
+        let work_queue: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
+
+        for work in &work_queue {
+            let cardinality = self.execute_query(&work.1);
+            let mut features_str =
+            work.1.iter().fold(String::new(), |acc, &num| {
+                acc + &num.to_string() + " "
+            });
+            features_str.pop();
+            let data = &format!("{},{}\n", features_str, cardinality);
+            wtr.write_all(data.as_bytes())?;
+        }
+
+        Ok(())
+    }
+
+    /// Computes the cardinality of partial configurations for all queries in path_in
+    /// in a multi threaded environment
+    fn card_multi_queries_multi(
+        &mut self,
+        path_in: &str,
+        path_out: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        let work: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
         let mut queue = WorkQueue::with_capacity(work.len());
 
         for e in work.clone() {
@@ -62,7 +107,8 @@ impl Ddnnf{
                     //
                     // Sending could fail. If so, there's no use in
                     // doing any more work, so abort.
-                    match t_results_tx.send((work.clone(), ddnnf.execute_query(&work))) {
+                    let work_c = work.clone();
+                    match t_results_tx.send((work_c.0, work_c.1, ddnnf.execute_query(&work.1))) {
                         Ok(_) => (),
                         Err(_) => {
                             break;
@@ -82,19 +128,14 @@ impl Ddnnf{
         // start the file writer with the file_path
         let f = File::create(path_out).expect("Unable to create file");
         let mut wtr = BufWriter::new(f);
+        let mut results = Vec::new();
 
         // Get completed work from the channel while there's work to be done.
         for _ in 0..work.len() {
             match results_rx.recv() {
                 // If the control thread successfully receives, a job was completed.
-                Ok((features, cardinality)) => {
-                    let mut features_str =
-                        features.iter().fold(String::new(), |acc, &num| {
-                            acc + &num.to_string() + " "
-                        });
-                    features_str.pop();
-                    let data = &format!("{},{}\n", features_str, cardinality);
-                    wtr.write_all(data.as_bytes())?;
+                Ok(result) => {
+                    results.push(result);
                 }
                 // If the control thread is the one left standing, that's pretty
                 // problematic.
@@ -102,6 +143,17 @@ impl Ddnnf{
                     panic!("All workers died unexpectedly.");
                 }
             }
+        }
+
+        results.sort_unstable();
+
+        for result in results {
+            let mut features_str = result.1.iter().fold(String::new(), |acc, &num| {
+                acc + &num.to_string() + " "
+            });
+            features_str.pop();
+            let data = &format!("{},{}\n", features_str, result.2);
+            wtr.write_all(data.as_bytes())?;
         }
 
         // Just make sure that all the other threads are done.
@@ -115,5 +167,66 @@ impl Ddnnf{
 
         // If everything worked as expected, then we can return Ok(()) and we are happy :D
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::fs;
+
+    use file_diff::diff_files;
+
+    use crate::parser::build_d4_ddnnf_tree;
+
+    use super::*;
+
+    #[test]
+    fn card_multi_queries() {
+        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        ddnnf.max_worker = 1;
+        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
+
+        ddnnf.max_worker = 4;
+        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcm.txt").unwrap();
+
+        let mut is_single = File::open("./tests/data/pcs.txt").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm.txt").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+
+        // diff_files is true if the files are identical
+        assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
+        is_single = File::open("./tests/data/pcs.txt").unwrap();
+        assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
+
+        fs::remove_file("./tests/data/pcs.txt").unwrap();
+        fs::remove_file("./tests/data/pcm.txt").unwrap();
+    }
+
+    #[test]
+    fn test_equality_single_and_multi() {
+        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        ddnnf.max_worker = 1;
+
+        ddnnf.card_multi_queries_single("./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
+        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm1.txt").unwrap();
+
+        ddnnf.max_worker = 4;
+        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm4.txt").unwrap();
+
+        let mut is_single = File::open("./tests/data/pcs1.txt").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm1.txt").unwrap();
+        let mut is_multi4 = File::open("./tests/data/pcm4.txt").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+    
+        // diff_files is true if the files are identical
+        assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
+        is_single = File::open("./tests/data/pcs1.txt").unwrap();
+        is_multi = File::open("./tests/data/pcm1.txt").unwrap();
+        assert!(diff_files(&mut is_multi, &mut is_multi4), "partial config for multiple threads differs when using multiple threads");
+        assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
+
+        fs::remove_file("./tests/data/pcs1.txt").unwrap();
+        fs::remove_file("./tests/data/pcm1.txt").unwrap();
+        fs::remove_file("./tests/data/pcm4.txt").unwrap();
     }
 }

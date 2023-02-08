@@ -84,12 +84,13 @@ fn main() {
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
     let mut ddnnf: Ddnnf;
+    let file_path_ddnnf = matches.value_of("file_path").expect("expected the file path of a ddnnf");
 
     if matches.contains_id("ommited_features") {
         let ommited_features: u32 = *matches.get_one("ommited_features").unwrap();
         ddnnf = dparser::build_d4_ddnnf_tree(
-            matches.value_of("file_path").unwrap(),
-            ommited_features,
+            file_path_ddnnf,
+            ommited_features
         );
 
         if !matches.contains_id("stream") {
@@ -101,9 +102,7 @@ fn main() {
             );
         }
     } else {
-        ddnnf = dparser::build_ddnnf_tree_with_extras(
-            matches.value_of("file_path").unwrap(),
-        );
+        ddnnf = dparser::build_ddnnf_tree_with_extras(file_path_ddnnf);
 
         if !matches.contains_id("stream") {
             let elapsed_time = time.elapsed().as_secs_f32();
@@ -130,7 +129,7 @@ fn main() {
         let features: Vec<i32> =
                 matches.get_many("features")
                 .expect("invalid format for features").copied().collect();
-        ddnnf.execute_query_interactive(features);
+        ddnnf.execute_query_interactive(&features);
     }
 
     // file path without last extension
@@ -139,30 +138,33 @@ fn main() {
     // computes the cardinality of partial configurations and saves the results in a .txt file
     // the results do not have to be in the same order if the number of threads is greater than one
     if matches.contains_id("queries") {
-        let file_path_in = matches.remove_one::<String>("queries").unwrap();
-        let file_path_out = &format!(
-            "{}-queries.txt",
-            matches.remove_one::<String>("queries").get_or_insert(file_path.clone()).as_str()
-        );
+        let params: Vec<String> = matches.remove_many::<String>("queries").unwrap().collect();
+        let config_path = &params[0];
+        let file_path_out = &format!("{}-queries.txt",
+            if params.len() == 2 {
+                &params[1]
+            } else {
+                &file_path
+            });
 
         let time = Instant::now();
         ddnnf
-            .card_multi_queries(file_path_in.as_str(), file_path_out)
+            .card_multi_queries(config_path, file_path_out)
             .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
 
         println!(
             "Computed values of all queries in {} and the results are saved in {}\n
             It took {} seconds. That is an average of {} seconds per query",
-            file_path_in,
+            config_path,
             file_path_out,
             elapsed_time,
-            elapsed_time / dparser::parse_queries_file(file_path_in.as_str()).len() as f64
+            elapsed_time / dparser::parse_queries_file(config_path.as_str()).len() as f64
         );
     }
 
     // computes the cardinality of features and saves the results in a .csv file
-    // the cardinalities are always sorted from lowest to highest (also for multiple threadss)
+    // the cardinalities are always sorted from lowest to highest (also for multiple threads)
     if matches.contains_id("card_of_fs") {
         let file_path = &format!(
             "{}-features.csv",
@@ -171,7 +173,7 @@ fn main() {
 
         let time = Instant::now();
         ddnnf
-            .card_of_each_feature_to_csv(file_path)
+            .card_of_each_feature(file_path)
             .unwrap_or_default();
         let elapsed_time = time.elapsed().as_secs_f64();
 
@@ -224,7 +226,7 @@ fn main() {
                                 },
                             }).collect();
                             if let Some(f) = features {
-                                ddnnf.execute_query_interactive(f)
+                                ddnnf.execute_query_interactive(&f);
                             }
                         }
                     }
@@ -246,7 +248,6 @@ fn main() {
         rl.save_history("history.txt").unwrap();
     }
 
-
     // switch in the stream mode
     if matches.contains_id("stream") {
         let stdin_channel = spawn_stdin_channel();
@@ -261,10 +262,7 @@ fn main() {
 
                     let response = ddnnf.handle_stream_msg(&buffer);
 
-                    match response.as_str() {
-                        "exit" => { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; },
-                        _ => (),
-                    }
+                    if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
                     
                     handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();
