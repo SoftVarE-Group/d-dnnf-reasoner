@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use itertools::Itertools;
 use rug::Integer;
 
 use crate::Ddnnf;
@@ -29,40 +29,65 @@ impl Ddnnf {
     /// A group forms an atomic set iff every valid configuration either includes
     /// or excludes all mebers of that atomic set
     pub(crate) fn get_atomic_sets(&mut self) -> Vec<Vec<i32>> {
-        let combinations: HashMap<Integer, Vec<i32>> = HashMap::new();
+        let mut combinations: Vec<(Integer, i32)> = Vec::new();
 
-        for (key, value) in &combinations {
-            if &self.execute_query(value) == key {
-                // is atomic set
+        for i in 1..=self.number_of_variables as i32 {
+            combinations.push((self.execute_query(&[i]), i));
+        }
+        combinations.sort_unstable();
+        
+        let mut data_grouped = Vec::new();
+        
+        let mut current_key = combinations[0].0.clone();
+        let mut values_current_key = Vec::new();
+        for (key, value) in combinations.into_iter() {
+            if current_key == key {
+                values_current_key.push(value);
             } else {
-                // try to remove
+                data_grouped.push((current_key, std::mem::take(&mut values_current_key)));
+                current_key = key;
+                values_current_key.push(value);
+            }
+        }
+        data_grouped.push((current_key, values_current_key));
+
+        let mut result = Vec::new();
+        for (key, group) in data_grouped {
+            let atomic_set = self._incremental_check(key, &group);
+            if !atomic_set.is_empty() {
+                result.push(atomic_set);
+            }
+        }
+
+        return result;
+    }
+
+    /// first naive approach to compute atomic sets by incrementally add a feature one by one
+    /// while checking if the atomic set property (i.e. the count stays the same) still holds
+    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &Vec<i32>) -> Vec<i32> {
+        if pot_atomic_set.len() == 1 { return pot_atomic_set.to_vec();}
+
+        let mut atomic_set: Vec<i32> = self.find_atomic_pair(&control, pot_atomic_set);
+        if atomic_set.is_empty() { return vec![]; }
+
+        for candidate in pot_atomic_set {
+            if atomic_set.contains(candidate) { continue; }
+            if self.execute_query(&atomic_set) == control {
+                atomic_set.push(*candidate);
+            }
+        }
+        atomic_set
+    }
+
+    /// searches for a starting pair of two features that fulfill the following property:
+    /// #(mc,1) == #(mc,1) == #(mc,[1,2])
+    fn find_atomic_pair(&mut self, control: &Integer, pot_atomic_set: &Vec<i32>) -> Vec<i32> {
+        for pair in pot_atomic_set.clone().into_iter().combinations(2) {
+            if &self.execute_query(&pair) == control {
+                return pair;
             }
         }
 
         return vec![];
-    }
-
-    /**
-     * Hat der inkrementelle Ansatz Probleme???
-     * Bsp. atomic set should be 1,2
-     * Candidates sind 1,2,3,4
-     * 
-     * Erster Kandidat wird random 3
-     * => gleiche Problematik der kombinatorischen Explusion wie bei Rauswerfen der Werte
-     * => Valider Ausgangspunkt ist nötig aka ein feature das sicher Teil des atomic sets ist
-     *      => random suchen bis eine Kombination aus zwei features stimmt
-     *      => wenn erstes feature mit keinem passt => nächster Kandidat
-    */
-    #[allow(dead_code)]
-    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &mut Vec<i32>) -> Vec<i32> {
-        let mut atomic_set = vec![pot_atomic_set.pop().unwrap()];
-
-        for candidate in pot_atomic_set {
-            atomic_set.push(*candidate);
-            if self.execute_query(&atomic_set) == control {
-            }
-        }
-
-        atomic_set
     }
 }
