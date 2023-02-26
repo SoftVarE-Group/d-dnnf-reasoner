@@ -27,7 +27,7 @@ impl Ddnnf {
 
         // atomic sets
         let atomic_sets = self.get_atomic_sets();
-        println!("{:?}", atomic_sets);
+        file.write_all(format!("atomic sets: {:?}\n", atomic_sets).as_bytes())?;
 
         Ok(())
     }
