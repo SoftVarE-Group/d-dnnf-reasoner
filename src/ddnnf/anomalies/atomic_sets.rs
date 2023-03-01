@@ -159,16 +159,14 @@ impl Ddnnf {
     fn get_signed_excludes(&mut self) -> Vec<u64> {
         const SAMPLE_AMOUNT: usize = 64;
         
-        let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 10).unwrap();
+        let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 42).unwrap();
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
         
         for var in 0..self.number_of_variables as usize {
             let mut bitvec: u64 = 0;
-            for sample in samples.iter().enumerate() {
+            for sample in samples.iter() {
                 // If the feature is set to true in the x'th sample, then we set the x'th bit to 1.
-                if sample.1[var].is_positive() {
-                    bitvec |= 1 << sample.0;
-                }
+                bitvec |= u64::from(sample[var].is_positive()) << 1;
             }
             signed_excludes.push(bitvec);
         }
