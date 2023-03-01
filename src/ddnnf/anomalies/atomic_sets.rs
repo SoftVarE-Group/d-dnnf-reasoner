@@ -1,14 +1,10 @@
 use itertools::Itertools;
-use bitvec::prelude::*;
 use rug::Integer;
 
 use crate::Ddnnf;
 
-
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::ops::{BitXor};
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnionFind<N: Hash + Eq + Clone> {
@@ -139,8 +135,9 @@ impl Ddnnf {
         data_grouped.push((current_key, values_current_key));
 
         let mut atomic_sets: UnionFind<u16> = UnionFind::new();
+        let signed_excludes = self.get_signed_excludes();
         for (key, group) in data_grouped {
-            self._incremental_check(key, &group, &mut atomic_sets);
+            self._incremental_check(key, &group, &signed_excludes, &mut atomic_sets);
         }
 
         let mut features_in_as = 0;
@@ -159,16 +156,19 @@ impl Ddnnf {
     /// Computes the signs of the features in multiple uniform random samples.
     /// Each of the features is represented by an BitArray holds as many entries as random samples
     /// with a 0 indicating that the feature occurs negated and a 1 indicating the feature occurs affirmed.
-    fn get_signed_excludes(&mut self) -> Vec<BitArray<[u64; 4]>> {
-        const SAMPLE_AMOUNT: usize = 256;
+    fn get_signed_excludes(&mut self) -> Vec<u64> {
+        const SAMPLE_AMOUNT: usize = 64;
         
         let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 10).unwrap();
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
         
         for var in 0..self.number_of_variables as usize {
-            let mut bitvec = bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT];
+            let mut bitvec: u64 = 0;
             for sample in samples.iter().enumerate() {
-                bitvec.set(sample.0 as usize, sample.1[var].is_positive());
+                // If the feature is set to true in the x'th sample, then we set the x'th bit to 1.
+                if sample.1[var].is_positive() {
+                    bitvec |= 1 << sample.0;
+                }
             }
             signed_excludes.push(bitvec);
         }
@@ -176,11 +176,9 @@ impl Ddnnf {
         return signed_excludes;
     }
 
-    /// first naive approach to compute atomic sets by incrementally add a feature one by one
+    /// First naive approach to compute atomic sets by incrementally add a feature one by one
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
-    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &Vec<i32>, atomic_sets: &mut UnionFind<u16>) {
-        let signed_excludes = self.get_signed_excludes();
-        
+    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &Vec<i32>, signed_excludes: &Vec<u64>, atomic_sets: &mut UnionFind<u16>) {
         // goes through all combinations of set candidates and checks whether the pair is part of an atomic set
         for pair in pot_atomic_set.to_owned().into_iter().combinations(2) {
             let x = pair[0] as u16; let y = pair[1] as u16;
@@ -192,8 +190,9 @@ impl Ddnnf {
             }
 
             // If the sign of the two feature candidates differs in at least one of the uniform random samples,
-            // then we can by sure that they don't belong to the same atomic set
-            if (signed_excludes[x as usize - 1].bitxor(signed_excludes[y as usize - 1])).any() {
+            // then we can by sure that they don't belong to the same atomic set. Differences can be checked by
+            // applying XOR to the two bitvectors and checking if any bit is set.
+            if (signed_excludes[x as usize - 1] ^ signed_excludes[y as usize - 1]) > 0 {
                 unsafe { SAMPLE += 1; };
                 continue;
             }
