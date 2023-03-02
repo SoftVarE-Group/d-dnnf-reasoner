@@ -164,9 +164,9 @@ impl Ddnnf {
         
         for var in 0..self.number_of_variables as usize {
             let mut bitvec: u64 = 0;
-            for sample in samples.iter() {
+            for sample in samples.iter().enumerate() {
                 // If the feature is set to true in the x'th sample, then we set the x'th bit to 1.
-                bitvec |= u64::from(sample[var].is_positive()) << 1;
+                bitvec |= u64::from(sample.1[var].is_positive()) << sample.0;
             }
             signed_excludes.push(bitvec);
         }
