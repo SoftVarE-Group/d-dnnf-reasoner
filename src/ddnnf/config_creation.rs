@@ -208,7 +208,7 @@ impl Ddnnf {
                     
                     // can't get a sample of a children with no more valid configuration
                     if child_count_as_float != 0 {
-                        let child_amount = (&parent_count_as_float / child_count_as_float).to_f64() * amount as f64;
+                        let child_amount = (child_count_as_float / &parent_count_as_float).to_f64() * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
                     }
