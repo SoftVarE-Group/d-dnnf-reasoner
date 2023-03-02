@@ -26,7 +26,8 @@ impl Ddnnf {
         // false-optionals
 
         // atomic sets
-        let atomic_sets = self.get_atomic_sets();
+        let mut atomic_sets = self.get_atomic_sets();
+        atomic_sets.sort_unstable();
         file.write_all(format!("atomic sets: {:?}\n", atomic_sets).as_bytes())?;
 
         Ok(())

@@ -1,3 +1,4 @@
+use bitvec::prelude::*;
 use itertools::Itertools;
 use rug::Integer;
 
@@ -140,33 +141,22 @@ impl Ddnnf {
             self._incremental_check(key, &group, &signed_excludes, &mut atomic_sets);
         }
 
-        let mut features_in_as = 0;
-        for set in atomic_sets.subsets() {
-            features_in_as += set.len();
-        }
-
-        unsafe {
-            println!("Transitivity: {:?}, Sample: {:?}, Features in atomic sets: {:?}, Computed -> Success: {:?}, -> Fail: {:?}", TRANSITIVITY, SAMPLE, features_in_as, COMPUTED, FAIL);
-            TRANSITIVITY = 0; SAMPLE = 0; COMPUTED = 0; FAIL = 0;
-        }
-
         atomic_sets.subsets()
     }
 
     /// Computes the signs of the features in multiple uniform random samples.
     /// Each of the features is represented by an BitArray holds as many entries as random samples
     /// with a 0 indicating that the feature occurs negated and a 1 indicating the feature occurs affirmed.
-    fn get_signed_excludes(&mut self) -> Vec<u64> {
-        const SAMPLE_AMOUNT: usize = 64;
-        
-        let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 42).unwrap();
+    fn get_signed_excludes(&mut self) -> Vec<BitArray<[u64; 8]>> {
+        const SAMPLE_AMOUNT: usize = 512;
+
+        let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 10).unwrap();
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
-        
+
         for var in 0..self.number_of_variables as usize {
-            let mut bitvec: u64 = 0;
+            let mut bitvec = bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT];
             for sample in samples.iter().enumerate() {
-                // If the feature is set to true in the x'th sample, then we set the x'th bit to 1.
-                bitvec |= u64::from(sample.1[var].is_positive()) << sample.0;
+                bitvec.set(sample.0 as usize, sample.1[var].is_positive());
             }
             signed_excludes.push(bitvec);
         }
@@ -176,40 +166,30 @@ impl Ddnnf {
 
     /// First naive approach to compute atomic sets by incrementally add a feature one by one
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
-    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &Vec<i32>, signed_excludes: &Vec<u64>, atomic_sets: &mut UnionFind<u16>) {
+    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &Vec<i32>, signed_excludes: &Vec<BitArray<[u64; 8]>>, atomic_sets: &mut UnionFind<u16>) {
         // goes through all combinations of set candidates and checks whether the pair is part of an atomic set
         for pair in pot_atomic_set.to_owned().into_iter().combinations(2) {
             let x = pair[0] as u16; let y = pair[1] as u16;
 
             // we don't have to check if a pair is part of an atomic set if they already are connected via transitivity
             if atomic_sets.equiv(x, y) {
-                unsafe { TRANSITIVITY += 1; };
                 continue;
             }
 
             // If the sign of the two feature candidates differs in at least one of the uniform random samples,
             // then we can by sure that they don't belong to the same atomic set. Differences can be checked by
             // applying XOR to the two bitvectors and checking if any bit is set.
-            if (signed_excludes[x as usize - 1] ^ signed_excludes[y as usize - 1]) > 0 {
-                unsafe { SAMPLE += 1; };
+            if (signed_excludes[x as usize - 1] ^ signed_excludes[y as usize - 1]).any() {
                 continue;
             }
 
             // we identify a pair of values to be in the same atomic set, then we union them
             if self.execute_query(&pair) == control {
-                unsafe { COMPUTED += 1; };
                 atomic_sets.union(x, y);
-            } else {
-                unsafe { FAIL += 1; };
             }
         }
     }
 }
-
-static mut TRANSITIVITY: usize = 0;
-static mut SAMPLE: usize = 0;
-static mut COMPUTED: usize = 0;
-static mut FAIL: usize = 0;
 
 #[cfg(test)]
 mod test {
@@ -225,15 +205,12 @@ mod test {
             build_ddnnf_tree_with_extras("example_input/axTLS.dimacs.nnf");
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
-        //let mut adder: Ddnnf =
-        //    build_ddnnf_tree_with_extras("example_input/adderII.dimacs.nnf");
         //let mut auto2: Ddnnf =
         //    build_ddnnf_tree_with_extras("example_input/automotive2_4.dimacs.nnf");
 
         println!("atomic set vp9: {:?}", vp9.get_atomic_sets());
         println!("atomic set axtls: {:?}", axtls.get_atomic_sets());
         println!("atomic set auto1: {:?}", auto1.get_atomic_sets());
-        //println!("atomic set adder: {:?}", adder.get_atomic_sets());
         //println!("atomic set auto2: {:?}", auto2.get_atomic_sets());
     }
 }
