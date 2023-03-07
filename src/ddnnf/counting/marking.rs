@@ -4,58 +4,6 @@ use super::super::node::{NodeType::*};
 use crate::Ddnnf;
 
 impl Ddnnf {
-
-    // TODO tests/*.rs Dateien in src umlagern
-        // CI anpassen => nur noch ein job für alle tests
-    // TODO test schreiben, doku schreiben
-
-
-    /* alte version
-        self.nodes[i].temp = Integer::product(
-            children.iter().map(
-                |&index| {
-                    if self.nodes[index].marker {
-                        &self.nodes[index].temp
-                    } else {
-                        &self.nodes[index].count
-            }
-        }))
-        .complete()
-    */
-
-    /* // TODO in calc_count_node einbauen, wenn für alle queries performant
-        self.nodes[i].temp = children.iter()
-        .fold(self.nodes[i].count.clone(), |mut acc, &index| {
-            if self.nodes[index].marker {
-                if &self.nodes[index].count != &0 {
-                    acc /= &self.nodes[index].count;
-                }
-                acc *= &self.nodes[index].temp;
-            }
-            acc
-        });
-    */
-
-    /*
-        let marked_children = children.iter().filter(|&&child| self.nodes[child].marker).collect::<Vec<&usize>>();
-        self.nodes[i].temp = if marked_children.len() < children.len() / 20 {
-            marked_children.iter().fold(self.nodes[i].count.clone(), |mut acc, &&index| {
-                let node = &self.nodes[index];
-                if node.count != 0 {
-                    acc /= &node.count;
-                }
-                acc *= &node.temp;
-                acc
-            })
-        } else {
-            Integer::product(marked_children
-                .iter()
-                .map(|&&index| { &self.nodes[index].temp }))
-                .complete()
-        }
-    
-    */
-
     #[inline]
     // Computes the cardinality of a node using the marking algorithm:
     // And and Or nodes that base the computation on their child nodes use the
