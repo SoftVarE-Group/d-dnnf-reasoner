@@ -239,7 +239,7 @@ mod test {
     use itertools::Itertools;
 
     use super::*;
-    use crate::{parser::build_d4_ddnnf_tree, ddnnf::config_creation::_clear_enumeration_cache};
+    use crate::parser::build_d4_ddnnf_tree;
 
     #[test]
     fn handle_stream_msg_core() {
@@ -346,9 +346,6 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum() {
-        // we reset global cache to not have any interference by other test cases
-        _clear_enumeration_cache();
-
         let mut _auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
@@ -377,7 +374,7 @@ mod test {
             res_set.insert(config);
         }
 
-        let binding = vp9.handle_stream_msg("enum");
+        let binding = vp9.handle_stream_msg("enum a 1 l 216000");
         let res: Vec<&str> = binding.split(";").collect();
         assert_eq!(216000, res.len());
 

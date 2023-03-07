@@ -252,10 +252,6 @@ impl Ddnnf {
     }
 }
 
-pub(crate) fn _clear_enumeration_cache() {
-    ENUMERATION_CACHE.lock().unwrap().clear();
-}
-
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, no_coverage)]
 mod test {
@@ -268,9 +264,6 @@ mod test {
 
     #[test]
     fn enumeration_small_ddnnf() {
-        // we reset global cache to not have any interference by other test cases
-        _clear_enumeration_cache();
-
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
@@ -304,6 +297,9 @@ mod test {
 
         assert_eq!(80, vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        for inter in inter_res_assumptions_2.clone() {
+            res_assumptions.insert(inter);
+        }
         assert_eq!(40, inter_res_assumptions_2.len());
         
         // the cycle for that set of assumptions starts again
@@ -318,9 +314,6 @@ mod test {
 
     #[test]
     fn enumeration_big_ddnnf() {
-        // we reset global cache to not have any interference by other test cases
-        _clear_enumeration_cache();
-
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
@@ -341,9 +334,6 @@ mod test {
 
     #[test]
     fn enumeration_step_by_step() {
-        // we reset global cache to not have any interference by other test cases
-        _clear_enumeration_cache();
-
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);  
 
@@ -387,9 +377,6 @@ mod test {
 
     #[test]
     fn enumeration_is_not_possible() {
-        // we reset global cache to not have any interference by other test cases
-        _clear_enumeration_cache();
-
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
         let mut auto1: Ddnnf =
