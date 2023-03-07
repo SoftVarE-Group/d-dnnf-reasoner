@@ -16,19 +16,19 @@ impl Ddnnf {
         // core features
         let mut core = self.core.clone().into_iter().collect::<Vec<i32>>();
         core.sort();
-        file.write_all(format!("core: {:?}\n", core).as_bytes())?;
+        file.write_all(format!("core: {core:?}\n").as_bytes())?;
 
         // dead features
         let mut dead = self.dead.clone().into_iter().collect::<Vec<i32>>();
         dead.sort();
-        file.write_all(format!("dead: {:?}\n", dead).as_bytes())?;
+        file.write_all(format!("dead: {dead:?}\n").as_bytes())?;
 
         // false-optionals
 
         // atomic sets
         let mut atomic_sets = self.get_atomic_sets();
         atomic_sets.sort_unstable();
-        file.write_all(format!("atomic sets: {:?}\n", atomic_sets).as_bytes())?;
+        file.write_all(format!("atomic sets: {atomic_sets:?}\n").as_bytes())?;
 
         Ok(())
     }
