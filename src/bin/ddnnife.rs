@@ -5,10 +5,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::Parser;
 
-use colour::{green, yellow_ln, red};
-
-use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use colour::red;
 
 use std::io::{self, Write, BufRead};
 use std::path::Path;
@@ -41,16 +38,6 @@ struct Cli {
     /// The stream API
     #[arg(long)]
     stream: bool,
-
-    /// The interactive mode allows the computation of multiple queries one after another by typing the query into the console.
-    /// This mode is way slower then loading the queries with a file!
-    /// This mode also requires a file path to a file in dimacs format.
-    /// There are the following options in interactive mode:
-    /// -> [feature numbers with the same format as in -f]: computes the cardinality of partial configurations
-    /// -> exit: closes the application (CTRL+C and CTRL+D also work)
-    /// -> help: prints help information
-    #[arg(short, long, verbatim_doc_comment)]
-    interactive: bool,
 
     /// Computes the cardinality of features for the feature model, i.e. the cardinality iff we select one feature for all features.
     /// Default output file is '{FILE_NAME}-features.csv'.
@@ -126,7 +113,11 @@ fn main() {
 
     // computes the cardinality for the partial configuration that can be mentioned with parameters
     if cli.features.is_some() {
-        ddnnf.execute_query_interactive(&cli.features.unwrap());
+        let features = cli.features.unwrap();
+        println!("\nDdnnf count for query {:?} is: {:?}", &features, ddnnf.execute_query(&features));
+        let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
+        println!("While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
+            That are {:.2}%", marked_nodes.len(), ddnnf.number_of_nodes, marked_nodes.len() as f64 / ddnnf.number_of_nodes as f64 * 100.0);
     }
 
     // file path without last extension
@@ -184,67 +175,6 @@ fn main() {
             elapsed_time,
             elapsed_time / ddnnf.number_of_variables as f64
         );
-    }
-
-    // switch in the interactive mode
-    if cli.interactive {
-        let mut rl = DefaultEditor::new().unwrap();
-        if rl.load_history("history.txt").is_err() {
-            println!("No previous history.");
-        }
-        yellow_ln!("\nThis is the d-DNNF repl. Type help for further information about the usage");
-        loop {
-            let readline = rl.readline(">> ");
-            match readline {
-                Ok(line) => {
-                    rl.add_history_entry(line.as_str()).unwrap();
-                    match line.as_str() {
-                        "help" => {
-                            yellow_ln!("Usage information:");
-                            green!("\t[feature numbers with the same format as in -f]: ");
-                            println!("computes the cardinality of partial configurations");
-                            green!("\texit: ");
-                            println!("closes the application (CTRL+C and CTRL+D also work)");
-                            green!("\thelp: ");
-                            println!("prints this message");
-                        }
-                        "exit" => break,
-                        other => {
-                            let features: Option<Vec<i32>> = other.split_whitespace().map(|elem|
-                            match elem.to_string().parse::<i32>() {
-                                // check if input is within the valid range
-                                Ok(s) => if s.abs() > ddnnf.number_of_variables as i32 || s == 0 {
-                                    println!("The feature number {} is out of the range of 1 to {}. Please try again.", s, ddnnf.number_of_variables);
-                                    None
-                                } else {
-                                    Some(s)
-                                },
-                                Err(e) => {
-                                    println!("{}. Please try again.", e);
-                                    None
-                                },
-                            }).collect();
-                            if let Some(f) = features {
-                                ddnnf.execute_query_interactive(&f);
-                            }
-                        }
-                    }
-                }
-                Err(ReadlineError::Interrupted) => {
-                    println!("CTRL-C: program closes...");
-                    break;
-                }
-                Err(ReadlineError::Eof) => {
-                    println!("CTRL-D: program closes...");
-                    break;
-                }
-                Err(err) => {
-                    println!("Error: {:?}", err);
-                    break;
-                }
-            }
-        }
-        rl.save_history("history.txt").unwrap();
     }
 
     // switch in the stream mode

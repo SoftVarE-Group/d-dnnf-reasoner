@@ -48,7 +48,7 @@ impl Ddnnf {
         let mut wtr = csv::Writer::from_path(file_path)?;
 
         for work in 1_i32..self.number_of_variables as i32 + 1 {
-            let cardinality = self.card_of_feature_with_marker(work).1;
+            let cardinality = self.card_of_feature_with_marker(work);
             wtr.write_record(vec![
                 work.to_string(),
                 cardinality.to_string(),
@@ -95,7 +95,7 @@ impl Ddnnf {
                 // Loop while there's expected to be work, looking for work.
                 // If work is available, do that work.
                 while let Some(work) = t_queue.pull_work() {
-                    let result = ddnnf.card_of_feature_with_marker(work).1;
+                    let result = ddnnf.card_of_feature_with_marker(work);
 
                     // Send the work and the result of that work.
                     //

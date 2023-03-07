@@ -27,7 +27,6 @@ panic = "abort"
 
 [dependencies]
 clap = { version = "4.1.8", features = ["cargo", "derive", "color"] }
-rustyline = "11.0.0"
 colour = "0.7.0"
 mimalloc = { version = "*", default-features = false }
 rug = "1.19.1"
