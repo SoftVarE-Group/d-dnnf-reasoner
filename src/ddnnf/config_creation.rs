@@ -1,4 +1,4 @@
-use std::{cmp::min, sync::Mutex, collections::HashMap};
+use std::{cmp::min, sync::{Mutex, Arc}, collections::HashMap};
 
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -13,7 +13,7 @@ use crate::Ddnnf;
 
 use super::node::NodeType::*;
 
-static ENUMERATION_CACHE: Lazy<Mutex<HashMap<Vec<i32>,usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>,usize>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 impl Ddnnf {
     /// Creates satisfiable complete configurations for a ddnnf and given assumptions
@@ -252,6 +252,10 @@ impl Ddnnf {
     }
 }
 
+pub(crate) fn _clear_enumeration_cache() {
+    ENUMERATION_CACHE.lock().unwrap().clear();
+}
+
 #[cfg(test)]
 #[cfg_attr(coverage_nightly, no_coverage)]
 mod test {
@@ -264,6 +268,9 @@ mod test {
 
     #[test]
     fn enumeration_small_ddnnf() {
+        // we reset global cache to not have any interference by other test cases
+        _clear_enumeration_cache();
+
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
 
@@ -295,6 +302,7 @@ mod test {
         assert_eq!(vp9.rt(), res_all.len(), "there are duplicates");
 
 
+        assert_eq!(80, vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
         assert_eq!(40, inter_res_assumptions_2.len());
         
@@ -304,11 +312,15 @@ mod test {
             res_assumptions.insert(inter);
         }
         assert_eq!(40, inter_res_assumptions_3.len());
-        assert_eq!(40, res_assumptions.len(), "because of the cycle we should have gotten duplicates");
+        // if there is no cycle, we request 40 configs for the 3rd time resulting in a total of 120
+        assert_eq!(80, res_assumptions.len(), "because of the cycle we should have gotten duplicates");
     }
 
     #[test]
     fn enumeration_big_ddnnf() {
+        // we reset global cache to not have any interference by other test cases
+        _clear_enumeration_cache();
+
         let mut auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
 
@@ -329,6 +341,9 @@ mod test {
 
     #[test]
     fn enumeration_step_by_step() {
+        // we reset global cache to not have any interference by other test cases
+        _clear_enumeration_cache();
+
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);  
 
@@ -372,6 +387,9 @@ mod test {
 
     #[test]
     fn enumeration_is_not_possible() {
+        // we reset global cache to not have any interference by other test cases
+        _clear_enumeration_cache();
+
         let mut vp9: Ddnnf =
             build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
         let mut auto1: Ddnnf =

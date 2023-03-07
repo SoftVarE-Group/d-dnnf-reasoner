@@ -152,6 +152,7 @@ impl Ddnnf {
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             }
+            "atomic" => format_vec_vec(self.get_atomic_sets().iter()),
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
@@ -165,7 +166,7 @@ impl Ddnnf {
                     Err(e) => format!("E6 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
                 }
             },
-            "atomic" | "uni_random" | "t-wise_sampling" => {
+            "t-wise_sampling" => {
                 String::from("E1 error: not yet supported")
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),
@@ -238,7 +239,7 @@ mod test {
     use itertools::Itertools;
 
     use super::*;
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::{parser::build_d4_ddnnf_tree, ddnnf::config_creation::_clear_enumeration_cache};
 
     #[test]
     fn handle_stream_msg_core() {
@@ -345,6 +346,9 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum() {
+        // we reset global cache to not have any interference by other test cases
+        _clear_enumeration_cache();
+
         let mut _auto1: Ddnnf =
             build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
         let mut vp9: Ddnnf =
@@ -436,6 +440,25 @@ mod test {
             assert!(auto1.execute_query(result) == 1);
         }
         assert_eq!(135, results.len());
+    }
+
+    #[test]
+    fn handle_stream_msg_atomic() {
+        let mut vp9: Ddnnf =
+            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+
+        assert_eq!(
+            String::from("E4 error: the option \"sets\" is not valid in this context"),
+            vp9.handle_stream_msg("atomic sets")
+        );
+        assert_eq!(
+            String::from("E2 error: the operation \"atomic_sets\" is not supported"),
+            vp9.handle_stream_msg("atomic_sets")
+        );
+        assert_eq!(
+            String::from("1 2 6 10 15 19 25 31 40"),
+            vp9.handle_stream_msg("atomic")
+        );
     }
 
     #[test]
