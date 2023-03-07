@@ -74,6 +74,11 @@ fn main() {
     .arg(arg!(--heuristics "Provides information about the type of nodes, their connection and the different paths.")
         .requires("file_path")
         .takes_value(false))
+    .arg(arg!(-a --anomalies "Computes core, dead, false-optional features, and atomic sets. You can add a file path for saving the information. Alternativly, the information is saved in anomalies.txt")
+        .requires("file_path")
+        .value_parser(value_parser!(String))
+        .value_name("ANOMALIES")
+        .min_values(0))
     .get_matches();
 
     // create the ddnnf based of the input file that is required
@@ -268,6 +273,18 @@ fn main() {
                 },
             }
         }
+    }
+
+    // writes the anomalies of the d-DNNF to file
+    // anomalies are: core, dead, false-optional features and atomic sets
+    if matches.contains_id("anomalies") {
+        let path = &format!(
+            "{}{}",
+            matches.get_one::<String>("anomalies").get_or_insert(&String::from("anomalies")).as_str(),
+            ".txt"
+        );
+        ddnnf.write_anomalies(path).unwrap();
+        println!("The anomalies of the d-DNNF (i.e. core, dead, false-optional features, and atomic sets) are written into {}.", path);
     }
 
     // writes the d-DNNF to file

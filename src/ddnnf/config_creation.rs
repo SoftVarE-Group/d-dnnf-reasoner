@@ -52,7 +52,7 @@ impl Ddnnf {
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
     /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
     /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned. 
-    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &Vec<i32>, amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
+    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &[i32], amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
         if !self.preprocess_config_creation(assumptions) {
             return None;
         }
@@ -70,7 +70,7 @@ impl Ddnnf {
     // resets the temp count of each node to the cached count,
     // computes the count under the assumptions to set some of the temp values,
     // and handle the literals properly.
-    fn preprocess_config_creation(&mut self, assumptions: &Vec<i32>) -> bool {
+    fn preprocess_config_creation(&mut self, assumptions: &[i32]) -> bool {
         // if any of the assumptions isn't valid by being in the range of +-#variables, then we return false
         if assumptions.iter().any(|f| f.abs() > self.number_of_variables as i32) {
             return false;
