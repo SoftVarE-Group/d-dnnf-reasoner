@@ -53,14 +53,8 @@ impl Ddnnf {
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> (usize, Integer) {
-        for index in indexes.iter().copied() {
-            self.nodes[index].temp.assign(0); // change the value of the node
-            self.mark_nodes_start(index); // go through the path til the root node is marked
-        }
-
-        // sort the marked nodes so that we make sure to first calculate the childnodes and then their parents
-        self.md.sort_unstable();
+    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> Integer {
+        self.mark_assumptions(indexes);
 
         // calc the count for all marked nodes, respectevly all nodes that matter
         for j in 0..self.md.len() {
@@ -74,11 +68,10 @@ impl Ddnnf {
         for &index in indexes {
             self.nodes[index].marker = false;
         }
-        let marked_nodes = self.md.len();
         self.md.clear();
 
         // the result is propagated through the whole graph up to the root
-        (marked_nodes, self.rt())
+        self.rt()
     }
 
     #[inline]
@@ -86,16 +79,16 @@ impl Ddnnf {
     /// The marking algorithm differs to the standard variation by only reomputing the
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
-    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> (usize, Integer) {
+    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
         if self.core.contains(&feature) || self.dead.contains(&-feature) {
-            (0, self.rc())
+            self.rc()
         } else if self.dead.contains(&feature) || self.core.contains(&-feature) {
-            (0, Integer::ZERO)
+            Integer::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
                 Some(i) => self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
-                None => (0, self.rc()),
+                None => self.rc(),
             }
         }
     }
@@ -107,27 +100,48 @@ impl Ddnnf {
         &mut self,
         features: &[i32],
         operation: fn(&mut Ddnnf, usize)
-    ) -> (usize, Integer) {
+    ) -> Integer {
         if self.query_is_not_sat(features) {
-            (0, Integer::ZERO)
+            Integer::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
 
-            let mut indexes: Vec<usize> = Vec::new();
-
-            for number in features {
-                // we set the negative occurences to 0 for the features we want to include
-                if let Some(i) = self.literals.get(&-number).cloned() {
-                    indexes.push(i)
-                }
-            }
+            let indexes: Vec<usize> = self.map_features_opposing_indexes(&features);
 
             if indexes.is_empty() {
-                return (0, self.rc());
+                return self.rc();
             }
 
             self.operate_on_marker(&indexes, operation)
         }
+    }
+
+    // creates a clone of the nodes which were marked when computing the cardinality
+    // for a given partial configuration
+    pub fn get_marked_nodes_clone(&mut self, features: &[i32]) -> Vec<usize> {           
+        self.mark_assumptions(&self.map_features_opposing_indexes(&features));
+        let marked_nodes = self.md.clone();
+        
+        // reset everything
+        self.md.clear();
+        for node in self.nodes.iter_mut() {
+            node.marker = false;
+        }
+
+        marked_nodes
+    }
+
+    #[inline]
+    // marks the nodes under the assumptions that all nodes, provided via
+    // indexes are literals that are deselected
+    fn mark_assumptions(&mut self, indexes: &[usize]) {
+        for index in indexes.iter().copied() {
+            self.nodes[index].temp.assign(0); // change the value of the node
+            self.mark_nodes_start(index); // go through the path til the root node is marked
+        }
+
+        // sort the marked nodes so that we make sure to first calculate the childnodes and then their parents
+        self.md.sort_unstable();
     }
 
     #[inline]

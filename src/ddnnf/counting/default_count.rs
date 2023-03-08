@@ -100,22 +100,22 @@ mod test {
         
         for i in 1..=vp9.number_of_variables as i32 {
             assert_eq!(
-                vp9.card_of_feature_with_marker(i).1,
+                vp9.card_of_feature_with_marker(i),
                 vp9._operate_on_single_feature(i, Ddnnf::calc_count)
             );
             assert_eq!(
-                vp9.card_of_feature_with_marker(-i).1,
+                vp9.card_of_feature_with_marker(-i),
                 vp9._operate_on_single_feature(-i, Ddnnf::calc_count)
             );
         }
         
         for i in (1..=auto1.number_of_variables as i32).step_by(100) {
             assert_eq!(
-                auto1.card_of_feature_with_marker(i).1,
+                auto1.card_of_feature_with_marker(i),
                 auto1._operate_on_single_feature(i, Ddnnf::calc_count)
             );
             assert_eq!(
-                auto1.card_of_feature_with_marker(-i).1,
+                auto1.card_of_feature_with_marker(-i),
                 auto1._operate_on_single_feature(-i, Ddnnf::calc_count)
             );
         }

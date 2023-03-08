@@ -2,7 +2,7 @@
 name = "ddnnf_reasoning"
 version = "0.5.0"
 authors = ["Heiko Raab; heiko.raab@uni-ulm-de", "Chico Sundermann; chico.sundermann@uni-ulm.de"]
-edition = "2018"
+edition = "2021"
 license = "GNU LGPL-2.1"
 
 [lib]
@@ -26,20 +26,19 @@ panic = "abort"
 # for performance graphs: debug = true
 
 [dependencies]
-clap = "3.2.22"
-rustyline = "9.0.0"
-colour = "0.6.0"
+clap = { version = "4.1.8", features = ["cargo", "derive", "color"] }
+colour = "0.7.0"
 mimalloc = { version = "*", default-features = false }
-rug = "1.13.0"
-nom = "6.1.2"
-csv = "1.1"
+rug = "1.19.1"
+nom = "7.1.3"
+csv = "1.2.1"
 workctl = "0.2.0" # parallelisation
 file_diff = "1.0.0"
-petgraph = "0.6.2"
+petgraph = "0.6.3"
 rand_pcg = "0.3.1"
 rand = "0.8.5"
 rand_distr = "0.4.3"
 itertools = "0.10.5"
-once_cell = "1.17.0"
+once_cell = "1.17.1"
 rustc-hash = "1.1.0"
 bitvec = "1.0.1"
