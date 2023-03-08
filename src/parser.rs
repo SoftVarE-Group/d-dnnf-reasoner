@@ -2,12 +2,14 @@ pub mod c2d_lexer;
 use c2d_lexer::{lex_line, TId, C2DToken};
 
 pub mod d4_lexer;
-use colour::{red, green, yellow};
+use colour::e_red;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod persisting;
 
 use core::panic;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::{
     cell::RefCell,
     rc::Rc, process
@@ -40,41 +42,69 @@ use petgraph::{
 ///
 /// let file_path = "./tests/data/small_test.dimacs.nnf";
 ///
-/// let ddnnfx: Ddnnf = parser::build_ddnnf_tree_with_extras(file_path);
+/// let ddnnfx: Ddnnf = parser::build_ddnnf(file_path, None);
 /// ```
 ///
 /// # Panics
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
+pub fn build_ddnnf(path: &str, ommited_features: Option<u32>) -> Ddnnf {
+    let file = File::open(path).unwrap();
+    let lines = BufReader::new(file)
+        .lines()
+        .map(|line| line.expect("Unable to read line"))
+        .collect::<Vec<String>>();
+
+    distribute_building(lines, ommited_features)
+}
+
+/// Chooses, depending on the first read line, which building implmentation to choose.
+/// Either the first line is a header and therefore the c2d format or ommited_features
+/// is supplied and its the d4 format.
+#[inline]
+pub fn distribute_building(lines: Vec<String>, ommited_features: Option<u32>) -> Ddnnf {
     use C2DToken::*;
-
-    let mut buf_reader = BufReaderMl::open(path).expect("Unable to open file");
-
-    let first_line = buf_reader.next().expect("Unable to read line").unwrap();
-    let nodes; let variables;
-
-    match lex_line(first_line.trim()) {
-        Ok((_, Header { nodes: n, edges: _, variables: v })) => { nodes = n; variables = v; },
-        Ok(_) | Err(_) => { // tried to parse the d4 standard without -o option which results in trying to parse the c2d standard
-            red!("error: "); print!("the first line of the file isn't a header!\n\nYou probably should use the option: ");
-            yellow!("'--ommited_features <OMMITED FEATURES>'");
-            print!(".\nFor more information try "); green!("--help\n");
-            process::exit(1);
+    
+    match lex_line(lines[0].trim()) {
+        Ok((_, Header { nodes: _, edges: _, variables })) => {
+            build_c2d_ddnnf(lines, variables as u32)
+        },
+        Ok(_) | Err(_) => {
+            // tried to parse the c2d standard, but failes
+            match ommited_features {
+                Some(o) => {
+                    // we try to parse the d4 standard
+                    build_d4_ddnnf(lines, o)
+                },
+                None => {
+                    // unknown standard or combination -> abort
+                    e_red!("error: ");
+                    eprintln!("The first line of the file isn't a header and the option ommited_features is not set.\n\
+                    Hence, we can't determine the number of variables and consequently can't construct a valid ddnnf.");
+                    process::exit(1);
+                },
+            }
         },
     }
+}
 
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(nodes);
+/// Parses a ddnnf, referenced by the file path.
+/// This function uses C2DTokens which specify a d-DNNF in c2d format.
+/// The file gets parsed and we create the corresponding data structure.
+#[inline]
+fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
+    use C2DToken::*;
+
+    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
 
     let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
     let mut true_nodes = Vec::new();
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
-    for line in buf_reader {
-        let line = line.expect("Unable to read line");
-
+    // skip the first line, because we already looked at the header
+    for line in lines.into_iter().skip(1) {
         let next: Node = match lex_line(line.as_ref()).unwrap().1 {
             And { children } => Node::new_and(
                 calc_and_count(&mut parsed_nodes, &children),
@@ -117,16 +147,14 @@ pub fn build_ddnnf_tree_with_extras(path: &str) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, variables as u32, nodes)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, variables)
 }
 
 /// Parses a ddnnf, referenced by the file path.
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
-    let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
-
+fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
     let mut ddnnf_graph = DiGraph::<TId, ()>::new();
 
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
@@ -209,9 +237,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
 
     // opens the file with a BufReaderMl which is similar to a regular BufReader
     // works off each line of the file data seperatly
-    for line in buf_reader {
-        let line = line.expect("Unable to read line");
-
+    for line in lines {
         let next: D4Token = lex_line_d4(line.as_ref()).unwrap().1;
 
         use D4Token::*;
@@ -380,8 +406,7 @@ pub fn build_d4_ddnnf_tree(path: &str, ommited_features: u32) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    let len = parsed_nodes.len();
-    Ddnnf::new(parsed_nodes, literals, true_nodes, ommited_features, len)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, ommited_features)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes

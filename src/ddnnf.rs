@@ -23,10 +23,24 @@ pub struct Ddnnf {
     pub dead: FxHashSet<i32>,
     /// An interim save for the marking algorithm
     pub md: Vec<usize>,
-    pub number_of_nodes: usize,
     pub number_of_variables: u32,
     /// The number of threads
     pub max_worker: u16,
+}
+
+impl Default for Ddnnf {
+    fn default() -> Self {
+        Ddnnf {
+            nodes: Vec::new(),
+            literals: FxHashMap::default(),
+            true_nodes: Vec::new(),
+            core: FxHashSet::default(),
+            dead: FxHashSet::default(),
+            md: Vec::new(),
+            number_of_variables: 0,
+            max_worker: 4,
+        }
+    }
 }
 
 impl Ddnnf {
@@ -36,7 +50,6 @@ impl Ddnnf {
         literals: FxHashMap<i32, usize>,
         true_nodes: Vec<usize>,
         number_of_variables: u32,
-        number_of_nodes: usize,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
@@ -45,7 +58,6 @@ impl Ddnnf {
             core: FxHashSet::default(),
             dead: FxHashSet::default(),
             md: Vec::new(),
-            number_of_nodes,
             number_of_variables,
             max_worker: 4,
         };
@@ -57,13 +69,13 @@ impl Ddnnf {
     // returns the current count of the root node in the ddnnf
     // that value is the same during all computations
     pub fn rc(&self) -> Integer {
-        self.nodes[self.number_of_nodes - 1].count.clone()
+        self.nodes[self.nodes.len() - 1].count.clone()
     }
 
     // returns the current temp count of the root node in the ddnnf
     // that value is changed during computations
     fn rt(&self) -> Integer {
-        self.nodes[self.number_of_nodes - 1].temp.clone()
+        self.nodes[self.nodes.len() - 1].temp.clone()
     }
 
     /// Determines the positions of the inverted featueres
@@ -89,7 +101,7 @@ impl Ddnnf {
     ///
     /// // create a ddnnf
     /// let file_path = "./tests/data/small_test.dimacs.nnf";
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras(file_path);
+    /// let mut ddnnf: Ddnnf = build_ddnnf(file_path, None);
     ///
     /// assert_eq!(3, ddnnf.execute_query(&vec![3,1]));
     /// assert_eq!(3, ddnnf.execute_query(&vec![3]));

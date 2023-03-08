@@ -12,7 +12,7 @@ fn card_of_features_normal_and_reloaded_test() {
     // default way to compute card of features with a d-DNNF in d4 standard
     let d4_out = "./tests/data/auto1_d4_fs.csv";
     let mut ddnnf: Ddnnf =
-        parser::build_d4_ddnnf_tree("./tests/data/auto1_d4.nnf", 2513);
+        parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
     ddnnf
         .card_of_each_feature(d4_out)
         .unwrap_or_default();
@@ -24,7 +24,7 @@ fn card_of_features_normal_and_reloaded_test() {
     // compute the cardinality of features for the saved file
     let saved_out = "./tests/data/auto1_d4_to_c2d_fs.csv";
     let mut ddnnf: Ddnnf =
-        parser::build_ddnnf_tree_with_extras(saved_nnf);
+        parser::build_ddnnf(saved_nnf, None);
     ddnnf
         .card_of_each_feature(saved_out)
         .unwrap_or_default();

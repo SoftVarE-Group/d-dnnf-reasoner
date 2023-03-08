@@ -3,7 +3,7 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use clap::Parser;
+use clap::{Parser, ArgGroup};
 
 use colour::red;
 
@@ -25,9 +25,27 @@ use ddnnf_lib::parser::{self as dparser, persisting::write_ddnnf};
 
 {all-args}{after-help}
 "), allow_negative_numbers = true, long_about = None)]
+
+#[clap(group(
+    ArgGroup::new("loading")
+        .required(true)
+        .args(&["file_path", "pipe_ddnnf_stdin"]),
+))]
+
 struct Cli {
-    /// The path to the file in dimacs format. The d-dnnf has to be smooth to work properly!
-    file_path: String,
+    /// The path to the file in dimacs format. The d-dnnf has to be either fulfill the requirements
+    /// of the c2d format and be smooth or produced by the newest d4 compiler version to work properly!
+    #[arg(verbatim_doc_comment)]
+    file_path: Option<String>,
+
+    /// Allows to load the ddnnf via stdin.
+    /// Either ommited_features has to be set or the file must start with a header of the form 'nnf n v e',
+    /// where v is the number of nodes, e is the number of edges,
+    /// and n is the number of variables over which the d-dnnf is defined.
+    /// Like the c2d and the d4 format specifies, each line must be defided by a new line.
+    /// Two following new lines end the reading from stdin.
+    #[arg(short, long, verbatim_doc_comment)]    
+    pipe_ddnnf_stdin: bool,
 
     /// The numbers of the features that should be included or excluded (positive number to include, negative to exclude).
     /// Can be one or multiple. A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace!
@@ -39,7 +57,8 @@ struct Cli {
     #[arg(long)]
     stream: bool,
 
-    /// Computes the cardinality of features for the feature model, i.e. the cardinality iff we select one feature for all features.
+    /// Computes the cardinality of features for the feature model,
+    /// i.e. the cardinality iff we select one feature for all features.
     /// Default output file is '{FILE_NAME}-features.csv'.
     #[clap(short, long, num_args = 0..=1, verbatim_doc_comment)]
     card_of_fs: Option<Vec<String>>,
@@ -49,7 +68,6 @@ struct Cli {
     /// Default output file is '{FILE_NAME}-queries.txt'.
     #[arg(short, long, num_args = 1..=2, verbatim_doc_comment)]
     queries: Option<Vec<String>>,
-
 
     /// Computes core, dead, false-optional features, and atomic sets.
     /// You can add a file path for saving the information.
@@ -84,14 +102,18 @@ fn main() {
     let time = Instant::now();
     let mut ddnnf: Ddnnf;
 
-    if cli.ommited_features.is_some() {
-        let ommited_features: u32 = cli.ommited_features.unwrap();
-        ddnnf = dparser::build_d4_ddnnf_tree(
-            &cli.file_path,
-            ommited_features
-        );
+    if cli.pipe_ddnnf_stdin {
+        // read model line by line from stdin
+        let mut input = Vec::new();
+        for line in io::stdin().lock().lines() {
+            let read_line = line.unwrap();
+            if read_line.is_empty() { break; }
+            input.push(read_line);
+        }
+        ddnnf = dparser::distribute_building(input, cli.ommited_features);
     } else {
-        ddnnf = dparser::build_ddnnf_tree_with_extras(&cli.file_path);
+        let ddnnf_path = &cli.file_path.clone().unwrap();
+        ddnnf = dparser::build_ddnnf(ddnnf_path, cli.ommited_features)
     }
 
     if !cli.stream {
@@ -117,11 +139,13 @@ fn main() {
         println!("\nDdnnf count for query {:?} is: {:?}", &features, ddnnf.execute_query(&features));
         let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
         println!("While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
-            That are {:.2}%", marked_nodes.len(), ddnnf.number_of_nodes, marked_nodes.len() as f64 / ddnnf.number_of_nodes as f64 * 100.0);
+            That are {:.2}%", marked_nodes.len(), ddnnf.nodes.len(), marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0);
     }
 
     // file path without last extension
-    let file_path = String::from(Path::new(&cli.file_path).with_extension("").file_name().unwrap().to_str().unwrap());
+    let file_path = String::from(
+        Path::new(&cli.file_path.unwrap_or(String::from("ddnnf.nnf")))
+        .with_extension("").file_name().unwrap().to_str().unwrap());
 
     // computes the cardinality of partial configurations and saves the results in a .txt file
     // the results do not have to be in the same order if the number of threads is greater than one

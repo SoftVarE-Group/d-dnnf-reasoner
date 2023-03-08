@@ -239,14 +239,14 @@ mod test {
     use itertools::Itertools;
 
     use super::*;
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     #[test]
     fn handle_stream_msg_core() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = auto1.handle_stream_msg("core");
         let res = binding.split(" ").collect::<Vec<&str>>();
@@ -292,7 +292,7 @@ mod test {
     #[test]
     fn handle_stream_msg_count() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from(
@@ -321,7 +321,7 @@ mod test {
     #[test]
     fn handle_stream_msg_sat() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("true;true;false"),
@@ -347,9 +347,9 @@ mod test {
     #[test]
     fn handle_stream_msg_enum() {
         let mut _auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
         let res: Vec<&str> = binding.split(";").collect_vec();
@@ -390,9 +390,9 @@ mod test {
     #[test]
     fn handle_stream_msg_random() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
@@ -442,7 +442,7 @@ mod test {
     #[test]
     fn handle_stream_msg_atomic() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         assert_eq!(
             String::from("E4 error: the option \"sets\" is not valid in this context"),
@@ -461,7 +461,7 @@ mod test {
     #[test]
     fn handle_stream_msg_save() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let binding = env::current_dir().unwrap();
         let working_dir = binding.to_str().unwrap();
 
@@ -502,7 +502,7 @@ mod test {
     #[test]
     fn handle_stream_msg_other() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("exit"),
@@ -513,7 +513,7 @@ mod test {
     #[test]
     fn handle_stream_msg_error() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         assert_eq!(
             String::from("E4 error: got an empty msg"),
             auto1.handle_stream_msg("")

@@ -34,7 +34,7 @@ impl Ddnnf {
             };
 
             let mut sample_list = 
-                self.enumerate_node((&Integer::from(last_stop), &min(self.rt(), Integer::from(last_stop + amount))), self.number_of_nodes-1);
+                self.enumerate_node((&Integer::from(last_stop), &min(self.rt(), Integer::from(last_stop + amount))), self.nodes.len()-1);
             for sample in sample_list.iter_mut() {
                 sample.sort_unstable_by_key(|f| f.abs());
             }
@@ -58,7 +58,7 @@ impl Ddnnf {
         }
         
         if self.execute_query(&assumptions) > 0 {
-            let mut sample_list = self.sample_node(amount, self.number_of_nodes-1, &mut Pcg32::seed_from_u64(seed));
+            let mut sample_list = self.sample_node(amount, self.nodes.len()-1, &mut Pcg32::seed_from_u64(seed));
             for sample in sample_list.iter_mut() {
                 sample.sort_unstable_by_key(|f| f.abs());
             }
@@ -260,12 +260,12 @@ mod test {
     use rand::thread_rng;
 
     use super::*;
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     #[test]
     fn enumeration_small_ddnnf() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let mut res_all = HashSet::new();
         let mut res_assumptions = HashSet::new();
@@ -315,7 +315,7 @@ mod test {
     #[test]
     fn enumeration_big_ddnnf() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![1, -2, -3, 4, -5, 6, 7, 8, -9, -10, 11, -12, -13, 100, -101, 102];
@@ -335,7 +335,7 @@ mod test {
     #[test]
     fn enumeration_step_by_step() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);  
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));  
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![-35, 42];
@@ -378,9 +378,9 @@ mod test {
     #[test]
     fn enumeration_is_not_possible() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
         assert!(vp9.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1).is_none());
@@ -394,9 +394,9 @@ mod test {
     #[test]
     fn sampling_validity() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let vp9_assumptions= vec![38, 2, -14];
         let vp9_samples = vp9.uniform_random_sampling(&vp9_assumptions, 1_000, 42).unwrap();
@@ -415,9 +415,9 @@ mod test {
     #[test]
     fn sampling_seeding() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // same seeding should yield same results, different seeding should (normally) yield different results
         assert_eq!(
@@ -450,9 +450,9 @@ mod test {
     #[test]
     fn sampling_is_not_possible() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.uniform_random_sampling(&mut vec![1, -1], 1, 42).is_none());
         assert!(vp9.uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42).is_none());

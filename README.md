@@ -73,6 +73,11 @@ Compute the cardinality of features for automotive01 when compiled with d4. Here
 ./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 -c
 ```
 
+An alternative to the above, using the possibility to load a model via stdin looks like the following.
+```properties
+cat example_input/auto1_d4.nnf | ./target/release/ddnnife -p -o 2513 -c
+```
+
 Compute the cardinality of partial configurations for X264.dimacs.nnf with 4 threads (default) and save the result as out.txt in the current working directory (default).
 ```properties
 ./target/release/ddnnife example_input/X264.dimacs.nnf -q example_input/X264.config

@@ -214,14 +214,14 @@ impl Ddnnf {
 mod test {
     use std::{collections::HashSet, iter::FromIterator};
 
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     use super::*;
 
     #[test]
     fn atomic_sets_vp9() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         // make sure that the results are reproducible
         for _ in 0..3 {
@@ -243,7 +243,7 @@ mod test {
     #[test]
     fn atomic_sets_auto1() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // ensure reproducible
         for _ in 0..3 {

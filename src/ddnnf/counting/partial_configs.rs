@@ -22,7 +22,7 @@ impl Ddnnf{
     ///
     /// // create a ddnnf
     /// // and run the queries
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
+    /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
     /// ddnnf.card_multi_queries(
     ///     "./tests/data/small_test.config",
     ///     "./tests/data/smt_out.txt",)
@@ -176,13 +176,13 @@ mod test {
 
     use file_diff::diff_files;
 
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     use super::*;
 
     #[test]
     fn card_multi_queries() {
-        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
         ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
 
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn test_equality_single_and_multi() {
-        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
         ddnnf.card_multi_queries_single("./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
