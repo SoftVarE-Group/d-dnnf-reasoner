@@ -126,12 +126,23 @@ impl Ddnnf {
     /// Compute all atomic sets
     /// A group forms an atomic set iff every valid configuration either includes
     /// or excludes all mebers of that atomic set
-    pub(crate) fn get_atomic_sets(&mut self) -> Vec<Vec<u16>> {
+    pub(crate) fn get_atomic_sets(&mut self, candidates: Option<Vec<u32>>, assumptions: &[i32]) -> Vec<Vec<u16>> {
         let mut combinations: Vec<(Integer, i32)> = Vec::new();
 
+        // If there are no candidates supplied, we consider all features to be a candidate
+        let considered_features = match candidates {
+            Some(c) => c,
+            None => (1..=self.number_of_variables).collect(),
+        };
+
+        // We can't find any atomic set if there are no candidates
+        if considered_features.is_empty() {
+            return vec![];
+        }
+
         // compute the cardinality of features to obtain atomic set candidates
-        for i in 1..=self.number_of_variables as i32 {
-            combinations.push((self.execute_query(&[i]), i));
+        for i in considered_features {
+            combinations.push((self.execute_query(&[&[i as i32], assumptions].concat()), i as i32));
         }
         combinations.sort_unstable(); // sorting is required to group in the next step
     
@@ -153,9 +164,10 @@ impl Ddnnf {
 
         // initalize Unionfind and Samples
         let mut atomic_sets: UnionFind<u16> = UnionFind::default();
-        let signed_excludes = self.get_signed_excludes();
+        let signed_excludes = self.get_signed_excludes(assumptions);
         for (key, group) in data_grouped {
-            self._incremental_check(key, &group, &signed_excludes, &mut atomic_sets);
+            self.incremental_subset_check(
+                key, &group, &signed_excludes, assumptions, &mut atomic_sets);
         }
 
         let mut subsets = atomic_sets.subsets();
@@ -166,11 +178,23 @@ impl Ddnnf {
     /// Computes the signs of the features in multiple uniform random samples.
     /// Each of the features is represented by an BitArray holds as many entries as random samples
     /// with a 0 indicating that the feature occurs negated and a 1 indicating the feature occurs affirmed.
-    fn get_signed_excludes(&mut self) -> Vec<BitArray<[u64; 8]>> {
+    fn get_signed_excludes(&mut self, assumptions: &[i32]) -> Vec<BitArray<[u64; 8]>> {
         const SAMPLE_AMOUNT: usize = 512;
 
-        let samples = self.uniform_random_sampling(&[], SAMPLE_AMOUNT, 10).unwrap();
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
+
+        let samples;
+        match self.uniform_random_sampling(assumptions, SAMPLE_AMOUNT, 10) {
+            Some(x) => samples = x,
+            None => {
+                // If the assumptions make the query unsat, then we get no samples.
+                // Hence, we can't exclude any combination of features
+                for _ in 0..self.number_of_variables as usize {
+                    signed_excludes.push(bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT]);
+                }
+                return signed_excludes;
+            },
+        }
 
         for var in 0..self.number_of_variables as usize {
             let mut bitvec = bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT];
@@ -185,7 +209,8 @@ impl Ddnnf {
 
     /// First naive approach to compute atomic sets by incrementally add a feature one by one
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
-    fn _incremental_check(&mut self, control: Integer, pot_atomic_set: &[i32], signed_excludes: &[BitArray<[u64; 8]>], atomic_sets: &mut UnionFind<u16>) {
+    fn incremental_subset_check(&mut self, control: Integer, pot_atomic_set: &[i32],
+        signed_excludes: &[BitArray<[u64; 8]>], assumptions: &[i32], atomic_sets: &mut UnionFind<u16>) {
         // goes through all combinations of set candidates and checks whether the pair is part of an atomic set
         for pair in pot_atomic_set.iter().copied().combinations(2) {
             let x = pair[0] as u16; let y = pair[1] as u16;
@@ -203,7 +228,7 @@ impl Ddnnf {
             }
 
             // we identify a pair of values to be in the same atomic set, then we union them
-            if self.execute_query(&pair) == control {
+            if self.execute_query(&[&pair, assumptions].concat()) == control {
                 atomic_sets.union(x, y);
             }
         }
@@ -225,7 +250,7 @@ mod test {
 
         // make sure that the results are reproducible
         for _ in 0..3 {
-            let vp9_atomic_sets = vp9.get_atomic_sets();
+            let vp9_atomic_sets = vp9.get_atomic_sets(None, &vec![]);
             assert_eq!(vec![vec![1, 2, 6, 10, 15, 19, 25, 31, 40]], vp9_atomic_sets);
 
             // There should exactly one atomic set that is a subset of the core and the dead features.
@@ -247,7 +272,7 @@ mod test {
 
         // ensure reproducible
         for _ in 0..3 {
-            let auto1_atomic_sets = auto1.get_atomic_sets();
+            let auto1_atomic_sets = auto1.get_atomic_sets(None, &vec![]);
             assert_eq!(155, auto1_atomic_sets.len());
 
             // check some subset values
@@ -291,5 +316,78 @@ mod test {
                 .exactly_one().is_ok()
             );
         }
+    }
+
+    #[test]
+    fn empty_candidates() {
+        let mut vp9: Ddnnf =
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut auto1: Ddnnf =
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+
+        assert!(vp9.get_atomic_sets(Some(vec![]), &vec![]).is_empty());
+        assert!(auto1.get_atomic_sets(Some(vec![]), &vec![]).is_empty());
+    }
+
+    #[test]
+    fn candidates_and_assumptions_for_core() {
+        let mut vp9: Ddnnf =
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+
+        let vp9_default_as = vp9.get_atomic_sets(None, &vec![]);
+        let vp9_core = vp9.core.clone().into_iter().collect_vec();
+        assert_eq!(
+            vp9_default_as,
+            vp9.get_atomic_sets(Some((1..=vp9.number_of_variables as u32).collect_vec()), &vec![])
+        );
+        assert_eq!(
+            vp9_default_as,
+            vp9.get_atomic_sets(None, &vp9_core)
+        );
+        assert_eq!(
+            vp9_default_as,
+            vp9.get_atomic_sets(Some((1..=vp9.number_of_variables as u32).collect_vec()), &vp9_core)
+        );
+        assert_eq!(
+            vp9_default_as,
+            vp9.get_atomic_sets(Some(vp9.core.clone().into_iter().map(|f| f as u32).collect_vec()), &vp9_core)
+        );
+    }
+
+    #[test]
+    fn candidates_and_assumptions() {
+        let mut auto1: Ddnnf =
+        build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let assumptions = vec![10, 20, 35];
+        let atomic_sets = 
+            auto1.get_atomic_sets(Some((1..=50).collect_vec()), &vec![10, 20, 35])
+                .iter()
+                .map(|subset| subset.iter().map(|&f| f as i32).collect_vec())
+                .collect_vec();
+
+        assert_eq!(
+            vec![vec![1, 2, 3, 4, 5, 8, 12, 14, 15, 16, 17, 18, 32, 34, 36, 37, 39, 40, 41, 42, 43], vec![10, 11, 20, 22, 23, 25, 26, 33, 35], vec![19, 44]],
+            atomic_sets
+        );
+
+        // atomic set property holds for all possibilities
+        for subset in atomic_sets.iter() {
+            let mut compare_value = Integer::from(-1);
+            for feature in subset.iter() {
+                let mut query_slice = assumptions.clone();
+                query_slice.push(*feature);
+
+                if compare_value == -1 {
+                    compare_value = auto1.execute_query(&query_slice);
+                } else {
+                    assert_eq!(compare_value, auto1.execute_query(&query_slice));
+                }
+            }
+        }
+
+        // atomic sets are supposed to be distinct
+        assert_ne!(auto1.execute_query(&atomic_sets[0]), auto1.execute_query(&atomic_sets[1]));
+        assert_ne!(auto1.execute_query(&atomic_sets[0]), auto1.execute_query(&atomic_sets[2]));
+        assert_ne!(auto1.execute_query(&atomic_sets[1]), auto1.execute_query(&atomic_sets[2]));
     }
 }

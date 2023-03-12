@@ -2,6 +2,8 @@ use std::iter::{FromIterator};
 use std::usize::MAX;
 use std::{path::Path};
 
+use itertools::Itertools;
+
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
 
@@ -152,7 +154,17 @@ impl Ddnnf {
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             }
-            "atomic" => format_vec_vec(self.get_atomic_sets().iter()),
+            "atomic" => {
+                if values.iter().any(|&f| f.is_negative()) {
+                    return String::from("E5 error: candidates must be positive");
+                }
+                let candidates = if !values.is_empty()  {
+                    Some(values.iter().map(|&f| f as u32).collect_vec())
+                } else {
+                    None
+                };
+                format_vec_vec(self.get_atomic_sets(candidates, &params).iter())
+            },
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
@@ -452,9 +464,37 @@ mod test {
             String::from("E2 error: the operation \"atomic_sets\" is not supported"),
             vp9.handle_stream_msg("atomic_sets")
         );
+
+        // negative assumptions are allowed
+        assert_eq!(
+            String::from("1 2 3 6 10 15 19 25 30 31 40;4 5 26 27 28 29"),
+            vp9.handle_stream_msg("atomic a 1 2 6 -4 30 -5")
+        );
+        // but negated variables are not allowed, because by definition atomic sets can't contain negated features
+        assert_eq!(
+            String::from("E5 error: candidates must be positive"),
+            vp9.handle_stream_msg("atomic v -1 a 1 2 6 -4 30 -5")
+        );
+
         assert_eq!(
             String::from("1 2 6 10 15 19 25 31 40"),
             vp9.handle_stream_msg("atomic")
+        );
+        assert_eq!(
+            String::from("1 2 6 10"),
+            vp9.handle_stream_msg("atomic v 1 2 3 4 5 6 7 8 9 10")
+        );
+        assert_eq!(
+            String::from("15 19 25"),
+            vp9.handle_stream_msg("atomic v 15 16 17 18 19 20 21 22 23 24 25 a 1 2 6 10 15")
+        );
+        assert_eq!(
+            String::from("1 2 3 6 10 15 19 25 31 40;4 5"),
+            vp9.handle_stream_msg("atomic a 1 2 3")
+        );
+        assert_eq!( // an unsat query results in an atomic set that contains one subset which contains all features
+            format_vec((1..=42).into_iter()),
+            vp9.handle_stream_msg("atomic a 4 5")
         );
     }
 
