@@ -1,6 +1,6 @@
 [package]
 name = "ddnnife"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Heiko Raab; heiko.raab@uni-ulm-de", "Chico Sundermann; chico.sundermann@uni-ulm.de"]
 edition = "2021"
 license = "GNU LGPL-2.1"
