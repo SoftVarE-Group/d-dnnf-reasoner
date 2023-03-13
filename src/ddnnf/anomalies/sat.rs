@@ -43,7 +43,7 @@ impl Ddnnf {
     }
 
     #[inline]
-    // CComputes if a node is sat
+    // Computes if a node is sat
     pub(crate) fn sat_node_default(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {

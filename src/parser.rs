@@ -18,9 +18,6 @@ use std::{
 use rug::{Integer, Complete};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-pub mod bufreader_for_big_files;
-use bufreader_for_big_files::BufReaderMl;
-
 use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
 
 use petgraph::graph::DiGraph;
@@ -101,7 +98,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
     let mut true_nodes = Vec::new();
 
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
+    // opens the file with a BufReader and
     // works off each line of the file data seperatly
     // skip the first line, because we already looked at the header
     for line in lines.into_iter().skip(1) {
@@ -235,7 +232,7 @@ fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
         ddnnf_graph.add_edge(and_node, to, ());
     };
 
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
+    // opens the file with a BufReader and
     // works off each line of the file data seperatly
     for line in lines {
         let next: D4Token = lex_line_d4(line.as_ref()).unwrap().1;
@@ -507,16 +504,17 @@ fn calc_or_count(
 ///
 /// Panics for a path to a non existing file
 pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
-    let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
+    // opens the file with a BufReader and
+    // works off each line of the file data seperatly
+    let file = File::open(path).unwrap();
+    let lines = BufReader::new(file)
+        .lines()
+        .map(|line| line.expect("Unable to read line"));
     let mut parsed_queries: Vec<(usize, Vec<i32>)> = Vec::new();
 
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
-    // works off each line of the file data seperatly
-    for (line_number, line) in buf_reader.enumerate() {
-        let l = line.expect("Unable to read line");
-
+    for (line_number, line) in lines.enumerate() {
         // takes a line of the file and parses the i32 values
-        let res: Vec<i32> = l.as_ref().split_whitespace().into_iter()
+        let res: Vec<i32> = line.split_whitespace().into_iter()
         .map(|elem| elem.to_string().parse::<i32>()
             .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
         ).collect();

@@ -7,14 +7,15 @@ use crate::Ddnnf;
 
 use std::hash::Hash;
 
+/// A quite basic union-find implementation that uses ranks and path compresion
 #[derive(Debug, Clone, PartialEq)]
-pub struct UnionFind<N: Hash + Eq + Clone> {
+struct UnionFind<N: Hash + Eq + Clone> {
     size: usize,
     parents: FxHashMap<N, N>,
     rank: FxHashMap<N, usize>,
 }
 
-pub trait UnionFindTrait<N: Eq + Hash + Clone> {
+trait UnionFindTrait<N: Eq + Hash + Clone> {
     fn find(&mut self, node: N) -> N;
     fn equiv(&mut self, x: N, y: N) -> bool;
     fn union(&mut self, x: N, y: N);
@@ -30,7 +31,7 @@ where T: Eq + Hash + Clone {
 
 impl<T> UnionFind<T>
 where T: Eq + Hash + Clone {
-    pub fn new() -> UnionFind<T> {
+    fn new() -> UnionFind<T> {
         let parents: FxHashMap<T, T> = FxHashMap::default();
         let rank: FxHashMap<T, usize> = FxHashMap::default();
 
@@ -39,10 +40,6 @@ where T: Eq + Hash + Clone {
             parents,
             rank,
         }
-    }
-
-    pub fn entries(&self) -> Vec<T> {
-        self.rank.clone().into_keys().collect()
     }
 }
 

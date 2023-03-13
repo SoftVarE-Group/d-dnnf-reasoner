@@ -2,13 +2,12 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::Parser;
-use ddnnf_lib::parser::bufreader_for_big_files::BufReaderMl;
 use rustc_hash::FxHashMap;
 
 use std::time::Instant;
 
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufWriter, Write, BufRead, BufReader};
 
 pub use ddnnf_lib::parser as dparser;
 pub use dparser::c2d_lexer;
@@ -121,14 +120,16 @@ fn preprocess(path: &str) -> Vec<C2DToken> {
 
 // generates a token stream from a file path
 fn get_token_stream(path: &str) -> Vec<C2DToken> {
-    let buf_reader = BufReaderMl::open(path).expect("Unable to open file");
+    let file = File::open(path).unwrap();
+    let lines = BufReader::new(file)
+        .lines()
+        .map(|line| line.expect("Unable to read line"));
     // we do not know the capacity beforehand without applying semmantics but we know that the file will often be quite big
     let mut parsed_tokens: Vec<C2DToken> = Vec::with_capacity(10000);
 
-    // opens the file with a BufReaderMl which is similar to a regular BufReader
+    // opens the file with a BufReader and
     // works off each line of the file data seperatly
-    for line in buf_reader {
-        let line = line.expect("Unable to read line");
+    for line in lines {
         parsed_tokens.push(dparser::c2d_lexer::lex_line(line.as_ref()).unwrap().1);
     }
 

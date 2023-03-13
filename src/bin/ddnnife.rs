@@ -1,5 +1,3 @@
-//#![warn(clippy::all, clippy::pedantic)]
-
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -18,7 +16,8 @@ use ddnnf_lib::ddnnf::Ddnnf;
 use ddnnf_lib::parser::{self as dparser, persisting::write_ddnnf};
 
 #[derive(Parser)]
-#[command(author, version, about, arg_required_else_help(true), help_template("\
+#[command(author, version, about, arg_required_else_help(true),
+help_template("\
 {before-help}{name} {version}
 {author-with-newline}{about-with-newline}
 {usage-heading} {usage}
@@ -116,6 +115,7 @@ fn main() {
         ddnnf = dparser::build_ddnnf(ddnnf_path, cli.ommited_features)
     }
 
+    // print additional output, iff we are not in the stream mode
     if !cli.stream {
         let elapsed_time = time.elapsed().as_secs_f32();
         println!(
@@ -215,7 +215,7 @@ fn main() {
 
                     let response = ddnnf.handle_stream_msg(&buffer);
 
-                    if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/".as_bytes()).unwrap(); break; }
+                    if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/\n".as_bytes()).unwrap(); break; }
                     
                     handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
                     handle_out.flush().unwrap();
@@ -244,6 +244,8 @@ fn main() {
     }
 }
 
+// Uses the supplied file path if there is any.
+// If there is no prefix, we switch to the default fallback.
 fn build_file_path(maybe_prefix: Option<Vec<String>>, fallback: &String, postfix: &str) -> String {
     let potential_path = maybe_prefix.unwrap();
     let mut custom_file_path;
@@ -257,6 +259,7 @@ fn build_file_path(maybe_prefix: Option<Vec<String>>, fallback: &String, postfix
     custom_file_path
 }
 
+// spawns a new thread that listens on stdin and delivers its request to the stream message handling
 fn spawn_stdin_channel() -> Receiver<String> {
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || {
