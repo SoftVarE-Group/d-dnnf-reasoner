@@ -3,6 +3,12 @@ use std::usize::MAX;
 use std::{path::Path};
 
 use itertools::Itertools;
+use nom::IResult;
+use nom::branch::alt;
+use nom::bytes::complete::tag;
+use nom::character::complete::{digit1, char};
+use nom::combinator::{map_res, opt, recognize};
+use nom::sequence::{tuple, pair};
 
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
@@ -36,17 +42,21 @@ impl Ddnnf {
             match args[param_index-1] {
                 "a" | "assumptions" => {
                     params = match get_numbers(&args[param_index..], self.number_of_variables) {
-                        Ok(v) => v,
+                        Ok(v) => {
+                            param_index += v.1;
+                            v.0
+                        },
                         Err(e) => return e,
                     };
-                    param_index += params.len();
                 },
                 "v" | "variables" => {
                     values = match get_numbers(&args[param_index..], self.number_of_variables) {
-                        Ok(v) => v,
+                        Ok(v) => {
+                            param_index += v.1;
+                            v.0
+                        },
                         Err(e) => return e,
                     };
-                    param_index += values.len();
                 },
                 "seed" | "s" | "limit" | "l" | "path" | "p" => {
                     if param_index < args.len() {
@@ -220,17 +230,66 @@ fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
     .join(";")
 }
 
-fn get_numbers(params: &[&str], boundary: u32) -> Result<Vec<i32>, String> {
+// parses numbers and ranges of the form START..[STOP] into a vector of i32
+fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), String> {
     let mut numbers = Vec::new();
-    for param in params.iter() {
+    let mut parsed_str_count = 0;
+
+    for &param in params.iter() {
         if param.chars().any(|c| c.is_alphabetic()) {
-            return Ok(numbers);
+            return Ok((numbers, parsed_str_count));
         }
-        match param.parse::<i32>() {
-            Ok(num) => numbers.push(num),
-            Err(e) => return Err(format!("E3 error: {}", e)),
+
+        fn signed_number(input: &str) -> IResult<&str, &str> {
+            recognize(pair(opt(char('-')), digit1))(input)
         }
+
+        // try parsing by starting with the most specific combination and goind
+        // to the least specific one
+        let range: IResult<&str, Vec<i32>> = 
+            alt((
+                // limited range
+                map_res(
+                    tuple((signed_number, tag(".."), signed_number)),
+                    |s: (&str, &str, &str) | {
+                        match (s.0.parse::<i32>(), s.2.parse::<i32>()) {
+                            // start and stop are inclusive (removing the '=' would make stop exclusive)
+                            (Ok(start), Ok(stop)) => Ok((start..=stop).collect()),
+                            (Ok(_), Err(e)) |
+                            (Err(e), _) => Err(e)
+                        }
+                    }
+                ),
+                // unlimited range
+                map_res(
+                    pair(signed_number, tag("..")),
+                    |s: (&str, &str) | {
+                        match s.0.parse::<i32>() {
+                            Ok(start) => Ok((start..=boundary as i32).collect()),
+                            Err(e) => Err(e)
+                        }
+                    }
+                ),
+                // single number
+                map_res(
+                    signed_number,
+                    |s: &str| {
+                        match s.parse::<i32>() {
+                            Ok(v) => Ok(vec![v]),
+                            Err(e) => Err(e),
+                        }
+                    }
+                )
+            ))(param);
+
+        match range {
+            // '0' isn't valid in this context and gets removed
+            Ok(num) => num.1.into_iter().for_each(|f| if f != 0 { numbers.push(f) }),
+            Err(e) => return Err(format!("E3 {}", e)),
+        }
+        parsed_str_count += 1;
     }
+
     if numbers.is_empty() {
         return Err(String::from(
             "E4 error: option used but there was no value supplied",
@@ -241,7 +300,8 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<Vec<i32>, String> {
         return Err(format!("E3 error: not all parameters are within the boundary of {} to {}", -(boundary as i32), boundary as i32));
     }
 
-    Ok(numbers)
+    println!("{:?}, {:?}", numbers, parsed_str_count);
+    Ok((numbers, parsed_str_count))
 }
 
 #[cfg(test)]
@@ -274,7 +334,7 @@ mod test {
         );
         assert_eq!(
             String::from(""),
-            auto1.handle_stream_msg("core v 1 2 3 -1 -2 -3")
+            auto1.handle_stream_msg("core v -3..3")
         );
         assert_eq!(
             String::from("67;-58"),
@@ -283,6 +343,10 @@ mod test {
         assert_eq!(
             String::from("4;5;6"), // count p 1 2 3 == 0
             auto1.handle_stream_msg("core a 1 2 3 v 4 5 6")
+        );
+        assert_eq!(
+            String::from("8640;8640;2880;2880;2880"),
+            vp9.handle_stream_msg("count v 1..5 a 24..26")
         );
 
         assert_eq!(
@@ -482,11 +546,11 @@ mod test {
         );
         assert_eq!(
             String::from("1 2 6 10"),
-            vp9.handle_stream_msg("atomic v 1 2 3 4 5 6 7 8 9 10")
+            vp9.handle_stream_msg("atomic v 1..10")
         );
         assert_eq!(
             String::from("15 19 25"),
-            vp9.handle_stream_msg("atomic v 15 16 17 18 19 20 21 22 23 24 25 a 1 2 6 10 15")
+            vp9.handle_stream_msg("atomic v 15..25 a 1 2 6 10 15")
         );
         assert_eq!(
             String::from("1 2 3 6 10 15 19 25 31 40;4 5"),
@@ -597,30 +661,33 @@ mod test {
     #[test]
     fn test_get_numbers() {
         assert_eq!(
-            Ok(vec![1, -2, 3]),
+            Ok((vec![1, -2, 3], 3)),
             get_numbers(vec!["1", "-2", "3"].as_ref(), 4)
         );
         assert_eq!(
-            Ok(vec![1, -2, 3]),
+            Ok((vec![1, -2, 3], 3)),
             get_numbers(vec!["1", "-2", "3", "v", "4"].as_ref(), 5)
         );
 
-        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "3"].as_ref(), 10));
         assert_eq!(
-            Ok(vec![]),
+            Ok((vec![], 0)),
+            get_numbers(vec!["a", "1", "-2", "3"].as_ref(), 10)
+        );
+        assert_eq!(
+            Ok((vec![], 0)),
             get_numbers(vec!["another_param", "1", "-2", "3"].as_ref(), 10)
         );
 
         assert_eq!(
-            Err(String::from("E3 error: invalid digit found in string")),
+            Err(String::from("E3 Parsing Error: Error { input: \" \", code: Digit }")),
             get_numbers(vec!["1", "-2", "3", " ", "4"].as_ref(), 10)
         );
         assert_eq!(
-            Err(String::from("E3 error: invalid digit found in string")),
-            get_numbers(vec!["1", "-2", "3.0", "v", "4"].as_ref(), 10)
+            Ok((vec![1, -2, 3], 4)),
+            get_numbers(vec!["1", "-2", "0", "3.5", "v", "4"].as_ref(), 10)
         );
         assert_eq!(
-            Err(String::from("E3 error: invalid digit found in string")),
+            Err(String::from("E3 Parsing Error: Error { input: \"-3\", code: Digit }")),
             get_numbers(vec!["1", "-2", "--3", " ", "4"].as_ref(), 10)
         );
         assert_eq!(
@@ -632,6 +699,33 @@ mod test {
             Err(String::from("E3 error: not all parameters are within the boundary of -10 to 10")),
             get_numbers(vec!["1", "-2", "-300", "4"].as_ref(), 10)
         );
-        assert_eq!(Ok(vec![]), get_numbers(vec!["a", "1", "-2", "30"].as_ref(), 10));
+        assert_eq!(
+            Ok((vec![], 0)),
+            get_numbers(vec!["a", "1", "-2", "30"].as_ref(), 10)
+        );
+    }
+
+    #[test]
+    fn test_number_ranges() {
+        assert_eq!(
+            Ok((vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)),
+            get_numbers(vec!["1..10", "v", "4"].as_ref(), 20)
+        );
+        assert_eq!(
+            Ok(((1..=20).collect_vec(), 1)),
+            get_numbers(vec!["1..", "v", "4"].as_ref(), 20)
+        );
+        assert_eq!(
+            Ok((vec![-1, 1, 2, 3, 4, 6, 8, 9, 10], 3)),
+            get_numbers(vec!["-1..4", "6", "8..10", "v", "4"].as_ref(), 20)
+        );
+        assert_eq!(
+            Ok((vec![5, 6, 7], 3)),
+            get_numbers(vec!["5..2", "5..5", "6..7"].as_ref(), 20)
+        );
+        assert_eq!(
+            Ok((vec![1, 2, 3, 4, 5], 1)),
+            get_numbers(vec!["1..5", "a", "6", "7", "3", "4", "5"].as_ref(), 20)
+        );
     }
 }
