@@ -1,6 +1,6 @@
 # ddnnife a d-dnnf-reasoner
 
-ddnnife takes a smooth d-DNNF as input following the [standard format specified by c2d](http://reasoning.cs.ucla.edu/c2d/). After parsing and storing the d-DNNF, ddnnife can be used to compute the cardinality of single features, all features, or partial configurations. Beside that, ddnnife offers multiple additional features.
+ddnnife takes a smooth d-DNNF as input following the [standard format specified by c2d](http://reasoning.cs.ucla.edu/c2d/) or a d-DNNF conforming the [d4 standard](https://github.com/crillab/d4), which is an extension of the c2d standard. After parsing and storing the d-DNNF, ddnnife can be used to compute the cardinality of single features, all features, or partial configurations. Additionally, via the stream API, ddnnife is able to compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations, and produce uniform random samples. 
 
 # Table of contents
 1. [Building ](#building)
