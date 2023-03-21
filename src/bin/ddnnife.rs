@@ -64,7 +64,7 @@ struct Cli {
 
     /// Mulitple queries that follow the feature format and the qeries themself are seperatated by \"\\n\".
     /// The option takes a file with queries as first argument and an optional second argument for saving the results.
-    /// Default output file is '{FILE_NAME}-queries.txt'.
+    /// Default output file is '{FILE_NAME}-queries.csv'.
     #[arg(short, long, num_args = 1..=2, verbatim_doc_comment)]
     queries: Option<Vec<String>>,
 
@@ -147,7 +147,7 @@ fn main() {
         Path::new(&cli.file_path.unwrap_or(String::from("ddnnf.nnf")))
         .with_extension("").file_name().unwrap().to_str().unwrap());
 
-    // computes the cardinality of partial configurations and saves the results in a .txt file
+    // computes the cardinality of partial configurations and saves the results in a .csv file
     // the results do not have to be in the same order if the number of threads is greater than one
     if cli.queries.is_some() {
         let params: Vec<String> = cli.queries.unwrap();
@@ -157,7 +157,7 @@ fn main() {
             exit(1);
         }
         let config_path = &params[0];
-        let file_path_out = &format!("{}-queries.txt",
+        let file_path_out = &format!("{}-queries.csv",
             if params.len() == 2 {
                 &params[1]
             } else {

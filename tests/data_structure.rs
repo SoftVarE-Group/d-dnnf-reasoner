@@ -40,9 +40,9 @@ fn card_of_features_test() {
 
 #[test]
 fn card_of_pc_test() {
-    let c2d_out = "./tests/data/auto1_c2d_pc.txt";
-    let d4_out = "./tests/data/auto1_d4_pc.txt";
-    let sb_file_path = "./tests/data/auto1_sb_pc.txt";
+    let c2d_out = "./tests/data/auto1_c2d_pc.csv";
+    let d4_out = "./tests/data/auto1_d4_pc.csv";
+    let sb_file_path = "./tests/data/auto1_sb_pc.csv";
     let config_file = "./tests/data/auto1.config";
 
     let mut ddnnf: Ddnnf =

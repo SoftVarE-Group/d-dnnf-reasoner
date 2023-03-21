@@ -17,9 +17,12 @@ valcom
 build.rs
 *.zip
 
+# ddnnife config input
+*.config
+
 # ddnnife output files (direct and indirect)
 *-features.csv
-*-queries.txt
+*-queries.csv
 *-anomalies.txt
 *-saved.nnf
 *-mermaid.md
