@@ -1,5 +1,8 @@
-use std::iter::FromIterator;
+use std::iter::{FromIterator};
+use std::usize::MAX;
 use std::{path::Path};
+
+use itertools::Itertools;
 
 use crate::Ddnnf;
 use crate::parser::persisting::write_ddnnf;
@@ -132,7 +135,7 @@ impl Ddnnf {
             "enum" => {
                 let limit_interpretation = match limit {
                     Some(limit) => limit,
-                    None => 1,
+                    None => MAX,
                 };
                 let configs = self.enumerate(&mut params, limit_interpretation);
                 match configs {
@@ -151,6 +154,17 @@ impl Ddnnf {
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             }
+            "atomic" => {
+                if values.iter().any(|&f| f.is_negative()) {
+                    return String::from("E5 error: candidates must be positive");
+                }
+                let candidates = if !values.is_empty()  {
+                    Some(values.iter().map(|&f| f as u32).collect_vec())
+                } else {
+                    None
+                };
+                format_vec_vec(self.get_atomic_sets(candidates, &params).iter())
+            },
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
@@ -164,7 +178,7 @@ impl Ddnnf {
                     Err(e) => format!("E6 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
                 }
             },
-            "atomic" | "uni_random" | "t-wise_sampling" => {
+            "t-wise_sampling" => {
                 String::from("E1 error: not yet supported")
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),
@@ -237,14 +251,14 @@ mod test {
     use itertools::Itertools;
 
     use super::*;
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     #[test]
     fn handle_stream_msg_core() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = auto1.handle_stream_msg("core");
         let res = binding.split(" ").collect::<Vec<&str>>();
@@ -290,7 +304,7 @@ mod test {
     #[test]
     fn handle_stream_msg_count() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from(
@@ -319,7 +333,7 @@ mod test {
     #[test]
     fn handle_stream_msg_sat() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("true;true;false"),
@@ -345,9 +359,9 @@ mod test {
     #[test]
     fn handle_stream_msg_enum() {
         let mut _auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
         let res: Vec<&str> = binding.split(";").collect_vec();
@@ -388,9 +402,9 @@ mod test {
     #[test]
     fn handle_stream_msg_random() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
@@ -438,9 +452,56 @@ mod test {
     }
 
     #[test]
+    fn handle_stream_msg_atomic() {
+        let mut vp9: Ddnnf =
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+
+        assert_eq!(
+            String::from("E4 error: the option \"sets\" is not valid in this context"),
+            vp9.handle_stream_msg("atomic sets")
+        );
+        assert_eq!(
+            String::from("E2 error: the operation \"atomic_sets\" is not supported"),
+            vp9.handle_stream_msg("atomic_sets")
+        );
+
+        // negative assumptions are allowed
+        assert_eq!(
+            String::from("1 2 3 6 10 15 19 25 30 31 40;4 5 26 27 28 29"),
+            vp9.handle_stream_msg("atomic a 1 2 6 -4 30 -5")
+        );
+        // but negated variables are not allowed, because by definition atomic sets can't contain negated features
+        assert_eq!(
+            String::from("E5 error: candidates must be positive"),
+            vp9.handle_stream_msg("atomic v -1 a 1 2 6 -4 30 -5")
+        );
+
+        assert_eq!(
+            String::from("1 2 6 10 15 19 25 31 40"),
+            vp9.handle_stream_msg("atomic")
+        );
+        assert_eq!(
+            String::from("1 2 6 10"),
+            vp9.handle_stream_msg("atomic v 1 2 3 4 5 6 7 8 9 10")
+        );
+        assert_eq!(
+            String::from("15 19 25"),
+            vp9.handle_stream_msg("atomic v 15 16 17 18 19 20 21 22 23 24 25 a 1 2 6 10 15")
+        );
+        assert_eq!(
+            String::from("1 2 3 6 10 15 19 25 31 40;4 5"),
+            vp9.handle_stream_msg("atomic a 1 2 3")
+        );
+        assert_eq!( // an unsat query results in an atomic set that contains one subset which contains all features
+            format_vec((1..=42).into_iter()),
+            vp9.handle_stream_msg("atomic a 4 5")
+        );
+    }
+
+    #[test]
     fn handle_stream_msg_save() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let binding = env::current_dir().unwrap();
         let working_dir = binding.to_str().unwrap();
 
@@ -481,7 +542,7 @@ mod test {
     #[test]
     fn handle_stream_msg_other() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("exit"),
@@ -492,7 +553,7 @@ mod test {
     #[test]
     fn handle_stream_msg_error() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         assert_eq!(
             String::from("E4 error: got an empty msg"),
             auto1.handle_stream_msg("")

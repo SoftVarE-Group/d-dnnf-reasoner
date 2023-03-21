@@ -3,7 +3,7 @@ use rustc_hash::FxHashSet;
 use crate::{Ddnnf};
 
 impl Ddnnf {
-        /// Computes all core features
+    /// Computes all core features
     /// A feature is a core feature iff there exists only the positiv occurence of that feature
     pub(crate) fn get_core(&mut self) {
         self.core = (1..=self.number_of_variables as i32)

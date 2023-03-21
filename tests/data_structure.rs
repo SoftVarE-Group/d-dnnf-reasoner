@@ -11,7 +11,7 @@ use std::fs::File;
 fn card_of_features_test() {
     let c2d_out = "./tests/data/auto1_c2d_fs.csv";
     let mut ddnnf: Ddnnf =
-        parser::build_ddnnf_tree_with_extras("./tests/data/auto1_c2d.nnf");
+        parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
     ddnnf
         .card_of_each_feature(c2d_out)
         .unwrap_or_default();
@@ -25,7 +25,7 @@ fn card_of_features_test() {
 
     let d4_out = "./tests/data/auto1_d4_fs.csv";
     let mut ddnnf: Ddnnf =
-        parser::build_d4_ddnnf_tree("./tests/data/auto1_d4.nnf", 2513);
+        parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
     ddnnf
         .card_of_each_feature(d4_out)
         .unwrap_or_default();
@@ -40,13 +40,13 @@ fn card_of_features_test() {
 
 #[test]
 fn card_of_pc_test() {
-    let c2d_out = "./tests/data/auto1_c2d_pc.txt";
-    let d4_out = "./tests/data/auto1_d4_pc.txt";
-    let sb_file_path = "./tests/data/auto1_sb_pc.txt";
+    let c2d_out = "./tests/data/auto1_c2d_pc.csv";
+    let d4_out = "./tests/data/auto1_d4_pc.csv";
+    let sb_file_path = "./tests/data/auto1_sb_pc.csv";
     let config_file = "./tests/data/auto1.config";
 
     let mut ddnnf: Ddnnf =
-        parser::build_ddnnf_tree_with_extras("tests/data/auto1_c2d.nnf");
+        parser::build_ddnnf("tests/data/auto1_c2d.nnf", None);
     ddnnf.max_worker = 1;
     ddnnf
         .card_multi_queries(config_file, c2d_out)
@@ -60,7 +60,7 @@ fn card_of_pc_test() {
     fs::remove_file(c2d_out).unwrap();
 
     let mut ddnnf: Ddnnf =
-        parser::build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+        parser::build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
     ddnnf.max_worker = 1;
     ddnnf
         .card_multi_queries(config_file, d4_out)
@@ -77,6 +77,6 @@ fn card_of_pc_test() {
 #[test]
 fn heuristics_test() {
     let mut ddnnf: Ddnnf =
-        parser::build_ddnnf_tree_with_extras("./tests/data/auto1_c2d.nnf");
+        parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
     ddnnf.print_all_heuristics();
 }

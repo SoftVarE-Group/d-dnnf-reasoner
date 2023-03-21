@@ -7,7 +7,7 @@ use crate::{Ddnnf, parser};
 impl Ddnnf{
     #[inline]
     /// Computes the cardinality of partial configurations for all queries in path_in.
-    /// The results are saved in the path_out. The .txt ending always gets added to the user input.
+    /// The results are saved in the path_out. The .csv ending always gets added to the user input.
     /// The function uses the marking approach for configurations with <= 10 features. For larger
     /// queries we use the "standard" approach without marking.
     /// Here the number of threads influence the speed by using a shared work queue.
@@ -22,12 +22,12 @@ impl Ddnnf{
     ///
     /// // create a ddnnf
     /// // and run the queries
-    /// let mut ddnnf: Ddnnf = build_ddnnf_tree_with_extras("./tests/data/small_test.dimacs.nnf");
+    /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
     /// ddnnf.card_multi_queries(
     ///     "./tests/data/small_test.config",
-    ///     "./tests/data/smt_out.txt",)
+    ///     "./tests/data/smt_out.csv",)
     ///     .unwrap_or_default();
-    /// let _rm = fs::remove_file("./tests/data/smt_out.txt");
+    /// let _rm = fs::remove_file("./tests/data/smt_out.csv");
     ///
     /// ```
     pub fn card_multi_queries(
@@ -125,9 +125,8 @@ impl Ddnnf{
             threads.push(handle);
         }
 
-        // start the file writer with the file_path
-        let f = File::create(path_out).expect("Unable to create file");
-        let mut wtr = BufWriter::new(f);
+        // start the csv writer with the file_path
+        let mut wtr = csv::Writer::from_path(path_out)?;
         let mut results = Vec::new();
 
         // Get completed work from the channel while there's work to be done.
@@ -152,8 +151,7 @@ impl Ddnnf{
                 acc + &num.to_string() + " "
             });
             features_str.pop();
-            let data = &format!("{},{}\n", features_str, result.2);
-            wtr.write_all(data.as_bytes())?;
+            wtr.write_record(vec![features_str, result.2.to_string()])?;
         }
 
         // Just make sure that all the other threads are done.
@@ -176,57 +174,57 @@ mod test {
 
     use file_diff::diff_files;
 
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     use super::*;
 
     #[test]
     fn card_multi_queries() {
-        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
+        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcs.csv").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcm.txt").unwrap();
+        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcm.csv").unwrap();
 
-        let mut is_single = File::open("./tests/data/pcs.txt").unwrap();
-        let mut is_multi = File::open("./tests/data/pcm.txt").unwrap();
-        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+        let mut is_single = File::open("./tests/data/pcs.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
 
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
-        is_single = File::open("./tests/data/pcs.txt").unwrap();
+        is_single = File::open("./tests/data/pcs.csv").unwrap();
         assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
 
-        fs::remove_file("./tests/data/pcs.txt").unwrap();
-        fs::remove_file("./tests/data/pcm.txt").unwrap();
+        fs::remove_file("./tests/data/pcs.csv").unwrap();
+        fs::remove_file("./tests/data/pcm.csv").unwrap();
     }
 
     #[test]
     fn test_equality_single_and_multi() {
-        let mut ddnnf: Ddnnf = build_d4_ddnnf_tree("./tests/data/VP9_d4.nnf", 42);
+        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
-        ddnnf.card_multi_queries_single("./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
-        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm1.txt").unwrap();
+        ddnnf.card_multi_queries_single("./tests/data/VP9.config", "./tests/data/pcs1.csv").unwrap();
+        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm1.csv").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm4.txt").unwrap();
+        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm4.csv").unwrap();
 
-        let mut is_single = File::open("./tests/data/pcs1.txt").unwrap();
-        let mut is_multi = File::open("./tests/data/pcm1.txt").unwrap();
-        let mut is_multi4 = File::open("./tests/data/pcm4.txt").unwrap();
-        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+        let mut is_single = File::open("./tests/data/pcs1.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm1.csv").unwrap();
+        let mut is_multi4 = File::open("./tests/data/pcm4.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
     
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
-        is_single = File::open("./tests/data/pcs1.txt").unwrap();
-        is_multi = File::open("./tests/data/pcm1.txt").unwrap();
+        is_single = File::open("./tests/data/pcs1.csv").unwrap();
+        is_multi = File::open("./tests/data/pcm1.csv").unwrap();
         assert!(diff_files(&mut is_multi, &mut is_multi4), "partial config for multiple threads differs when using multiple threads");
         assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
 
-        fs::remove_file("./tests/data/pcs1.txt").unwrap();
-        fs::remove_file("./tests/data/pcm1.txt").unwrap();
-        fs::remove_file("./tests/data/pcm4.txt").unwrap();
+        fs::remove_file("./tests/data/pcs1.csv").unwrap();
+        fs::remove_file("./tests/data/pcm1.csv").unwrap();
+        fs::remove_file("./tests/data/pcm4.csv").unwrap();
     }
 }

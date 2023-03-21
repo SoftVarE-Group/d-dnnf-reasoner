@@ -1,4 +1,4 @@
-use std::{cmp::min, sync::Mutex, collections::HashMap};
+use std::{cmp::min, sync::{Mutex, Arc}, collections::HashMap};
 
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -13,7 +13,7 @@ use crate::Ddnnf;
 
 use super::node::NodeType::*;
 
-static ENUMERATION_CACHE: Lazy<Mutex<HashMap<Vec<i32>,usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>,usize>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 impl Ddnnf {
     /// Creates satisfiable complete configurations for a ddnnf and given assumptions
@@ -34,7 +34,7 @@ impl Ddnnf {
             };
 
             let mut sample_list = 
-                self.enumerate_node((&Integer::from(last_stop), &min(self.rt(), Integer::from(last_stop + amount))), self.number_of_nodes-1);
+                self.enumerate_node((&Integer::from(last_stop), &min(self.rt(), Integer::from(last_stop + amount))), self.nodes.len()-1);
             for sample in sample_list.iter_mut() {
                 sample.sort_unstable_by_key(|f| f.abs());
             }
@@ -52,13 +52,13 @@ impl Ddnnf {
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
     /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
     /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned. 
-    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &Vec<i32>, amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
+    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &[i32], amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
         if !self.preprocess_config_creation(assumptions) {
             return None;
         }
         
         if self.execute_query(&assumptions) > 0 {
-            let mut sample_list = self.sample_node(amount, self.number_of_nodes-1, &mut Pcg32::seed_from_u64(seed));
+            let mut sample_list = self.sample_node(amount, self.nodes.len()-1, &mut Pcg32::seed_from_u64(seed));
             for sample in sample_list.iter_mut() {
                 sample.sort_unstable_by_key(|f| f.abs());
             }
@@ -70,7 +70,7 @@ impl Ddnnf {
     // resets the temp count of each node to the cached count,
     // computes the count under the assumptions to set some of the temp values,
     // and handle the literals properly.
-    fn preprocess_config_creation(&mut self, assumptions: &Vec<i32>) -> bool {
+    fn preprocess_config_creation(&mut self, assumptions: &[i32]) -> bool {
         // if any of the assumptions isn't valid by being in the range of +-#variables, then we return false
         if assumptions.iter().any(|f| f.abs() > self.number_of_variables as i32) {
             return false;
@@ -208,7 +208,7 @@ impl Ddnnf {
                     
                     // can't get a sample of a children with no more valid configuration
                     if child_count_as_float != 0 {
-                        let child_amount = (&parent_count_as_float / child_count_as_float).to_f64() * amount as f64;
+                        let child_amount = (child_count_as_float / &parent_count_as_float).to_f64() * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
                     }
@@ -253,19 +253,18 @@ impl Ddnnf {
 }
 
 #[cfg(test)]
-#[cfg_attr(coverage_nightly, no_coverage)]
 mod test {
     use std::{collections::HashSet};
 
     use rand::thread_rng;
 
     use super::*;
-    use crate::parser::build_d4_ddnnf_tree;
+    use crate::parser::build_ddnnf;
 
     #[test]
     fn enumeration_small_ddnnf() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let mut res_all = HashSet::new();
         let mut res_assumptions = HashSet::new();
@@ -295,7 +294,11 @@ mod test {
         assert_eq!(vp9.rt(), res_all.len(), "there are duplicates");
 
 
+        assert_eq!(80, vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        for inter in inter_res_assumptions_2.clone() {
+            res_assumptions.insert(inter);
+        }
         assert_eq!(40, inter_res_assumptions_2.len());
         
         // the cycle for that set of assumptions starts again
@@ -304,13 +307,14 @@ mod test {
             res_assumptions.insert(inter);
         }
         assert_eq!(40, inter_res_assumptions_3.len());
-        assert_eq!(40, res_assumptions.len(), "because of the cycle we should have gotten duplicates");
+        // if there is no cycle, we request 40 configs for the 3rd time resulting in a total of 120
+        assert_eq!(80, res_assumptions.len(), "because of the cycle we should have gotten duplicates");
     }
 
     #[test]
     fn enumeration_big_ddnnf() {
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![1, -2, -3, 4, -5, 6, 7, 8, -9, -10, 11, -12, -13, 100, -101, 102];
@@ -330,7 +334,7 @@ mod test {
     #[test]
     fn enumeration_step_by_step() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);  
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));  
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![-35, 42];
@@ -373,9 +377,9 @@ mod test {
     #[test]
     fn enumeration_is_not_possible() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
         assert!(vp9.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1).is_none());
@@ -389,9 +393,9 @@ mod test {
     #[test]
     fn sampling_validity() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let vp9_assumptions= vec![38, 2, -14];
         let vp9_samples = vp9.uniform_random_sampling(&vp9_assumptions, 1_000, 42).unwrap();
@@ -410,9 +414,9 @@ mod test {
     #[test]
     fn sampling_seeding() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // same seeding should yield same results, different seeding should (normally) yield different results
         assert_eq!(
@@ -445,9 +449,9 @@ mod test {
     #[test]
     fn sampling_is_not_possible() {
         let mut vp9: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/VP9_d4.nnf", 42);
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
-            build_d4_ddnnf_tree("tests/data/auto1_d4.nnf", 2513);
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.uniform_random_sampling(&mut vec![1, -1], 1, 42).is_none());
         assert!(vp9.uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42).is_none());
