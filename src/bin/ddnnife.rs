@@ -13,7 +13,7 @@ use std::thread::{self};
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{self as dparser, persisting::write_ddnnf};
+use ddnnf_lib::parser::{self as dparser, persisting::{write_as_mermaid_md, write_ddnnf}};
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true),
@@ -83,6 +83,12 @@ struct Cli {
     /// Alternatively, you can choose a name. The .nnf ending is added automatically.
     #[arg(short, long, num_args = 0..=1, verbatim_doc_comment)]
     save_ddnnf: Option<Vec<String>>,
+
+    /// Transform the smooth d-DNNF into the mermaid.md format.
+    /// Default output file is '{FILE_NAME}-mermaid.md'.
+    /// Alternatively, you can choose a name. The .md ending is added automatically.
+    #[arg(short, long, num_args = 0..=1, verbatim_doc_comment)]
+    mermaid: Option<Vec<String>>,
 
     /// Specify how many threads should be used. Default is 4.
     /// Possible values are between 1 and 32.
@@ -238,18 +244,16 @@ fn main() {
 
     // writes the d-DNNF to file
     if cli.save_ddnnf.is_some() {
-        let path = build_file_path(cli.save_ddnnf, &file_path, "--saved.nnf");
+        let path = build_file_path(cli.save_ddnnf, &file_path, "-saved.nnf");
         write_ddnnf(&mut ddnnf, &path).unwrap();
         println!("\nThe smooth d-DNNF was written into the c2d format in {}.", path);
     }
 
     // transforms the d-DNNF to mermaid markdown
-    if matches.contains_id("mermaidify_ddnnf") {
-        let path = &format!(
-            "{}-mermaid.md",
-            matches.get_one::<String>("mermaidify_ddnnf").get_or_insert(&file_path).as_str()
-        );
-        write_as_mermaid_md(&ddnnf, path).unwrap();
+
+    if cli.mermaid.is_some() {
+        let path = build_file_path(cli.mermaid, &file_path, "-mermaid.md");
+        write_as_mermaid_md(&ddnnf, &path).unwrap();
         println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", path);
     }
 }

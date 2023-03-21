@@ -67,7 +67,7 @@ pub fn write_as_mermaid_md(ddnnf: &Ddnnf, path_out: &str) -> std::io::Result<()>
                 style pad1 fill:none, stroke:none\n\t\t\
             end\n");
     lw.write_all(config.as_bytes()).unwrap();
-    lw.write_all(mermaidify_node(ddnnf, ddnnf.number_of_nodes-1).as_bytes())?;
+    lw.write_all(mermaidify_node(ddnnf, ddnnf.nodes.len() - 1).as_bytes())?;
     lw.write_all(b"```").unwrap();
 
     Ok(())
