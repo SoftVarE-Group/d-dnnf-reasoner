@@ -6,50 +6,31 @@ use crate::{Ddnnf, parser};
 
 impl Ddnnf{
     #[inline]
-    /// Computes the cardinality of partial configurations for all queries in path_in.
+    /// Computes the given operation for all queries in path_in.
     /// The results are saved in the path_out. The .txt ending always gets added to the user input.
-    /// The function uses the marking approach for configurations with <= 10 features. For larger
-    /// queries we use the "standard" approach without marking.
-    /// Here the number of threads influence the speed by using a shared work queue.
-    /// The result can be in a different order for iff multiple threads are used.
-    /// # Example
-    /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::Ddnnf;
-    /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
-    /// use std::fs;
-    ///
-    /// // create a ddnnf
-    /// // and run the queries
-    /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
-    /// ddnnf.card_multi_queries(
-    ///     "./tests/data/small_test.config",
-    ///     "./tests/data/smt_out.txt",)
-    ///     .unwrap_or_default();
-    /// let _rm = fs::remove_file("./tests/data/smt_out.txt");
-    ///
-    /// ```
-    pub fn card_multi_queries(
+    /// Here, the number of threads influence the speed by using a shared work queue.
+    pub fn operate_on_queries<T: ToString + Ord + Send + 'static>(
         &mut self,
+        operation: fn(&mut Ddnnf, &[i32]) -> T,
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
         if self.max_worker == 1 {
-            self.card_multi_queries_single(path_in, path_out)
+            self.queries_single_thread(operation, path_in, path_out)
         } else {
-            self.card_multi_queries_multi(path_in, path_out)
+            self.queries_multi_thread(operation, path_in, path_out)
         }
     }
 
-    /// Computes the cardinality of partial configurations for all queries in path_in
+    /// Computes the operation for all queries in path_in
     /// in a multi threaded environment
     /// Here we have to take into account:
     ///     1) using channels for communication
     ///     2) cloning the ddnnf
     ///     3) sorting our results
-    fn card_multi_queries_single(
+    fn queries_single_thread<T: ToString>(
         &mut self,
+        operation: fn(&mut Ddnnf, &[i32]) -> T,
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -59,14 +40,14 @@ impl Ddnnf{
 
         let work_queue: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
 
-        for work in &work_queue {
-            let cardinality = self.execute_query(&work.1);
+        for (_, work) in &work_queue {
+            let cardinality = operation(self, &work);
             let mut features_str =
-            work.1.iter().fold(String::new(), |acc, &num| {
+            work.iter().fold(String::new(), |acc, &num| {
                 acc + &num.to_string() + " "
             });
             features_str.pop();
-            let data = &format!("{},{}\n", features_str, cardinality);
+            let data = &format!("{},{}\n", features_str, cardinality.to_string());
             wtr.write_all(data.as_bytes())?;
         }
 
@@ -75,8 +56,9 @@ impl Ddnnf{
 
     /// Computes the cardinality of partial configurations for all queries in path_in
     /// in a multi threaded environment
-    fn card_multi_queries_multi(
+    fn queries_multi_thread<T: ToString + Ord + Send + 'static>(
         &mut self,
+        operation: fn(&mut Ddnnf, &[i32]) -> T,
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -102,13 +84,13 @@ impl Ddnnf{
             let handle = thread::spawn(move || {
                 // Loop while there's expected to be work, looking for work.
                 // If work is available, do that work.
-                while let Some(work) = t_queue.pull_work() {
+                while let Some((index, work)) = t_queue.pull_work() {
                     // Send the work and the result of that work.
                     //
                     // Sending could fail. If so, there's no use in
                     // doing any more work, so abort.
                     let work_c = work.clone();
-                    match t_results_tx.send((work_c.0, work_c.1, ddnnf.execute_query(&work.1))) {
+                    match t_results_tx.send((index, work_c, operation(&mut ddnnf, &work))) {
                         Ok(_) => (),
                         Err(_) => {
                             break;
@@ -147,12 +129,12 @@ impl Ddnnf{
 
         results.sort_unstable();
 
-        for result in results {
-            let mut features_str = result.1.iter().fold(String::new(), |acc, &num| {
+        for (_, query, result) in results {
+            let mut features_str = query.iter().fold(String::new(), |acc, &num| {
                 acc + &num.to_string() + " "
             });
             features_str.pop();
-            let data = &format!("{},{}\n", features_str, result.2);
+            let data = &format!("{},{}\n", features_str, result.to_string());
             wtr.write_all(data.as_bytes())?;
         }
 
@@ -172,9 +154,10 @@ impl Ddnnf{
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{fs, io::{BufReader, BufRead}};
 
     use file_diff::diff_files;
+    use itertools::Itertools;
 
     use crate::parser::build_ddnnf;
 
@@ -184,10 +167,10 @@ mod test {
     fn card_multi_queries() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_multi_queries("./tests/data/VP9.config", "./tests/data/pcm.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm.txt").unwrap();
 
         let mut is_single = File::open("./tests/data/pcs.txt").unwrap();
         let mut is_multi = File::open("./tests/data/pcm.txt").unwrap();
@@ -203,15 +186,42 @@ mod test {
     }
 
     #[test]
+    fn sat_multi_queries() {
+        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
+        ddnnf.operate_on_queries(Ddnnf::sat, "./tests/data/VP9.config", "./tests/data/sat.csv").unwrap();
+
+        let sat_results = File::open("./tests/data/sat.csv").unwrap();
+        let lines = BufReader::new(sat_results)
+            .lines()
+            .map(|line| line.expect("Unable to read line"));
+    
+        for line in lines {
+            // a line has the format "[QUERY],[RESULT]"
+            let split_query_res = line.split(',').collect_vec();
+
+            // takes a query of the file and parses the i32 values
+            let query: Vec<i32> = split_query_res[0]
+                .split_whitespace().into_iter()
+                .map(|elem| elem.parse::<i32>().unwrap()).collect();
+            let res = split_query_res[1].parse::<bool>().unwrap();
+            
+            assert_eq!(ddnnf.sat(&query), res);
+            assert_eq!(ddnnf.sat(&query), (ddnnf.execute_query(&query) > 0));
+        }
+
+        fs::remove_file("./tests/data/sat.csv").unwrap();
+    }
+
+    #[test]
     fn test_equality_single_and_multi() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
-        ddnnf.card_multi_queries_single("./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
-        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm1.txt").unwrap();
+        ddnnf.queries_single_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm1.txt").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_multi_queries_multi("./tests/data/VP9.config", "./tests/data/pcm4.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm4.txt").unwrap();
 
         let mut is_single = File::open("./tests/data/pcs1.txt").unwrap();
         let mut is_multi = File::open("./tests/data/pcm1.txt").unwrap();

@@ -49,7 +49,7 @@ fn card_of_pc_test() {
         parser::build_ddnnf("tests/data/auto1_c2d.nnf", None);
     ddnnf.max_worker = 1;
     ddnnf
-        .card_multi_queries(config_file, c2d_out)
+        .operate_on_queries(Ddnnf::execute_query, config_file, c2d_out)
         .unwrap_or_default();
 
     let mut should = File::open(sb_file_path).unwrap();
@@ -63,7 +63,7 @@ fn card_of_pc_test() {
         parser::build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
     ddnnf.max_worker = 1;
     ddnnf
-        .card_multi_queries(config_file, d4_out)
+        .operate_on_queries(Ddnnf::execute_query, config_file, d4_out)
         .unwrap_or_default();
 
     let mut should = File::open(sb_file_path).unwrap();

@@ -20,6 +20,7 @@ build.rs
 # ddnnife output files (direct and indirect)
 *-features.csv
 *-queries.txt
+*-sat.csv
 *-anomalies.txt
 *-saved.nnf
 *-mermaid.md

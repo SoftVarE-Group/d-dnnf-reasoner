@@ -515,7 +515,7 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
     for (line_number, line) in lines.enumerate() {
         // takes a line of the file and parses the i32 values
         let res: Vec<i32> = line.split_whitespace().into_iter()
-        .map(|elem| elem.to_string().parse::<i32>()
+        .map(|elem| elem.parse::<i32>()
             .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
         ).collect();
         parsed_queries.push((line_number, res));

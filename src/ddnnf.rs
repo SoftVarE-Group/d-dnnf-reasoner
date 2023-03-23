@@ -2,6 +2,7 @@ pub mod stream;
 pub mod node;
 pub mod heuristics;
 pub mod counting;
+pub mod multiple_queries;
 pub mod anomalies;
 pub mod config_creation;
 
