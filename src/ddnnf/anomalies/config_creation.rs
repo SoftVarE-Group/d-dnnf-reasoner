@@ -10,8 +10,7 @@ use rand::{SeedableRng};
 use rug::{Assign, Rational, Integer};
 
 use crate::Ddnnf;
-
-use super::node::NodeType::*;
+use crate::NodeType::*;
 
 static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>,usize>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 

@@ -4,7 +4,6 @@ pub mod heuristics;
 pub mod counting;
 pub mod multiple_queries;
 pub mod anomalies;
-pub mod config_creation;
 
 use rug::{Integer};
 use rustc_hash::{FxHashMap, FxHashSet};
