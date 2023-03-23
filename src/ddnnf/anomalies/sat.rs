@@ -22,7 +22,7 @@ impl Ddnnf {
     /// That allows reusing that vector and therefore enabeling an efficient method to do decision propogation.
     #[inline]
     pub fn sat_propagate(&mut self, features: &[i32], mark: &mut Vec<bool>) -> bool {
-        if features.iter().any(|f| self.core.contains(&-f) || self.dead.contains(f)) {
+        if features.iter().any(|f| self.makes_query_unsat(f)) {
             return false;
         }
 

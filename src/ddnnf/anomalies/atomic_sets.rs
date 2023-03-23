@@ -297,21 +297,6 @@ mod test {
                 vec![33, 54, 75, 97, 118, 164, 284, 308, 319, 351, 633, 642, 1558, 2010, 2154, 2169, 2193],
                 auto1_atomic_sets[4]
             );
-
-            // There should exactly one atomic set that is a subset of the core and the dead features
-            let auto1_core_features = HashSet::<_>::from_iter(auto1.core.iter().copied()).into_iter().map(|f| f as u16).collect::<Vec<u16>>();
-            assert!(
-                auto1_atomic_sets.iter()
-                .filter(|set| auto1_core_features.iter().all(|f| set.contains(&f)))
-                .exactly_one().is_ok()
-            );
-
-            let auto1_dead_features = HashSet::<_>::from_iter(auto1.dead.iter().copied()).into_iter().map(|f| f as u16).collect::<Vec<u16>>();
-            assert!(
-                auto1_atomic_sets.iter()
-                .filter(|set| auto1_dead_features.iter().all(|f| set.contains(&f)))
-                .exactly_one().is_ok()
-            );
         }
     }
 

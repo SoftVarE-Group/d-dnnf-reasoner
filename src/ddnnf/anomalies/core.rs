@@ -3,26 +3,29 @@ use rustc_hash::FxHashSet;
 use crate::{Ddnnf};
 
 impl Ddnnf {
-    /// Computes all core features
-    /// A feature is a core feature iff there exists only the positiv occurence of that feature
+    /// Computes all dead and core features.
+    /// A feature is a core feature iff there exists only the positiv occurence of that feature.
+    /// A feature is a dead feature iff there exists only the negativ occurence of that feature.
     pub(crate) fn get_core(&mut self) {
-        self.core = (1..=self.number_of_variables as i32)
+        self.core = (-(self.number_of_variables as i32)..=self.number_of_variables as i32)
             .filter(|f| {
-                self.literals.get(f).is_some()
-                    && self.literals.get(&-f).is_none()
+                self.literals.get(f).is_some() && self.literals.get(&-f).is_none()
             })
             .collect::<FxHashSet<i32>>()
     }
 
-    /// Computes all dead features
-    /// A feature is a dead feature iff there exists only the negativ occurence of that feature
-    pub(crate) fn get_dead(&mut self) {
-        self.dead = (1..=self.number_of_variables as i32)
-            .filter(|f| {
-                self.literals.get(f).is_none()
-                    && self.literals.get(&-f).is_some()
-            })
-            .collect::<FxHashSet<i32>>()
+    /// Checks if removing the feature assigment from the query does not change the query
+    /// i.e. that feature is an included core feature or an excluded dead feature
+    pub(crate) fn has_no_effect_on_query(&self, feature: &i32) -> bool {
+        return feature.is_positive() && self.core.contains(feature) ||
+               feature.is_negative() && self.core.contains(feature);
+    }
+
+    /// Checks if that feature assignment alone must result in an unsat query
+    /// i.e. that feature is an excluded core feature or an included dead feature
+    pub(crate) fn makes_query_unsat(&self, feature: &i32) -> bool {
+        return feature.is_negative() && self.core.contains(&-feature) ||
+               feature.is_positive() && self.core.contains(&-feature);
     }
 
     #[inline]
@@ -32,14 +35,7 @@ impl Ddnnf {
             .iter()
             .filter({
                 // filter keeps the elements which do fulfill the defined boolean formula. Thats why we need to use the ! operator
-                |&f| {
-                    if f > &0 {
-                        // remove included core and excluded dead features
-                        !self.core.contains(f)
-                    } else {
-                        !self.dead.contains(&-f)
-                    }
-                }
+                |&f| !self.has_no_effect_on_query(f)
             })
             .copied()
             .collect::<Vec<i32>>()
@@ -50,13 +46,7 @@ impl Ddnnf {
     pub(crate) fn query_is_not_sat(&mut self, features: &[i32]) -> bool {
         // if there is an included dead or an excluded core feature
         features.iter().any({
-            |&f| {
-                if f > 0 {
-                    self.dead.contains(&f)
-                } else {
-                    self.core.contains(&-f)
-                }
-            }
+            |f| self.makes_query_unsat(f)
         })
     }
 }

@@ -52,7 +52,7 @@ struct Cli {
     #[arg(short, long, num_args = 0.., verbatim_doc_comment)]
     features: Option<Vec<i32>>,
 
-    /// The stream API
+    /// Starts ddnnife in stream mode.
     #[arg(long)]
     stream: bool,
 

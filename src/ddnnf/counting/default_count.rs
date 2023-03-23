@@ -34,9 +34,9 @@ impl Ddnnf {
     /// The function does not use the marking approach.
     /// This function trys to apply optimisations based on core and dead features.
     fn _operate_on_single_feature(&mut self, feature: i32, operation: fn(&mut Ddnnf, usize)) -> Integer {
-        if self.core.contains(&feature) {
+        if self.has_no_effect_on_query(&feature) {
             self.rc()
-        } else if self.dead.contains(&feature) {
+        } else if self.makes_query_unsat(&feature) {
             Integer::ZERO
         } else {
             for i in 0..self.nodes.len() {

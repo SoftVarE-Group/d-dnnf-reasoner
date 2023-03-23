@@ -14,15 +14,10 @@ impl Ddnnf {
         let file = File::create(path_out)?;
         let mut file = LineWriter::with_capacity(1000, file);
         
-        // core features
+        // core/dead features
         let mut core = self.core.clone().into_iter().collect::<Vec<i32>>();
         core.sort();
         file.write_all(format!("core: {core:?}\n").as_bytes())?;
-
-        // dead features
-        let mut dead = self.dead.clone().into_iter().collect::<Vec<i32>>();
-        dead.sort();
-        file.write_all(format!("dead: {dead:?}\n").as_bytes())?;
 
         // false-optionals
 

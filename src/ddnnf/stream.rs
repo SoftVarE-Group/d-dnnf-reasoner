@@ -105,8 +105,6 @@ impl Ddnnf {
                         }
                     } else if assumptions.is_empty() {
                         let mut core = Vec::from_iter(&d.core);
-                        let dead = &d.dead.iter().map(|v| -v).collect::<Vec<i32>>();
-                        core.extend(dead);
                         core.sort_by_key(|a| a.abs());
                         Some(format_vec(core.iter()))
                     } else {
@@ -299,8 +297,6 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
     if numbers.iter().any(|v| v.abs() > boundary as i32) {
         return Err(format!("E3 error: not all parameters are within the boundary of {} to {}", -(boundary as i32), boundary as i32));
     }
-
-    println!("{:?}, {:?}", numbers, parsed_str_count);
     Ok((numbers, parsed_str_count))
 }
 
@@ -338,7 +334,7 @@ mod test {
         );
         assert_eq!(
             String::from("67;-58"),
-            auto1.handle_stream_msg("core a 20 v 1 67 -58")
+            auto1.handle_stream_msg("core a 20 v 1 -1 67 -67 58 -58")
         );
         assert_eq!(
             String::from("4;5;6"), // count p 1 2 3 == 0
@@ -357,11 +353,11 @@ mod test {
             auto1.handle_stream_msg("core a 1 2 3").split(" ").count() == (auto1.number_of_variables*2) as usize
         );
 
-        assert!(
-            auto1.handle_stream_msg("core").split(" ").count() == auto1.core.len() + auto1.dead.len()
+        assert_eq!(
+            auto1.handle_stream_msg("core").split(" ").count(), auto1.core.len()
         );
-        assert!(
-            vp9.handle_stream_msg("core").split(" ").count() == vp9.core.len() + vp9.dead.len()
+        assert_eq!(
+            vp9.handle_stream_msg("core").split(" ").count(), vp9.core.len()
         );
     }
 
@@ -485,7 +481,6 @@ mod test {
         );
 
         let mut binding = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 42");
-        println!("{}", binding);
         let mut res = binding.split(" ").map(|v| v.parse::<i32>().unwrap()).collect::<Vec<i32>>();
         assert_eq!(1, vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());

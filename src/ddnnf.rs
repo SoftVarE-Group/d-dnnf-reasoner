@@ -17,10 +17,8 @@ pub struct Ddnnf {
     /// Literals for upwards propagation
     pub literals: FxHashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
-    /// The core features of the modell corresponding with this ddnnf
+    /// The core/dead features of the model corresponding with this ddnnf
     pub core: FxHashSet<i32>,
-    /// The dead features of the modell
-    pub dead: FxHashSet<i32>,
     /// An interim save for the marking algorithm
     pub md: Vec<usize>,
     pub number_of_variables: u32,
@@ -35,7 +33,6 @@ impl Default for Ddnnf {
             literals: FxHashMap::default(),
             true_nodes: Vec::new(),
             core: FxHashSet::default(),
-            dead: FxHashSet::default(),
             md: Vec::new(),
             number_of_variables: 0,
             max_worker: 4,
@@ -56,13 +53,11 @@ impl Ddnnf {
             literals,
             true_nodes,
             core: FxHashSet::default(),
-            dead: FxHashSet::default(),
             md: Vec::new(),
             number_of_variables,
             max_worker: 4,
         };
         ddnnf.get_core();
-        ddnnf.get_dead();
         ddnnf
     }
 

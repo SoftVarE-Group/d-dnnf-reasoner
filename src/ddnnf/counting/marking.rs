@@ -80,9 +80,9 @@ impl Ddnnf {
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
     pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
-        if self.core.contains(&feature) || self.dead.contains(&-feature) {
+        if self.has_no_effect_on_query(&feature) {
             self.rc()
-        } else if self.dead.contains(&feature) || self.core.contains(&-feature) {
+        } else if self.makes_query_unsat(&feature) {
             Integer::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
@@ -105,9 +105,7 @@ impl Ddnnf {
             Integer::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
-
             let indexes: Vec<usize> = self.map_features_opposing_indexes(&features);
-
             if indexes.is_empty() {
                 return self.rc();
             }
