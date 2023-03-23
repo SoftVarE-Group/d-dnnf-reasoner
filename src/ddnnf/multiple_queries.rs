@@ -7,7 +7,7 @@ use crate::{Ddnnf, parser};
 impl Ddnnf{
     #[inline]
     /// Computes the given operation for all queries in path_in.
-    /// The results are saved in the path_out. The .txt ending always gets added to the user input.
+    /// The results are saved in the path_out. The .csv ending always gets added to the user input.
     /// Here, the number of threads influence the speed by using a shared work queue.
     pub fn operate_on_queries<T: ToString + Ord + Send + 'static>(
         &mut self,
@@ -167,22 +167,22 @@ mod test {
     fn card_multi_queries() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs.csv").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm.csv").unwrap();
 
-        let mut is_single = File::open("./tests/data/pcs.txt").unwrap();
-        let mut is_multi = File::open("./tests/data/pcm.txt").unwrap();
-        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+        let mut is_single = File::open("./tests/data/pcs.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
 
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
-        is_single = File::open("./tests/data/pcs.txt").unwrap();
+        is_single = File::open("./tests/data/pcs.csv").unwrap();
         assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
 
-        fs::remove_file("./tests/data/pcs.txt").unwrap();
-        fs::remove_file("./tests/data/pcm.txt").unwrap();
+        fs::remove_file("./tests/data/pcs.csv").unwrap();
+        fs::remove_file("./tests/data/pcm.csv").unwrap();
     }
 
     #[test]
@@ -217,26 +217,26 @@ mod test {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
-        ddnnf.queries_single_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs1.txt").unwrap();
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm1.txt").unwrap();
+        ddnnf.queries_single_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs1.csv").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm1.csv").unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm4.txt").unwrap();
+        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm4.csv").unwrap();
 
-        let mut is_single = File::open("./tests/data/pcs1.txt").unwrap();
-        let mut is_multi = File::open("./tests/data/pcm1.txt").unwrap();
-        let mut is_multi4 = File::open("./tests/data/pcm4.txt").unwrap();
-        let mut should_be = File::open("./tests/data/VP9_sb_pc.txt").unwrap();
+        let mut is_single = File::open("./tests/data/pcs1.csv").unwrap();
+        let mut is_multi = File::open("./tests/data/pcm1.csv").unwrap();
+        let mut is_multi4 = File::open("./tests/data/pcm4.csv").unwrap();
+        let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
     
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
-        is_single = File::open("./tests/data/pcs1.txt").unwrap();
-        is_multi = File::open("./tests/data/pcm1.txt").unwrap();
+        is_single = File::open("./tests/data/pcs1.csv").unwrap();
+        is_multi = File::open("./tests/data/pcm1.csv").unwrap();
         assert!(diff_files(&mut is_multi, &mut is_multi4), "partial config for multiple threads differs when using multiple threads");
         assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
 
-        fs::remove_file("./tests/data/pcs1.txt").unwrap();
-        fs::remove_file("./tests/data/pcm1.txt").unwrap();
-        fs::remove_file("./tests/data/pcm4.txt").unwrap();
+        fs::remove_file("./tests/data/pcs1.csv").unwrap();
+        fs::remove_file("./tests/data/pcm1.csv").unwrap();
+        fs::remove_file("./tests/data/pcm4.csv").unwrap();
     }
 }
