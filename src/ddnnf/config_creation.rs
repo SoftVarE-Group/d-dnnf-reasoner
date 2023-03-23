@@ -272,7 +272,7 @@ mod test {
         let mut assumptions = vec![1, 2, 3, -4, -5, 6, 7, -8, -9, 10, 11, -12, -13, -14, 15, 16, -17, -18, 19, 20, 27];
         let inter_res_assumptions_1 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_1 {
-            assert!(vp9.is_sat_for(&inter));
+            assert!(vp9.sat(&inter));
             assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
             res_assumptions.insert(inter);
         }
@@ -342,7 +342,7 @@ mod test {
         for i in 1..=1_000 {
             let configs = vp9.enumerate(&mut assumptions, 1).unwrap();
             for inter in configs {
-                assert!(vp9.is_sat_for(&inter));
+                assert!(vp9.sat(&inter));
                 assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
                 
                 // ensure that the assumptions are fulfilled
@@ -361,7 +361,7 @@ mod test {
         for i in (1_000..=100_000).step_by(2_000) {
             let configs = vp9.enumerate(&mut assumptions, 2_000).unwrap();
             for inter in configs {
-                assert!(vp9.is_sat_for(&inter));
+                assert!(vp9.sat(&inter));
                 assert_eq!(vp9.number_of_variables as usize, inter.len(), "we got only a partial config");
                 
                 // ensure that the assumptions are fulfilled
@@ -400,13 +400,13 @@ mod test {
         let vp9_assumptions= vec![38, 2, -14];
         let vp9_samples = vp9.uniform_random_sampling(&vp9_assumptions, 1_000, 42).unwrap();
         for sample in vp9_samples {
-            assert!(vp9.is_sat_for(&sample));
+            assert!(vp9.sat(&sample));
             assert_eq!(vp9.number_of_variables as usize, sample.len());
         }
 
         let auto1_samples = auto1.uniform_random_sampling(&mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111], 1_000, 42).unwrap();
         for sample in auto1_samples {
-            assert!(auto1.is_sat_for(&sample));
+            assert!(auto1.sat(&sample));
             assert_eq!(auto1.number_of_variables as usize, sample.len());
         }
     }
