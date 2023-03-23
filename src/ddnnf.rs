@@ -2,6 +2,7 @@ pub mod stream;
 pub mod node;
 pub mod heuristics;
 pub mod counting;
+pub mod multiple_queries;
 pub mod anomalies;
 pub mod config_creation;
 
@@ -10,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use self::node::{Node};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
     pub nodes: Vec<Node>,
@@ -111,14 +112,6 @@ impl Ddnnf {
             1 => self.card_of_feature_with_marker(features[0]),
             2..=20 => self.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node),
             _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count)
-        }
-    }
-
-    pub fn is_sat_for(&mut self, features: &[i32]) -> bool {
-        match features.len() {
-            0 => self.rc() > 0,
-            1..=20 => self.operate_on_partial_config_marker(features, Ddnnf::sat_marked_node) > 0,
-            _ => self.operate_on_partial_config_default(features, Ddnnf::sat_node_default) > 0
         }
     }
 }

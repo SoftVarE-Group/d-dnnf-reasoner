@@ -68,6 +68,12 @@ struct Cli {
     #[arg(short, long, num_args = 1..=2, verbatim_doc_comment)]
     queries: Option<Vec<String>>,
 
+    /// Computes multiple SAT queries and saves the results in an output file.
+    /// Takes the same input format as the 'queries' option and works similarly.
+    /// Default output file is '{FILE_NAME}-sat.txt'.
+    #[arg(short, long, num_args = 1..=2, verbatim_doc_comment)]
+    sat: Option<Vec<String>>,
+
     /// Computes core, dead, false-optional features, and atomic sets.
     /// You can add a file path for saving the information.
     /// Alternativly, the information is saved in anomalies.txt
@@ -81,7 +87,7 @@ struct Cli {
 
     /// Save the smooth ddnnf in the c2d format. Default output file is '{FILE_NAME}.nnf'.
     /// Alternatively, you can choose a name. The .nnf ending is added automatically.
-    #[arg(short, long, num_args = 0..=1, verbatim_doc_comment)]
+    #[arg(long, num_args = 0..=1, verbatim_doc_comment)]
     save_ddnnf: Option<Vec<String>>,
 
     /// Specify how many threads should be used. Default is 4.
@@ -91,7 +97,7 @@ struct Cli {
 
     /// Provides information about the type of nodes, their connection and the different paths.
     #[arg(long, verbatim_doc_comment)]
-    heuristics: bool, 
+    heuristics: bool,
 }
 
 fn main() {
@@ -147,37 +153,24 @@ fn main() {
         Path::new(&cli.file_path.unwrap_or(String::from("ddnnf.nnf")))
         .with_extension("").file_name().unwrap().to_str().unwrap());
 
-    // computes the cardinality of partial configurations and saves the results in a .csv file
-    // the results do not have to be in the same order if the number of threads is greater than one
+    // computes the cardinality of partial configurations and saves the results in a .txt file
     if cli.queries.is_some() {
-        let params: Vec<String> = cli.queries.unwrap();
-        if !Path::new(&params[0]).exists() {
-            red!("error:");
-            eprintln!("{} is NOT a valid file path! Exiting...", params[0]);
-            exit(1);
-        }
-        let config_path = &params[0];
-        let file_path_out = &format!("{}-queries.csv",
-            if params.len() == 2 {
-                &params[1]
-            } else {
-                &file_path
-            });
+        compute_queries(
+            &mut ddnnf,
+            &file_path,
+            cli.queries,
+            Ddnnf::execute_query,
+            "queries.csv");
+    }
 
-        let time = Instant::now();
-        ddnnf
-            .card_multi_queries(config_path, file_path_out)
-            .unwrap_or_default();
-        let elapsed_time = time.elapsed().as_secs_f64();
-
-        println!(
-            "\nComputed values of all queries in {} and the results are saved in {}\n\
-            It took {} seconds. That is an average of {} seconds per query",
-            config_path,
-            file_path_out,
-            elapsed_time,
-            elapsed_time / dparser::parse_queries_file(config_path.as_str()).len() as f64
-        );
+    // computes the satisfiability of multiple queries
+    if cli.sat.is_some() {
+        compute_queries(
+            &mut ddnnf,
+            &file_path,
+            cli.sat,
+            Ddnnf::sat,
+            "sat.csv");
     }
 
     // computes the cardinality of features and saves the results in a .csv file
@@ -257,6 +250,41 @@ fn build_file_path(maybe_prefix: Option<Vec<String>>, fallback: &String, postfix
     custom_file_path += postfix;
 
     custom_file_path
+}
+
+fn compute_queries<T: ToString + Ord + Send + 'static>(
+    ddnnf: &mut Ddnnf,
+    file_path_ddnnf: &str,
+    cli_option: Option<Vec<String>>,
+    operation: fn(&mut Ddnnf, query: &[i32]) -> T,
+    output_postfix: &str) {
+    let params: Vec<String> = cli_option.unwrap();
+    if !Path::new(&params[0]).exists() {
+        red!("error:");
+        eprintln!("{} is NOT a valid file path! Exiting...", params[0]);
+        exit(1);
+    }
+    let config_path = &params[0];
+    let file_path_out = &format!("{}-{}",
+        if params.len() == 2 {
+            &params[1]
+        } else {
+            file_path_ddnnf
+        }, output_postfix);
+
+    let time = Instant::now();
+    ddnnf.operate_on_queries(operation, config_path, file_path_out)
+        .unwrap_or_default();
+    let elapsed_time = time.elapsed().as_secs_f64();
+
+    println!(
+        "\nComputed values of all queries in {} and the results are saved in {}\n\
+        It took {} seconds. That is an average of {} seconds per query",
+        config_path,
+        file_path_out,
+        elapsed_time,
+        elapsed_time / dparser::parse_queries_file(config_path.as_str()).len() as f64
+    );
 }
 
 // spawns a new thread that listens on stdin and delivers its request to the stream message handling

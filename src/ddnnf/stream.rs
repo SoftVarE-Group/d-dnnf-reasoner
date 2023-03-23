@@ -127,7 +127,7 @@ impl Ddnnf {
                 &values
             ),
             "sat" => op_with_assumptions_and_vars(
-                |d, x, _| Some(Ddnnf::is_sat_for(d, x)),
+                |d, x, _| Some(Ddnnf::sat(d, x)),
                 self,
                 &mut params,
                 &values
@@ -382,7 +382,7 @@ mod test {
         for config_str in res {
             let config: Vec<i32> = config_str.split(" ").map(|f| f.parse::<i32>().unwrap()).collect();
             assert_eq!(vp9.number_of_variables as usize, config.len(), "the config is partial");
-            assert!(vp9.is_sat_for(&config), "the config is not satisfiable");
+            assert!(vp9.sat(&config), "the config is not satisfiable");
             res_set.insert(config);
         }
 
