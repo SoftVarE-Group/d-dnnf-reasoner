@@ -24,10 +24,15 @@ build.rs
 *-features.csv
 *-queries.csv
 *-sat.csv
+*-atomic.csv
+*-urs.csv
+*-core.csv
 *-anomalies.txt
 *-saved.nnf
 *-mermaid.md
 *.svg
+
+clean.sh
 
 # docker
 dockerfile

@@ -18,7 +18,7 @@ impl Ddnnf {
     /// Creates satisfiable complete configurations for a ddnnf and given assumptions
     /// If the ddnnf on itself or in combination with the assumption is unsatisfiable,
     /// then we can not create any satisfiable configuration and simply return None.
-    pub(crate) fn enumerate(&mut self, assumptions: &mut Vec<i32>, amount: usize) -> Option<Vec<Vec<i32>>> { 
+    pub fn enumerate(&mut self, assumptions: &mut Vec<i32>, amount: usize) -> Option<Vec<Vec<i32>>> { 
         if amount == 0 { return Some(Vec::new()); }
         
         if !self.preprocess_config_creation(assumptions) {
@@ -51,7 +51,7 @@ impl Ddnnf {
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
     /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
     /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned. 
-    pub(crate) fn uniform_random_sampling(&mut self, assumptions: &[i32], amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
+    pub fn uniform_random_sampling(&mut self, assumptions: &[i32], amount: usize, seed: u64) -> Option<Vec<Vec<i32>>> {
         if !self.preprocess_config_creation(assumptions) {
             return None;
         }

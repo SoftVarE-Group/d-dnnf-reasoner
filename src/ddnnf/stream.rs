@@ -10,7 +10,7 @@ use nom::character::complete::{digit1, char};
 use nom::combinator::{map_res, opt, recognize};
 use nom::sequence::{tuple, pair};
 
-use crate::Ddnnf;
+use crate::{Ddnnf, parser::util::*};
 use crate::parser::persisting::write_ddnnf;
 
 impl Ddnnf {
@@ -212,20 +212,6 @@ fn op_with_assumptions_and_vars<T: ToString>(
     }
 
     response.join(";")
-}
-
-fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
-    vals.map(|v| v.to_string()).collect::<Vec<String>>().join(" ")
-}
-
-fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
-    where
-    T: IntoIterator,
-    T::Item: ToString,
-{
-    vals.map(|res| format_vec(res.into_iter()))
-    .collect::<Vec<String>>()
-    .join(";")
 }
 
 // parses numbers and ranges of the form START..[STOP] into a vector of i32

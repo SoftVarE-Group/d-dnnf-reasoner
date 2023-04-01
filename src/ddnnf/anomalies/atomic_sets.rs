@@ -123,7 +123,7 @@ impl Ddnnf {
     /// Compute all atomic sets
     /// A group forms an atomic set iff every valid configuration either includes
     /// or excludes all mebers of that atomic set
-    pub(crate) fn get_atomic_sets(&mut self, candidates: Option<Vec<u32>>, assumptions: &[i32]) -> Vec<Vec<u16>> {
+    pub fn get_atomic_sets(&mut self, candidates: Option<Vec<u32>>, assumptions: &[i32]) -> Vec<Vec<u16>> {
         let mut combinations: Vec<(Integer, i32)> = Vec::new();
 
         // If there are no candidates supplied, we consider all features to be a candidate

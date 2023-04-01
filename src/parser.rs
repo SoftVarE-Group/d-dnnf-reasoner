@@ -6,6 +6,7 @@ use colour::e_red;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod persisting;
+pub mod util;
 
 use core::panic;
 use std::fs::File;
