@@ -2,7 +2,7 @@ pub mod c2d_lexer;
 use c2d_lexer::{lex_line, TId, C2DToken};
 
 pub mod d4_lexer;
-use colour::e_red;
+use colour::{e_red, e_red_ln};
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod persisting;
@@ -48,7 +48,13 @@ use petgraph::{
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(path: &str, ommited_features: Option<u32>) -> Ddnnf {
-    let file = File::open(path).unwrap();
+    let file = match File::open(path) {
+        Ok(x) => x,
+        Err(err) => {
+            e_red_ln!("The following error code occured while trying to open the ddnnf file \"{}\":\n{}\nAborting...", path, err);
+            process::exit(1);
+        }
+    };
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"))
@@ -507,7 +513,13 @@ fn calc_or_count(
 pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
-    let file = File::open(path).unwrap();
+    let file = match File::open(path) {
+        Ok(x) => x,
+        Err(err) => {
+            e_red_ln!("The following error code occured while trying to open the query file \"{}\":\n{}\nAborting...", path, err);
+            process::exit(1);
+        }
+    };
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"));
