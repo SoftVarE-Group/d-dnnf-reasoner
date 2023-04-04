@@ -103,12 +103,27 @@ Compute the cardinality of partial configurations for ```X264.dimacs.nnf``` with
 ./target/release/ddnnife example_input/X264.dimacs.nnf -q example_input/X264.config
 ```
 
+Compute 100 uniform random samples for the auto1 model for the seed 42.
+```properties
+./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 urs -n 100 -s 42
+```
+
+Compute the atomic sets for auto1.
+```properties
+./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 atomic-sets
+```
+
+Display the help information for the sat command.
+```properties
+./target/release/ddnnife sat -h
+```
+
 ## Stream API <a name="building_stream"></a>
-With the ```--stream``` flag, we introduce the possibility to interact with ddnnife via stdin and stdout. The user can choose between different kinds of queries that can be further adjusted with additional parameters. The idea behind the stream API is to interact with ddnnife with another program, but for testing purposes one can use the stdin and stdout of a terminal to test the API.
+With the ```stream``` command, we introduce the possibility to interact with ddnnife via stdin and stdout. The user can choose between different kinds of queries that can be further adjusted with additional parameters. The idea behind the stream API is to interact with ddnnife with another program, but for testing purposes one can use the stdin and stdout of a terminal to test the API.
 
 We start ddnnife in stream mode for the ```automotive01``` model via
 ```properties
-./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 --stream
+./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 stream
 ```
 
 From here on, we can use the following types of queries:
