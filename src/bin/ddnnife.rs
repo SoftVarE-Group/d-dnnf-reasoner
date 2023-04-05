@@ -7,7 +7,7 @@ use ddnnf_lib::parser::util::format_vec;
 use itertools::Itertools;
 
 use std::fs::File;
-use std::io::{self, Write, BufRead, BufWriter};
+use std::io::{self, Write, BufRead, BufWriter, BufReader};
 use std::path::{Path};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self};
@@ -135,10 +135,6 @@ enum Operation {
         /// Default output file is '{FILE_NAME}-stream.csv'.
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
-        /// Specify how many threads should be used.
-        /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4, verbatim_doc_comment)]
-        jobs: u16,
     },
     /// Computes core, dead, false-optional features, and atomic sets.
     Anomalies {
@@ -250,7 +246,6 @@ fn main() {
         match operation {
             CountFeatures { jobs, .. } |
             CountQueries { jobs, .. } |
-            StreamQueries { jobs, .. } |
             SAT { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             },
@@ -265,6 +260,8 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "queries", "csv"),
             SAT { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "sat", "csv"),
+            StreamQueries { custom_output_file, .. }
+                => construct_ouput_path(custom_output_file, "stream", "csv"),
             Anomalies { custom_output_file }
                 => construct_ouput_path(custom_output_file, "anomalies", "txt"),
             AtomicSets { custom_output_file, .. }
@@ -336,6 +333,22 @@ fn main() {
                     Ddnnf::sat
                 );
             },
+            StreamQueries { queries_input_file, ..} => {
+                let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+                
+                let file = dparser::open_file_savely(queries_input_file);
+                let queries = BufReader::new(file)
+                    .lines()
+                    .map(|line| line.expect("Unable to read line"));
+                
+                for query in queries {
+                    wtr.write(ddnnf.handle_stream_msg(&query).as_bytes()).unwrap();
+                    wtr.write("\n".as_bytes()).unwrap();
+                }
+
+                wtr.flush().unwrap();
+                println!("\nComputed stream queries and saved the results in {}.", output_file_path);
+            },
             // switch in the stream mode
             Stream => {
                 let stdin_channel = spawn_stdin_channel();
@@ -378,7 +391,6 @@ fn main() {
                 wtr.flush().unwrap();
                 println!("\nComputed the core / dead features and saved the results in {}.", output_file_path);
             },
-            StreamQueries { queries_input_file: _, custom_output_file: _, jobs: _ } => todo!(),
         }
     }
 

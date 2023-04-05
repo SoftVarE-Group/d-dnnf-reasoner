@@ -26,6 +26,7 @@ build.rs
 *-sat.csv
 *-atomic.csv
 *-urs.csv
+*-stream.csv
 *-core.csv
 *-anomalies.txt
 *-saved.nnf

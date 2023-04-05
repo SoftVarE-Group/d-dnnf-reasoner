@@ -48,13 +48,7 @@ use petgraph::{
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(path: &str, ommited_features: Option<u32>) -> Ddnnf {
-    let file = match File::open(path) {
-        Ok(x) => x,
-        Err(err) => {
-            e_red_ln!("The following error code occured while trying to open the ddnnf file \"{}\":\n{}\nAborting...", path, err);
-            process::exit(1);
-        }
-    };
+    let file = open_file_savely(path);
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"))
@@ -511,15 +505,8 @@ fn calc_or_count(
 ///
 /// Panics for a path to a non existing file
 pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
-    // opens the file with a BufReader and
-    // works off each line of the file data seperatly
-    let file = match File::open(path) {
-        Ok(x) => x,
-        Err(err) => {
-            e_red_ln!("The following error code occured while trying to open the query file \"{}\":\n{}\nAborting...", path, err);
-            process::exit(1);
-        }
-    };
+    let file = open_file_savely(path);
+
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"));
@@ -534,4 +521,18 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
         parsed_queries.push((line_number, res));
     }
     parsed_queries
+}
+
+/// Tries to open a file.
+/// If an error occurs the program prints the error and exists.
+pub fn open_file_savely(path: &str) -> File {
+    // opens the file with a BufReader and
+    // works off each line of the file data seperatly
+    match File::open(path) {
+        Ok(x) => x,
+        Err(err) => {
+            e_red_ln!("The following error code occured while trying to open the query file \"{}\":\n{}\nAborting...", path, err);
+            process::exit(1);
+        }
+    }
 }
