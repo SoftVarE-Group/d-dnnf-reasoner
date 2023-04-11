@@ -3,6 +3,7 @@ pub mod config_creation;
 pub mod core;
 pub mod false_optional;
 pub mod sat;
+pub mod t_wise_sampling;
 
 use std::{fs::File, io::{LineWriter, Write}};
 

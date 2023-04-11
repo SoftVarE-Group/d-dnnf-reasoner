@@ -1,6 +1,5 @@
 use crate::{Ddnnf, NodeType::*};
 
-
 impl Ddnnf {
     /// Computes if a node is satisfiable with the marking algorithm:
     /// For each feature of the query, we search for its complementary literal.
