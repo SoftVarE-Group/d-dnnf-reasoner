@@ -2,7 +2,7 @@ pub mod c2d_lexer;
 use c2d_lexer::{lex_line, TId, C2DToken};
 
 pub mod d4_lexer;
-use colour::{e_red, e_red_ln};
+use colored::Colorize;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod persisting;
@@ -78,10 +78,9 @@ pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) ->
                 },
                 None => {
                     // unknown standard or combination -> we assume d4 and choose omitted_features
-                    e_red!("warning: ");
-                    println!("The first line of the file isn't a header and the option 'omitted_features' is not set.\
-                    Hence, we can't determine the number of variables and as a result, we may cannot construct a valid ddnnf.\
-                    Nonetheless, we will attempt to build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n");
+                    println!("{}", "WARNING: The first line of the file isn't a header and the option 'omitted_features' is not set. \
+                    Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
+                    Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n".yellow());
                     build_d4_ddnnf(lines, None)
                 },
             }
@@ -536,7 +535,7 @@ pub fn open_file_savely(path: &str) -> File {
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
-            e_red_ln!("The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
+            println!("{}", format!("ERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err).red());
             process::exit(1);
         }
     }
