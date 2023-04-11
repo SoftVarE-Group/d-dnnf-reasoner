@@ -39,7 +39,7 @@ struct Cli {
     file_path: Option<String>,
 
     /// Allows to load the ddnnf via stdin.
-    /// Either 'ommited_features' has to be set or the file must start with a header of the form 'nnf n v e',
+    /// Either 'omitted_features' has to be set or the file must start with a header of the form 'nnf n v e',
     /// where v is the number of nodes, e is the number of edges,
     /// and n is the number of variables over which the d-dnnf is defined.
     /// Like the c2d and the d4 format specifies, each line must be defided by a new line.
@@ -54,7 +54,7 @@ struct Cli {
     /// The number of omitted features.
     /// This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.
     #[arg(short, long, verbatim_doc_comment)]
-    ommited_features: Option<u32>,
+    omitted_features: Option<u32>,
 
     /// Save the smooth ddnnf in the c2d format. Default output file is '{FILE_NAME}-saved.nnf'.
     /// Alternatively, you can choose a name. The .nnf ending is added automatically.
@@ -204,10 +204,10 @@ fn main() {
             if read_line.is_empty() { break; }
             input.push(read_line);
         }
-        ddnnf = dparser::distribute_building(input, cli.ommited_features);
+        ddnnf = dparser::distribute_building(input, cli.omitted_features);
     } else {
         let ddnnf_path = &cli.file_path.clone().unwrap();
-        ddnnf = dparser::build_ddnnf(ddnnf_path, cli.ommited_features)
+        ddnnf = dparser::build_ddnnf(ddnnf_path, cli.omitted_features)
     }
 
     // file path without last extension

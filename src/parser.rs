@@ -9,6 +9,7 @@ pub mod persisting;
 pub mod util;
 
 use core::panic;
+use std::cmp::max;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{
@@ -47,21 +48,21 @@ use petgraph::{
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf(path: &str, ommited_features: Option<u32>) -> Ddnnf {
+pub fn build_ddnnf(path: &str, omitted_features: Option<u32>) -> Ddnnf {
     let file = open_file_savely(path);
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"))
         .collect::<Vec<String>>();
 
-    distribute_building(lines, ommited_features)
+    distribute_building(lines, omitted_features)
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.
-/// Either the first line is a header and therefore the c2d format or ommited_features
+/// Either the first line is a header and therefore the c2d format or omitted_features
 /// is supplied and its the d4 format.
 #[inline]
-pub fn distribute_building(lines: Vec<String>, ommited_features: Option<u32>) -> Ddnnf {
+pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) -> Ddnnf {
     use C2DToken::*;
     
     match lex_line(lines[0].trim()) {
@@ -70,17 +71,18 @@ pub fn distribute_building(lines: Vec<String>, ommited_features: Option<u32>) ->
         },
         Ok(_) | Err(_) => {
             // tried to parse the c2d standard, but failes
-            match ommited_features {
+            match omitted_features {
                 Some(o) => {
                     // we try to parse the d4 standard
-                    build_d4_ddnnf(lines, o)
+                    build_d4_ddnnf(lines, Some(o))
                 },
                 None => {
-                    // unknown standard or combination -> abort
-                    e_red!("error: ");
-                    eprintln!("The first line of the file isn't a header and the option ommited_features is not set.\n\
-                    Hence, we can't determine the number of variables and consequently can't construct a valid ddnnf.");
-                    process::exit(1);
+                    // unknown standard or combination -> we assume d4 and choose omitted_features
+                    e_red!("warning: ");
+                    println!("The first line of the file isn't a header and the option 'omitted_features' is not set.\
+                    Hence, we can't determine the number of variables and as a result, we may cannot construct a valid ddnnf.\
+                    Nonetheless, we will attempt to build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n");
+                    build_d4_ddnnf(lines, None)
                 },
             }
         },
@@ -152,11 +154,13 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
+fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnnf {
     let mut ddnnf_graph = DiGraph::<TId, ()>::new();
 
+    let omitted_features = omitted_features_opt.unwrap_or(100_000);
+    let mut max_feature_number = omitted_features_opt.unwrap_or(0);
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
-        Rc::new(RefCell::new(vec![false; (ommited_features + 1) as usize]));
+        Rc::new(RefCell::new(vec![false; (omitted_features + 1) as usize]));
 
     let mut indices: Vec<NodeIndex> = Vec::new();
 
@@ -243,6 +247,7 @@ fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
             Edge { from, to, features } => {
                 for f in &features {
                     literal_occurences.borrow_mut()[f.unsigned_abs() as usize] = true;
+                    max_feature_number = max(max_feature_number, f.unsigned_abs());
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
@@ -261,7 +266,7 @@ fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
     }
 
     let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
-        Rc::new(RefCell::new(vec![None; (ommited_features + 1) as usize]));
+        Rc::new(RefCell::new(vec![None; (omitted_features + 1) as usize]));
 
     let add_literal_node = 
         |ddnnf_graph: &mut DiGraph<TId,()>, f_u32: u32, attach: NodeIndex| {
@@ -302,12 +307,12 @@ fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
             }
         };
 
-    // add a new root which hold the unmentioned variables within the ommited_features range
+    // add a new root which hold the unmentioned variables within the omitted_features range
     let root = ddnnf_graph.add_node(TId::And);
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
 
     // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..ommited_features + 1 {
+    for i in 1..max_feature_number {
         if !literal_occurences.borrow()[i as usize] {
             add_literal_node(&mut ddnnf_graph, i, root);
         }
@@ -404,7 +409,7 @@ fn build_d4_ddnnf(lines: Vec<String>, ommited_features: u32) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, ommited_features)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes
@@ -531,7 +536,7 @@ pub fn open_file_savely(path: &str) -> File {
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
-            e_red_ln!("The following error code occured while trying to open the query file \"{}\":\n{}\nAborting...", path, err);
+            e_red_ln!("The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
             process::exit(1);
         }
     }
