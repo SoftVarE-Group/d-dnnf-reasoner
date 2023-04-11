@@ -65,8 +65,9 @@ impl Ddnnf {
         for i in 0..self.nodes.len() {
             match &self.nodes[i].ntype {
                 And { children } => {
-                    and_child_counter += children.len() as u64
-                }
+                    total_child_counter += children.len() as u64;
+                    and_child_counter += children.len() as u64;
+                },
                 Or { children } => total_child_counter += children.len() as u64,
                 _ => continue,
             }
