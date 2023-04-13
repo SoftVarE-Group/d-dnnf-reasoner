@@ -1,6 +1,8 @@
 use crate::ddnnf::anomalies::t_wise_sampling::sat_solver::SatSolver;
+use crate::parser::util::format_vec;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::iter;
 
 /// Represents a (partial) configuration
@@ -25,6 +27,12 @@ impl Extend<i32> for Config {
         for literal in iter {
             self.add(literal);
         }
+    }
+}
+
+impl Display for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format_vec(self.literals.iter()))
     }
 }
 

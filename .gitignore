@@ -25,6 +25,7 @@ build.rs
 *-queries.csv
 *-sat.csv
 *-atomic.csv
+*-t-wise.csv
 *-urs.csv
 *-stream.csv
 *-core.csv

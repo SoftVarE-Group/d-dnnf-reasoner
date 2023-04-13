@@ -3,6 +3,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::{Parser, ArgGroup, Subcommand};
 
+use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
 use ddnnf_lib::parser::util::format_vec;
 use itertools::Itertools;
 
@@ -136,6 +137,20 @@ enum Operation {
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
     },
+    /// Computes t-wise samples
+    TWise {
+        /// The default ouput file is '{FILE_NAME}-t-wise.csv'.
+        #[arg(verbatim_doc_comment)]
+        custom_output_file: Option<String>,
+        /// The 't' in t-wise sampling refers to the degree of interaction
+        /// or combination of input parameters to be considered in each test case.
+        /// For example, 2-wise sampling (also known as pairwise testing) considers
+        /// all possible combinations of two input parameters.
+        /// The higher the value of 't', the more comprehensive the testing will be,
+        /// but also the larger the number of test cases required.
+        #[clap(short, verbatim_doc_comment, default_value_t = 2)]
+        t: usize,
+    },
     /// Computes core, dead, false-optional features, and atomic sets.
     Anomalies {
         /// The default ouput file is '{FILE_NAME}-anomalies.csv'.
@@ -262,6 +277,8 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "sat", "csv"),
             StreamQueries { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "stream", "csv"),
+            TWise { custom_output_file, .. }
+                => construct_ouput_path(custom_output_file, "t-wise", "csv"),
             Anomalies { custom_output_file }
                 => construct_ouput_path(custom_output_file, "anomalies", "txt"),
             AtomicSets { custom_output_file, .. }
@@ -292,6 +309,12 @@ fn main() {
                 }
                 wtr.flush().unwrap();
                 println!("\nComputed {} uniform random samples and saved the results in {}.", number, output_file_path);
+            },
+            TWise { t, custom_output_file: _ } => {
+                let sample_result = ddnnf.sample_t_wise(*t);
+                println!("sample done");
+                save_sample_to_file(&sample_result,  &output_file_path).unwrap();
+                println!("\nComputed {}-wise samples and saved the results in {}.", t, output_file_path);
             },
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Count { features } => {

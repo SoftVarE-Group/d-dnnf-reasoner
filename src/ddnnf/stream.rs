@@ -186,8 +186,12 @@ impl Ddnnf {
                     Err(e) => format!("E6 error: {} while trying to write ddnnf to {}", e, path.to_str().unwrap()),
                 }
             },
-            "t-wise_sampling" => {
-                String::from("E1 error: not yet supported")
+            "t-wise" => {
+                let limit_interpretation = match limit {
+                    Some(limit) => limit,
+                    None => 1,
+                };
+                self.sample_t_wise(limit_interpretation).to_string()
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),
         }

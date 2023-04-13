@@ -15,6 +15,7 @@ use streaming_iterator::StreamingIterator;
 use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, OrMerger};
 use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 
+use crate::parser::util::format_vec;
 use crate::{Ddnnf, NodeType::*};
 
 use self::covering_strategies::cover_with_caching;
@@ -23,6 +24,47 @@ use self::iterator::TInteractionIter;
 use self::sample_merger::similarity_merger::SimilarityMerger;
 use self::sample_merger::zipping_merger::ZippingMerger;
 use self::sat_solver::SatSolver;
+
+impl Ddnnf {
+    pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
+        let sat_solver = SatSolver::new(self);
+        let and_merger = ZippingMerger {
+            t,
+            sat_solver: &sat_solver,
+            ddnnf: self,
+        };
+        let or_merger = SimilarityMerger { t };
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut sampler = TWiseSampler::new(self, and_merger, or_merger);
+
+        for node_id in 0..sampler.ddnnf.nodes.len() {
+            let partial_sample = sampler.make_partial_sample(node_id, &mut rng);
+            sampler.partial_samples.insert(node_id, partial_sample);
+        }
+
+        let root_id = sampler.ddnnf.nodes.len() - 1;
+
+        let sampling_result = sampler
+            .partial_samples
+            .remove(&root_id)
+            .expect("Root sample does not exist!");
+
+        if let ResultWithSample(mut sample) = sampling_result {
+            sample = trim_and_resample(
+                root_id,
+                sample,
+                t,
+                self.number_of_variables as usize,
+                &sat_solver,
+                &mut rng,
+            );
+            sampler.complete_partial_configs(&mut sample, root_id, &sat_solver);
+            ResultWithSample(sample)
+        } else {
+            sampling_result
+        }
+    }
+}
 
 struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
     ddnnf: &'a Ddnnf,
@@ -64,6 +106,13 @@ impl SamplingResult {
         match self {
             SamplingResult::Empty | SamplingResult::Void => true,
             ResultWithSample(sample) => sample.is_empty(),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            SamplingResult::Empty | SamplingResult::Void => String::new(),
+            ResultWithSample(sample) => format_vec(sample.iter()),
         }
     }
 }
@@ -348,48 +397,8 @@ fn find_unique_covering_conf(
     result
 }
 
-pub fn sample_t_wise(ddnnf: &Ddnnf, t: usize) -> SamplingResult {
-    let sat_solver = SatSolver::new(ddnnf);
-    let and_merger = ZippingMerger {
-        t,
-        sat_solver: &sat_solver,
-        ddnnf,
-    };
-    let or_merger = SimilarityMerger { t };
-    let mut rng = StdRng::seed_from_u64(42);
-    let mut sampler = TWiseSampler::new(ddnnf, and_merger, or_merger);
-
-    for node_id in 0..sampler.ddnnf.nodes.len() {
-        let partial_sample = sampler.make_partial_sample(node_id, &mut rng);
-        sampler.partial_samples.insert(node_id, partial_sample);
-    }
-
-    let root_id = sampler.ddnnf.nodes.len() - 1;
-
-    let sampling_result = sampler
-        .partial_samples
-        .remove(&root_id)
-        .expect("Root sample does not exist!");
-
-    if let ResultWithSample(mut sample) = sampling_result {
-        sample = trim_and_resample(
-            root_id,
-            sample,
-            t,
-            ddnnf.number_of_variables as usize,
-            &sat_solver,
-            &mut rng,
-        );
-        sampler.complete_partial_configs(&mut sample, root_id, &sat_solver);
-        ResultWithSample(sample)
-    } else {
-        sampling_result
-    }
-}
-
 pub fn save_sample_to_file(
     sampling_result: &SamplingResult,
-    number_of_variables: u32,
     file_path: &str,
 ) -> io::Result<()> {
     let file_path = Path::new(file_path);
@@ -397,12 +406,6 @@ pub fn save_sample_to_file(
         fs::create_dir_all(dir)?;
     }
     let mut wtr = csv::Writer::from_path(file_path)?;
-
-    // write the header - it looks like
-    // Configuration;1;2;3
-    let names = (1..=number_of_variables).map(|name| name.to_string());
-    let header = iter::once(String::from("Configuration")).chain(names);
-    wtr.write_record(header)?;
 
     match sampling_result {
         /*
@@ -416,19 +419,7 @@ pub fn save_sample_to_file(
         SamplingResult::Void => wtr.write_record(iter::once("false"))?,
         ResultWithSample(sample) => {
             for (index, config) in sample.iter().enumerate() {
-                /*
-                write the index of the config then a 0 (deselected) or 1 (selected) for each feature
-                 */
-                let literals = config.get_literals().iter().map(|literal| {
-                    if *literal < 0 {
-                        "0"
-                    } else {
-                        "1"
-                    }
-                });
-                let index = index.to_string();
-                let record = iter::once(index.as_str()).chain(literals);
-                wtr.write_record(record)?;
+                wtr.write_record([index.to_string(), format_vec(config.get_literals().iter())])?;
             }
         }
     }

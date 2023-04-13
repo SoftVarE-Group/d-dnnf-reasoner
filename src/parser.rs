@@ -156,10 +156,9 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnnf {
     let mut ddnnf_graph = DiGraph::<TId, ()>::new();
 
-    let omitted_features = omitted_features_opt.unwrap_or(100_000);
-    let mut max_feature_number = omitted_features_opt.unwrap_or(0);
+    let mut omitted_features = omitted_features_opt.unwrap_or(0);
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
-        Rc::new(RefCell::new(vec![false; (omitted_features + 1) as usize]));
+        Rc::new(RefCell::new(vec![false; max(100_000, omitted_features as usize)]));
 
     let mut indices: Vec<NodeIndex> = Vec::new();
 
@@ -246,7 +245,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
             Edge { from, to, features } => {
                 for f in &features {
                     literal_occurences.borrow_mut()[f.unsigned_abs() as usize] = true;
-                    max_feature_number = max(max_feature_number, f.unsigned_abs());
+                    omitted_features = max(omitted_features, f.unsigned_abs());
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
@@ -311,7 +310,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
 
     // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..max_feature_number {
+    for i in 1..omitted_features+1 {
         if !literal_occurences.borrow()[i as usize] {
             add_literal_node(&mut ddnnf_graph, i, root);
         }
@@ -408,7 +407,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features+1)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes
