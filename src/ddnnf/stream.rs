@@ -622,7 +622,7 @@ mod test {
         );
 
         assert_eq!(
-            String::from("E1 error: not yet supported"),
+            String::from("E2 error: the operation \"t-wise_sampling\" is not supported"),
             auto1.handle_stream_msg("t-wise_sampling a 1 v 2")
         );
         assert_eq!(

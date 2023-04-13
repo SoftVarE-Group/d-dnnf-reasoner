@@ -310,7 +310,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
 
     // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..omitted_features+1 {
+    for i in 1..omitted_features {
         if !literal_occurences.borrow()[i as usize] {
             add_literal_node(&mut ddnnf_graph, i, root);
         }
@@ -407,7 +407,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features+1)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes
