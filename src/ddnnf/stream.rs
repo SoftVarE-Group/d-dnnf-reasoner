@@ -1,5 +1,4 @@
 use std::iter::{FromIterator};
-use std::usize::MAX;
 use std::{path::Path};
 
 use itertools::Itertools;
@@ -143,7 +142,13 @@ impl Ddnnf {
             "enum" => {
                 let limit_interpretation = match limit {
                     Some(limit) => limit,
-                    None => MAX,
+                    None => {
+                        if self.rc() > 1_000 {
+                            1_000
+                        } else {
+                            self.rc().to_usize_wrapping()
+                        }
+                    },
                 };
                 let configs = self.enumerate(&mut params, limit_interpretation);
                 match configs {
