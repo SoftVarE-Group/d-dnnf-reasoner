@@ -375,25 +375,17 @@ fn main() {
             // switch in the stream mode
             Stream => {
                 let stdin_channel = spawn_stdin_channel();
-            
-                let stdout = io::stdout();
-                let mut handle_out = stdout.lock();
         
                 loop {
                     match stdin_channel.recv() {
-                        Ok(mut buffer) => {
-                            buffer.pop();
-        
+                        Ok(buffer) => {
                             let response = ddnnf.handle_stream_msg(&buffer);
-        
-                            if response.as_str() == "exit" { handle_out.write_all("ENDE \\ü/\n".as_bytes()).unwrap(); break; }
-                            
-                            handle_out.write_all(format!("{}\n", response).as_bytes()).unwrap();
-                            handle_out.flush().unwrap();
+                            if response.as_str() == "exit" { println!("End by 'exit' command"); break; }
+                            println!("{}", response);
                         },
-                        Err(e) => {
-                            handle_out.write_all(format!("error while receiving msg: {}\n", e).as_bytes()).unwrap();
-                            handle_out.flush().unwrap();
+                        Err(_) => {
+                            println!("End by closing input channel");
+                            break;
                         },
                     }
                 }
@@ -456,11 +448,9 @@ fn spawn_stdin_channel() -> Receiver<String> {
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         let stdin = io::stdin();
-        let mut handle_in = stdin.lock();
-        loop {
-            let mut buffer = String::new();
-            handle_in.read_line(&mut buffer).unwrap();
-            tx.send(buffer).unwrap();
+        let lines = stdin.lock().lines();
+        for line in lines {
+            tx.send(line.unwrap()).unwrap()
         }
     });
     rx
