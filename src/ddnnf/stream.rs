@@ -314,7 +314,7 @@ mod test {
         let binding = auto1.handle_stream_msg("core");
         let res = binding.split(" ").collect::<Vec<&str>>();
         assert_eq!(
-            243, res.len()
+            279, res.len()
         );
         assert!(
             res.contains(&"20") && res.contains(&"-168")

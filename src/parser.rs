@@ -22,11 +22,11 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
 
-use petgraph::graph::DiGraph;
 use petgraph::{
+    stable_graph::StableGraph,
     graph::{EdgeIndex, NodeIndex},
     visit::DfsPostOrder,
-    Direction::Outgoing,
+    Direction::{Outgoing, Incoming},
 };
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
@@ -154,7 +154,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
 fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnnf {
-    let mut ddnnf_graph = DiGraph::<TId, ()>::new();
+    let mut ddnnf_graph = StableGraph::<TId, ()>::new();
 
     let mut omitted_features = omitted_features_opt.unwrap_or(0);
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
@@ -169,7 +169,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     let literals_nx: Rc<RefCell<FxHashMap<i32, NodeIndex>>> =
         Rc::new(RefCell::new(FxHashMap::default()));
 
-    let get_literal_indices = |ddnnf_graph: &mut DiGraph<TId, ()>,
+    let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, ()>,
                                literals: Vec<i32>|
      -> Vec<NodeIndex> {
         let mut nx_lit = nx_literals.borrow_mut();
@@ -215,7 +215,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     //
     //
     let resolve_weighted_edge =
-    |ddnnf_graph: &mut DiGraph<TId, ()>,
+    |ddnnf_graph: &mut StableGraph<TId, ()>,
         from: NodeIndex,
         to: NodeIndex,
         edge: EdgeIndex,
@@ -267,7 +267,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         Rc::new(RefCell::new(vec![None; (omitted_features + 1) as usize]));
 
     let add_literal_node = 
-        |ddnnf_graph: &mut DiGraph<TId,()>, f_u32: u32, attach: NodeIndex| {
+        |ddnnf_graph: &mut StableGraph<TId,()>, f_u32: u32, attach: NodeIndex| {
         let f = f_u32 as i32;
         let mut ort = or_triangles.borrow_mut();
 
@@ -287,23 +287,23 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     };
 
     let balance_or_children =
-        |ddnnf_graph: &mut DiGraph<TId, ()>,
+        |ddnnf_graph: &mut StableGraph<TId, ()>,
          from: NodeIndex,
          children: Vec<(NodeIndex, FxHashSet<u32>)>| {
-            for child in children {
-                let and_node = ddnnf_graph.add_node(TId::And);
+        for child in children {
+            let and_node = ddnnf_graph.add_node(TId::And);
 
-                // place the newly created and node between the or node and its child
-                ddnnf_graph
-                    .remove_edge(ddnnf_graph.find_edge(from, child.0).unwrap());
-                ddnnf_graph.add_edge(from, and_node, ());
-                ddnnf_graph.add_edge(and_node, child.0, ());
+            // place the newly created and node between the or node and its child
+            ddnnf_graph
+                .remove_edge(ddnnf_graph.find_edge(from, child.0).unwrap());
+            ddnnf_graph.add_edge(from, and_node, ());
+            ddnnf_graph.add_edge(and_node, child.0, ());
 
-                for literal in child.1 {
-                    add_literal_node(ddnnf_graph, literal, and_node);
-                }
+            for literal in child.1 {
+                add_literal_node(ddnnf_graph, literal, and_node);
             }
-        };
+        }
+    };
 
     // add a new root which hold the unmentioned variables within the omitted_features range
     let root = ddnnf_graph.add_node(TId::And);
@@ -316,7 +316,81 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         }
     }
 
-    // snd dfs:
+    // Starting from an initial AND node, we delete all parent AND nodes.
+    // We can do this because the start node has a FALSE node as children. Hence, it count is 0!
+    let delete_parent_and_chain = |ddnnf_graph: &mut StableGraph<TId, ()>, start: NodeIndex| {
+        let mut current_vec = Vec::new();
+        let mut current = start;
+        loop {
+            match ddnnf_graph[current] {
+                TId::And => {
+                    // remove the AND node and all parent nodes that are also AND nodes
+                    let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
+                    loop {
+                        match parents.next_node(&ddnnf_graph) {
+                            Some(parent) => {
+                                current_vec.push(parent);
+                            },
+                            None => break,
+                        }
+                    }
+                    ddnnf_graph.remove_node(current);
+                },
+                _ => (),
+            }
+
+            match current_vec.pop() {
+                Some(head) => current = head,
+                None => break,
+            }
+        }
+    };
+
+    // second dfs:
+    // Remove the True and False node if any is part of the dDNNF.
+    // Those nodes can influence the core and dead features by reducing the amount of those,
+    // we can identify simply by literal occurences.
+    // Further, we decrease the size and complexity of the dDNNF.
+    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
+    while let Some(nx) = dfs.next(&ddnnf_graph) {        
+        let mut neighbours = ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
+        loop {
+            let next = neighbours.next(&ddnnf_graph);
+            match next {
+                Some((n_edge, n_node)) => {
+                    if !ddnnf_graph.contains_node(n_node) {
+                        continue;
+                    }
+
+                    if ddnnf_graph[n_node] == TId::True {
+                        match ddnnf_graph[nx] {
+                            TId::And => ddnnf_graph.remove_edge(n_edge).unwrap(),
+                            TId::Or => (), // should never happen
+                            _ => {
+                                println!("{}", "ERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting".red());
+                                process::exit(1);
+                            }
+                        };
+                    }
+
+                    if ddnnf_graph[n_node] == TId::False {
+                        match ddnnf_graph[nx] {
+                            TId::Or => ddnnf_graph.remove_edge(n_edge).unwrap(),
+                            TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
+                            _ => {
+                                println!("{}", "ERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can habe children".red());
+                                process::exit(1);
+                            }
+                        };
+                    }
+                },
+                None => break,
+            }
+        }
+    }
+
+
+    // third dfs:
     // Look at each or node. For each outgoing edge:
     // 1. Compute all literals that occur in the children of that edge
     // 2. Determine which literals occur only in the other paths
@@ -412,7 +486,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
 
 // determine the differences in literal-nodes occuring in the child nodes
 fn get_literal_diff(
-    di_graph: &DiGraph<TId, ()>,
+    di_graph: &StableGraph<TId, ()>,
     safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
     nx_literals: &FxHashMap<NodeIndex, i32>,
     or_node: NodeIndex,
@@ -443,7 +517,7 @@ fn get_literal_diff(
 
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
-    di_graph: &DiGraph<TId, ()>,
+    di_graph: &StableGraph<TId, ()>,
     safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
     nx_literals: &FxHashMap<NodeIndex, i32>,
     or_child: NodeIndex,
