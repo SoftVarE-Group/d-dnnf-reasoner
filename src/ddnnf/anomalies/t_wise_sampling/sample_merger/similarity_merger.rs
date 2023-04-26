@@ -1,5 +1,5 @@
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::iterator::TInteractionIter;
+use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{OrMerger, SampleMerger};
 use std::cmp::{min, Ordering};
 

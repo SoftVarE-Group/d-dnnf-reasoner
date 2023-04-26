@@ -1,8 +1,8 @@
 pub mod covering_strategies;
 pub mod data_structure;
-pub mod iterator;
+pub mod t_iterator;
 pub mod sample_merger;
-pub mod sat_solver;
+pub mod sat_wrapper;
 
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
@@ -20,14 +20,14 @@ use crate::{Ddnnf, NodeType::*};
 
 use self::covering_strategies::cover_with_caching;
 use self::data_structure::Sample;
-use self::iterator::TInteractionIter;
+use self::t_iterator::TInteractionIter;
 use self::sample_merger::similarity_merger::SimilarityMerger;
 use self::sample_merger::zipping_merger::ZippingMerger;
-use self::sat_solver::SatSolver;
+use self::sat_wrapper::SatWrapper;
 
 impl Ddnnf {
     pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
-        let sat_solver = SatSolver::new(self);
+        let sat_solver = SatWrapper::new(self);
         let and_merger = ZippingMerger {
             t,
             sat_solver: &sat_solver,
@@ -257,7 +257,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         &self,
         sample: &mut Sample,
         root: usize,
-        sat_solver: &SatSolver,
+        sat_solver: &SatWrapper,
     ) {
         let vars: Vec<i32> =
             (1..=self.ddnnf.number_of_variables as i32).collect();
@@ -294,7 +294,7 @@ fn trim_and_resample(
     sample: Sample,
     t: usize,
     number_of_variables: usize,
-    sat_solver: &SatSolver,
+    sat_solver: &SatWrapper,
     rng: &mut StdRng,
 ) -> Sample {
     if sample.is_empty() {

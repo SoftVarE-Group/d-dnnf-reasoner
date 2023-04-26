@@ -1,4 +1,4 @@
-use crate::ddnnf::anomalies::t_wise_sampling::sat_solver::SatSolver;
+use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 use crate::parser::util::format_vec;
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -114,13 +114,13 @@ impl Config {
     }
 
     /// Returns whether the cached sat state is complete (true) or incomplete (false)
-    pub fn is_sat_state_complete(&self) -> bool {
+    fn is_sat_state_complete(&self) -> bool {
         self.sat_state_complete
     }
 
-    /// Uses the given [SatSolver] to update the cached sat solver state in this config.
+    /// Uses the given [SatWrapper] to update the cached sat solver state in this config.
     /// This does nothing if the cache is up to date.
-    pub fn update_sat_state(&mut self, sat_solver: &SatSolver, root: usize) {
+    pub fn update_sat_state(&mut self, sat_solver: &SatWrapper, root: usize) {
         if self.is_sat_state_complete() {
             debug_assert!(
                 self.sat_state.is_some(),
@@ -189,10 +189,10 @@ pub struct Sample {
     /// Configs that do not contain all variables of this sample
     pub partial_configs: Vec<Config>,
     /// The variables that Configs of this sample may contain
-    vars: HashSet<u32>,
+    pub(super) vars: HashSet<u32>,
     /// The literals that actually occur in this sample, this is not a HashSet because we want
     /// a stable iteration order.
-    literals: Vec<i32>,
+    pub(super) literals: Vec<i32>,
 }
 
 impl PartialOrd<Self> for Sample {
@@ -282,25 +282,8 @@ impl Sample {
         sample
     }
 
-    /// Create an empty sample that may contain the given variables and will certainly contain
-    /// the given literals. Only use this if you know that the configs you are going to add to
-    /// this sample contain the given literals.
-    pub fn new_with_literals(
-        vars: HashSet<u32>,
-        mut literals: Vec<i32>,
-    ) -> Self {
-        literals.sort_unstable();
-        literals.dedup();
-        Self {
-            complete_configs: vec![],
-            partial_configs: vec![],
-            vars,
-            literals,
-        }
-    }
-
     /// Create an empty sample with no variables defined
-    pub fn empty() -> Self {
+    pub fn default() -> Self {
         Self {
             complete_configs: vec![],
             partial_configs: vec![],
@@ -356,7 +339,7 @@ impl Sample {
     /// use std::collections::HashSet;
     /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
     ///
-    /// let sample = Sample::new_with_literals(HashSet::from([1,2,3]), vec![]);
+    /// let sample = Sample::new(HashSet::from([1,2,3]));
     ///
     /// assert!(sample.is_config_complete(&Config::from(&[1,2,3], 3)));
     /// assert!(!sample.is_config_complete(&Config::from(&[1,2], 3)));
@@ -375,13 +358,6 @@ impl Sample {
         self.complete_configs
             .iter()
             .chain(self.partial_configs.iter())
-    }
-
-    /// Creates an iterator that first iterates over complete_configs and then over partial_configs
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut Config> {
-        self.complete_configs
-            .iter_mut()
-            .chain(self.partial_configs.iter_mut())
     }
 
     pub fn iter_with_completeness(
@@ -425,8 +401,6 @@ impl Sample {
 
 #[cfg(test)]
 mod test {
-    use crate::parser::build_ddnnf;
-
     use super::*;
 
     #[test]
@@ -443,36 +417,5 @@ mod test {
 
         let uncovered_interaction = vec![1, 2, 4];
         assert!(!sample.covers(&uncovered_interaction));
-    }
-
-    #[test]
-    fn test_cache_updating() {
-        let ddnnf =
-            build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
-        let root = ddnnf.nodes.len() - 1;
-        let sat_solver = SatSolver::new(&ddnnf);
-
-        // expected outcomes
-        let expected_for_3 = vec![
-            true, false, false, true, false, false, false, false, false, false,
-            false, true, false, false, false, false, false,
-        ];
-        let expected_for_2_3 = vec![
-            true, true, false, true, false, false, false, false, false, false,
-            true, true, false, false, false, false, false,
-        ];
-
-        // config without sat state
-        let mut config = Config::from(&[3], ddnnf.number_of_variables as usize);
-        assert_eq!(config.sat_state, None);
-
-        // update from None to Some(_)
-        config.update_sat_state(&sat_solver, root);
-        assert_eq!(config.sat_state, Some(expected_for_3));
-
-        // extend the config then update from Some(_) to Some(_)
-        config.extend([2]);
-        config.update_sat_state(&sat_solver, root);
-        assert_eq!(config.sat_state, Some(expected_for_2_3));
     }
 }

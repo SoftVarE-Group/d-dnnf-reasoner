@@ -1,8 +1,8 @@
 use crate::ddnnf::anomalies::t_wise_sampling::covering_strategies::cover_with_caching;
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::iterator::TInteractionIter;
+use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, SampleMerger};
-use crate::ddnnf::anomalies::t_wise_sampling::sat_solver::SatSolver;
+use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 use crate::Ddnnf;
 use std::cmp::min;
 
@@ -13,7 +13,7 @@ use streaming_iterator::StreamingIterator;
 #[derive(Debug, Clone)]
 pub struct ZippingMerger<'a> {
     pub t: usize,
-    pub sat_solver: &'a SatSolver<'a>,
+    pub sat_solver: &'a SatWrapper<'a>,
     pub ddnnf: &'a Ddnnf,
 }
 
@@ -87,14 +87,14 @@ impl SampleMerger for ZippingMerger<'_> {
         let (singles, mut samples): (Vec<&Sample>, Vec<&Sample>) =
             samples.iter().partition(|sample| sample.len() <= 1);
 
-        let single = singles.iter().fold(Sample::empty(), |acc, s| {
+        let single = singles.iter().fold(Sample::default(), |acc, s| {
             self.merge_in_place(node_id, acc, s, rng)
         });
 
         samples.push(&single);
         samples.sort_unstable();
 
-        samples.iter().fold(Sample::empty(), |acc, s| {
+        samples.iter().fold(Sample::default(), |acc, s| {
             self.merge_in_place(node_id, acc, s, rng)
         })
     }
@@ -170,12 +170,29 @@ mod test {
         assert_eq!(None, iter.next());
     }
 
+    /// Create an empty sample that may contain the given variables and will certainly contain
+    /// the given literals. Only use this if you know that the configs you are going to add to
+    /// this sample contain the given literals.
+    fn new_with_literals(
+        vars: HashSet<u32>,
+        mut literals: Vec<i32>,
+    ) -> Sample {
+        literals.sort_unstable();
+        literals.dedup();
+        Sample {
+            complete_configs: vec![],
+            partial_configs: vec![],
+            vars,
+            literals,
+        }
+    }
+
     #[test]
     fn test_zipping_merger() {
         let ddnnf =
             build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
         let node = ddnnf.nodes.len() - 1;
-        let sat_solver = SatSolver::new(&ddnnf);
+        let sat_solver = SatWrapper::new(&ddnnf);
 
         let zipping_merger = ZippingMerger {
             t: 2,
@@ -185,7 +202,7 @@ mod test {
 
         let mut rng = StdRng::seed_from_u64(42);
         let mut left_sample =
-            Sample::new_with_literals(HashSet::from([2, 3]), vec![-2, 3]);
+            new_with_literals(HashSet::from([2, 3]), vec![-2, 3]);
         left_sample.add_partial(Config::from(&[3], 4));
         let right_sample =
             Sample::new_from_configs(vec![Config::from(&[1, 4], 4)]);

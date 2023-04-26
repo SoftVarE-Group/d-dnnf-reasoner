@@ -13,14 +13,17 @@ impl Ddnnf {
     /// Vice versa the query is satisfiable.
     #[inline]
     pub fn sat(&mut self, features: &[i32]) -> bool {
-        let mut mark = vec![false; self.nodes.len()];
-        self.sat_propagate(features, &mut mark)
+        self.sat_propagate(features, &mut vec![false; self.nodes.len()], None)
     }
 
     /// Does the exact same as 'sat' with the difference of choosing the marking Vec by ourself.
     /// That allows reusing that vector and therefore enabeling an efficient method to do decision propogation.
+    /// If wanted, one can supply an marking Vec<bool>, that can be reused in following method calls to propagate satisfiability.
+    /// The root_index does not have to be the root of the DAG. Instead it can be any node. If 'None' is supplied we use the root of the DAG.
     #[inline]
-    pub fn sat_propagate(&mut self, features: &[i32], mark: &mut Vec<bool>) -> bool {
+    pub fn sat_propagate(&self, features: &[i32], mark: &mut Vec<bool>, root_index: Option<usize>) -> bool {
+        let root_index = root_index.unwrap_or(self.nodes.len() - 1);
+
         if features.iter().any(|f| self.makes_query_unsat(f)) {
             return false;
         }
@@ -31,14 +34,14 @@ impl Ddnnf {
                     self.propagate_mark(index, mark);
                     // if the root is unsatisfiable after any of the literals in the query,
                     // then the whole query must be unsatisfiable too. 
-                    if mark[self.nodes.len() - 1] { return false; }
+                    if mark[root_index] { return false; }
                 },
                 None => (),
             }
         }
         
         // the result is the marking of the root node
-        !mark[self.nodes.len() - 1]
+        !mark[root_index]
     }
 
     // marks a node and decides whether we have to continue the marking with its parent nodes
@@ -70,6 +73,12 @@ impl Ddnnf {
             .iter()
             .for_each(|&p| self.propagate_mark(p, mark))
     }
+}
+
+/// Creates a new marking vector that can wrapped be used as 'mark' parameter for 'sat_propagate'.
+#[inline]
+pub fn new_sat_mark_state(number_of_nodes: usize) -> Vec<bool> {
+    vec![false; number_of_nodes]
 }
 
 #[cfg(test)]

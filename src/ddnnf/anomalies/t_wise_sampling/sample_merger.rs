@@ -5,7 +5,7 @@ use rand::prelude::StdRng;
 pub mod similarity_merger;
 pub mod zipping_merger;
 
-pub trait SampleMerger {
+pub(super) trait SampleMerger {
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
     fn merge(
@@ -40,7 +40,7 @@ pub trait SampleMerger {
         samples: &[&Sample],
         rng: &mut StdRng,
     ) -> Sample {
-        samples.iter().fold(Sample::empty(), |acc, &sample| {
+        samples.iter().fold(Sample::default(), |acc, &sample| {
             self.merge_in_place(node_id, acc, sample, rng)
         })
     }
@@ -48,15 +48,15 @@ pub trait SampleMerger {
 
 /// This is a marker trait that indicates that a [SampleMerger] is for merging the samples
 /// in an AND node.
-pub trait AndMerger: SampleMerger {}
+pub(super) trait AndMerger: SampleMerger {}
 
 /// This is a marker trait that indicates that a [SampleMerger] is for merging the samples
 /// in an OR node.
-pub trait OrMerger: SampleMerger {}
+pub(super) trait OrMerger: SampleMerger {}
 
 /// A simple [AndMerger] that just builds all valid configs
 #[derive(Debug, Clone, Copy)]
-pub struct DummyAndMerger<'a> {
+pub(super) struct DummyAndMerger<'a> {
     ddnnf: &'a Ddnnf,
 }
 
@@ -95,7 +95,7 @@ impl AndMerger for DummyAndMerger<'_> {}
 
 /// A simple [OrMerger] that just builds all valid configs
 #[derive(Debug, Clone, Copy)]
-pub struct DummyOrMerger {}
+pub(super) struct DummyOrMerger {}
 
 impl SampleMerger for DummyOrMerger {
     fn merge(

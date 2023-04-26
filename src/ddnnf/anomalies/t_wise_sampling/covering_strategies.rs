@@ -1,11 +1,11 @@
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::sat_solver::SatSolver;
+use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 
 /// Covering strategy that uses the sat state caching.
-pub fn cover_with_caching(
+pub(super) fn cover_with_caching(
     sample: &mut Sample,
     interaction: &[i32],
-    sat_solver: &SatSolver,
+    sat_solver: &SatWrapper,
     node_id: usize,
     number_of_vars: usize,
 ) {
