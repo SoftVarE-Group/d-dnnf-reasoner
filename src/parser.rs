@@ -39,7 +39,7 @@ use petgraph::{
 /// use ddnnf_lib::parser;
 /// use ddnnf_lib::Ddnnf;
 ///
-/// let file_path = "./tests/data/small_test.dimacs.nnf";
+/// let file_path = "./tests/data/small_ex_c2d.nnf";
 ///
 /// let ddnnfx: Ddnnf = parser::build_ddnnf(file_path, None);
 /// ```
@@ -310,7 +310,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
 
     // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..omitted_features {
+    for i in 1..=omitted_features {
         if !literal_occurences.borrow()[i as usize] {
             add_literal_node(&mut ddnnf_graph, i, root);
         }

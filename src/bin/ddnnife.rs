@@ -15,7 +15,7 @@ use std::thread::{self};
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{self as dparser, persisting::write_ddnnf};
+use ddnnf_lib::parser::{self as dparser, persisting::{write_as_mermaid_md, write_ddnnf}};
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true),
@@ -202,6 +202,14 @@ enum Operation {
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
     },
+    /// Transforms the smooth d-DNNF into the mermaid.md format.
+    #[clap(verbatim_doc_comment)]
+    Mermaid {
+        /// Default output file is '{FILE_NAME}-mermaid.md'.
+        /// Alternatively, you can choose a name. The .md ending is added automatically.
+        #[arg(verbatim_doc_comment)]
+        custom_output_file: Option<String>,
+    },
 }
 
 fn main() {
@@ -287,6 +295,8 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "urs", "csv"),
             Core { custom_output_file }
                 => construct_ouput_path(custom_output_file, "core", "csv"),
+            Mermaid { custom_output_file }
+                => construct_ouput_path(custom_output_file, "mermaid", "md"),
             _ => String::new()
         };
 
@@ -406,6 +416,10 @@ fn main() {
                 wtr.flush().unwrap();
                 println!("\nComputed the core / dead features and saved the results in {}.", output_file_path);
             },
+            Mermaid { custom_output_file: _ } => {
+                write_as_mermaid_md(&ddnnf, &output_file_path).unwrap();
+                println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", output_file_path);
+            },
         }
     }
 
@@ -414,11 +428,6 @@ fn main() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
         write_ddnnf(&mut ddnnf, &path).unwrap();
         println!("\nThe smooth d-DNNF was written into the c2d format in {}.", path);
-    }
-
-    // print the heuristics
-    if cli.heuristics {
-        ddnnf.print_all_heuristics();
     }
 }
 

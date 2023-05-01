@@ -190,7 +190,7 @@ mod test {
     #[test]
     fn test_zipping_merger() {
         let ddnnf =
-            build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
+            build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
         let node = ddnnf.nodes.len() - 1;
         let sat_solver = SatWrapper::new(&ddnnf);
 

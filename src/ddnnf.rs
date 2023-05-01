@@ -95,11 +95,11 @@ impl Ddnnf {
     /// use rug::Integer;
     ///
     /// // create a ddnnf
-    /// let file_path = "./tests/data/small_test.dimacs.nnf";
+    /// let file_path = "./tests/data/small_ex_c2d.nnf";
     /// let mut ddnnf: Ddnnf = build_ddnnf(file_path, None);
     ///
-    /// assert_eq!(3, ddnnf.execute_query(&vec![3,1]));
-    /// assert_eq!(3, ddnnf.execute_query(&vec![3]));
+    /// assert_eq!(1, ddnnf.execute_query(&vec![3,4]));
+    /// assert_eq!(2, ddnnf.execute_query(&vec![3]));
     pub fn execute_query(&mut self, features: &[i32]) -> Integer {
         match features.len() {
             0 => self.rc(),
