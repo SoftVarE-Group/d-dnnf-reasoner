@@ -55,7 +55,6 @@ pub fn write_as_mermaid_md(ddnnf: &Ddnnf, path_out: &str) -> std::io::Result<()>
     
     let config = String::from("```mermaid\n\t\
         graph TD\n\t\
-        %%{init:{'flowchart':{'nodeSpacing': 50, 'rankSpacing': 100}}}%%\n\t\t\
             subgraph pad1 [ ]\n\t\t\
                 subgraph pad2 [ ]\n\t\t\
                     subgraph legend[Legend]\n\t\t\t\
@@ -78,7 +77,7 @@ fn mermaidify_node(ddnnf: &Ddnnf, position: usize) -> String {
     match &ddnnf.nodes[position].ntype {
         NodeType::And { children } | NodeType::Or { children } => {
             let mut res = String::new();
-            let mm_node = format!("\t\t{} --> ", mermaidify_type(&ddnnf, position));
+            let mm_node = format!("\t\t{} ---> ", mermaidify_type(&ddnnf, position));
 
             let mut children_series = children.clone();
             children_series.sort_by(|c1, c2| compute_depth(ddnnf, *c1).cmp(&&compute_depth(ddnnf, *c2)));
