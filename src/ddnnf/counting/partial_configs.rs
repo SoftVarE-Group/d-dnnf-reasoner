@@ -22,7 +22,7 @@ impl Ddnnf{
     ///
     /// // create a ddnnf
     /// // and run the queries
-    /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_test.dimacs.nnf", None);
+    /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
     /// ddnnf.card_multi_queries(
     ///     "./tests/data/small_test.config",
     ///     "./tests/data/smt_out.csv",)

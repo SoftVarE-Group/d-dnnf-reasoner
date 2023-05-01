@@ -37,7 +37,7 @@ use petgraph::{
 /// use ddnnf_lib::parser;
 /// use ddnnf_lib::Ddnnf;
 ///
-/// let file_path = "./tests/data/small_test.dimacs.nnf";
+/// let file_path = "./tests/data/small_ex_c2d.nnf";
 ///
 /// let ddnnfx: Ddnnf = parser::build_ddnnf(file_path, None);
 /// ```
