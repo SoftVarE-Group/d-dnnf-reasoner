@@ -117,7 +117,14 @@ impl Ddnnf {
     // creates a clone of the nodes which were marked when computing the cardinality
     // for a given partial configuration
     pub fn get_marked_nodes_clone(&mut self, features: &[i32]) -> Vec<usize> {           
-        self.mark_assumptions(&self.map_features_opposing_indexes(&features));
+        let opposing_indices = &self.map_features_opposing_indexes(&features);
+        self.mark_assumptions(&opposing_indices);
+        
+        // add the literal nodes
+        for index in opposing_indices.iter() {
+            self.md.push(*index);
+        }
+        self.md.sort_unstable();
         let marked_nodes = self.md.clone();
         
         // reset everything
@@ -171,5 +178,35 @@ impl Ddnnf {
                 self.mark_nodes(parent);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::parser::build_ddnnf;
+
+    #[test]
+    fn marking_nodes() {
+        let mut ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        
+        ddnnf.mark_assumptions(&[0]);
+        assert_eq!(vec![11], ddnnf.md);
+        for node in ddnnf.nodes.iter_mut() {
+            node.marker = false;
+        }
+        ddnnf.md.clear();
+
+        ddnnf.mark_assumptions(&[2, 3]);
+        assert_eq!(vec![7, 8, 9, 11], ddnnf.md);
+        for node in ddnnf.nodes.iter_mut() {
+            node.marker = false;
+        }
+        ddnnf.md.clear();
+
+        assert!(ddnnf.get_marked_nodes_clone(&[]).is_empty());
+        assert_eq!(vec![3, 8, 9, 11], ddnnf.get_marked_nodes_clone(&[2]));
+        assert_eq!(vec![6, 10, 11], ddnnf.get_marked_nodes_clone(&[4]));
+        assert_eq!(vec![3, 6, 8, 9, 10, 11], ddnnf.get_marked_nodes_clone(&[2, 4]));
+        assert_eq!(vec![2, 6, 7, 9, 10, 11], ddnnf.get_marked_nodes_clone(&[1, 3, 4]));
     }
 }

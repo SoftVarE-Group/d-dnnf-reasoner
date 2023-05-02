@@ -209,6 +209,15 @@ enum Operation {
         /// Alternatively, you can choose a name. The .md ending is added automatically.
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
+        /// The numbers of the features that should be included or excluded
+        /// (positive number to include, negative to exclude).
+        /// The nodes will be annotaded with their count regarding this query
+        /// while using the marking algorithm.
+        /// Can be one or multiple. A feature f has to be ∈ ℤ
+        /// and the only allowed seperator is a whitespace.
+        /// The default is no assumption.
+        #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
+        assumptions: Vec<i32>
     },
 }
 
@@ -295,7 +304,7 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "urs", "csv"),
             Core { custom_output_file }
                 => construct_ouput_path(custom_output_file, "core", "csv"),
-            Mermaid { custom_output_file }
+            Mermaid { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "mermaid", "md"),
             _ => String::new()
         };
@@ -416,8 +425,8 @@ fn main() {
                 wtr.flush().unwrap();
                 println!("\nComputed the core / dead features and saved the results in {}.", output_file_path);
             },
-            Mermaid { custom_output_file: _ } => {
-                write_as_mermaid_md(&ddnnf, &output_file_path).unwrap();
+            Mermaid { custom_output_file: _, assumptions } => {
+                write_as_mermaid_md(&mut ddnnf, &assumptions, &output_file_path).unwrap();
                 println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", output_file_path);
             },
         }

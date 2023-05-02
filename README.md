@@ -118,6 +118,39 @@ Display the help information for the sat command.
 ./target/release/ddnnife sat -h
 ```
 
+Create the mermaid visualization of the small example dDNNF under assumptions. The model count is 4 and the count for the partial configuration (2,4) is 1.
+```properties
+./target/debug/ddnnife example_input/small_example_c2d.nnf mermaid -a 2 4 
+```
+
+```mermaid
+	graph TD
+        subgraph pad1 [ ]
+            subgraph pad2 [ ]
+                subgraph legend[Legend]
+                    nodes("<font color=white> Node Type <font color=cyan> Node Number <font color=greeny> Count <font color=red> Temp Count <font color=orange> Query [2, 4]")
+                    style legend fill:none, stroke:none
+                end
+                style pad2 fill:none, stroke:none
+            end
+            style pad1 fill:none, stroke:none
+        end
+        classDef marked stroke:#d90000, stroke-width:4px
+
+		11("∧ <font color=cyan>11 <font color=greeny>4 <font color=red>1"):::marked --> 0 & 10 & 9;
+		10("∨ <font color=cyan>10 <font color=greeny>2 <font color=red>1"):::marked --> 5 & 6;
+		9("∨ <font color=cyan>9 <font color=greeny>2 <font color=red>1"):::marked --> 7 & 8;
+		8("∧ <font color=cyan>8 <font color=greeny>1 <font color=red>0"):::marked --> 3 & 4;
+		7("∧ <font color=cyan>7 <font color=greeny>1 <font color=red>1") --> 1 & 2;
+		6("¬L4 <font color=cyan>6 <font color=greeny>1 <font color=red>0"):::marked;
+		5("L4 <font color=cyan>5 <font color=greeny>1 <font color=red>1");
+		4("L3 <font color=cyan>4 <font color=greeny>1 <font color=red>1");
+		3("¬L2 <font color=cyan>3 <font color=greeny>1 <font color=red>0"):::marked;
+		2("¬L3 <font color=cyan>2 <font color=greeny>1 <font color=red>1");
+		1("L2 <font color=cyan>1 <font color=greeny>1 <font color=red>1");
+		0("L1 <font color=cyan>0 <font color=greeny>1 <font color=red>1");
+```
+
 ## Stream API <a name="building_stream"></a>
 With the ```stream``` command, we introduce the possibility to interact with ddnnife via stdin and stdout. The user can choose between different kinds of queries that can be further adjusted with additional parameters. The idea behind the stream API is to interact with ddnnife with another program, but for testing purposes one can use the stdin and stdout of a terminal to test the API.
 

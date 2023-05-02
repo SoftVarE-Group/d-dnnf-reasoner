@@ -1,5 +1,7 @@
 use std::{io::{LineWriter, Write}, fs::File, cmp::max};
 
+use rug::Assign;
+
 use crate::{Ddnnf, Node, NodeType};
 
 /// Takes a d-DNNF and writes the string representation into a file with the provided name
@@ -45,65 +47,78 @@ fn deconstruct_children(mut str: String, children: &Vec<usize>) -> String {
     str
 }
 
-/// Takes a Ddnnf, transforms it into a corresponding markdown mermaid representation
-/// , and saves it into the provided file name.
+/// Takes a Ddnnf, transforms it into a corresponding markdown mermaid representation,
+/// and saves it into the provided file name.
 /// 
 /// We als add a legend that describes the mermaidified nodes
-pub fn write_as_mermaid_md(ddnnf: &Ddnnf, path_out: &str) -> std::io::Result<()> { 
+pub fn write_as_mermaid_md(ddnnf: &mut Ddnnf, features: &[i32], path_out: &str) -> std::io::Result<()> { 
+    for node in ddnnf.nodes.iter_mut() {
+        node.temp.assign(&node.count);
+    }
+    
+    ddnnf.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node);
+    
     let file = File::create(path_out)?;
     let mut lw = LineWriter::with_capacity(1000, file);
     
-    let config = String::from("```mermaid\n\t\
-        graph TD\n\t\
-            subgraph pad1 [ ]\n\t\t\
-                subgraph pad2 [ ]\n\t\t\
-                    subgraph legend[Legend]\n\t\t\t\
-                        nodes(\"<font color=white> Node Type <font color=cyan> Node Number <font color=greeny> Count <font color=red> Temp Count\")\n\t\t\t\t\
-                    end\n\t\t\t\
-                    style legend stroke:orange,stroke-width:3px,color:orange,fill:none,height:90px,width:365px,x:20px\n\t\t\t\
-                end\n\t\t\
-                style pad2 fill:none, stroke:none\n\t\t\
-                style pad1 fill:none, stroke:none\n\t\t\
-            end\n");
+    let config = format!("```mermaid\n\t\
+    graph TD
+        subgraph pad1 [ ]
+            subgraph pad2 [ ]
+                subgraph legend[Legend]
+                    nodes(\"<font color=white> Node Type <font color=cyan> \
+                    Node Number <font color=greeny> Count <font color=red> Temp Count \
+                    <font color=orange> Query {:?}\")
+                    style legend fill:none, stroke:none
+                end
+                style pad2 fill:none, stroke:none
+            end
+            style pad1 fill:none, stroke:none
+        end
+        classDef marked stroke:#d90000, stroke-width:4px\n\n", features);
     lw.write_all(config.as_bytes()).unwrap();
-    lw.write_all(mermaidify_node(ddnnf, ddnnf.nodes.len() - 1).as_bytes())?;
+    let marking = ddnnf.get_marked_nodes_clone(features);
+    lw.write_all(mermaidify_nodes(ddnnf, &marking).as_bytes())?;
     lw.write_all(b"```").unwrap();
 
     Ok(())
 }
 
 /// Adds the nodes its children to the mermaid graph
-fn mermaidify_node(ddnnf: &Ddnnf, position: usize) -> String {
-    match &ddnnf.nodes[position].ntype {
-        NodeType::And { children } | NodeType::Or { children } => {
-            let mut res = String::new();
-            let mm_node = format!("\t\t{} ---> ", mermaidify_type(&ddnnf, position));
+fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
+    let mut result = String::new();
 
-            let mut children_series = children.clone();
-            children_series.sort_by(|c1, c2| compute_depth(ddnnf, *c1).cmp(&&compute_depth(ddnnf, *c2)));
+    for (position, node) in ddnnf.nodes.iter().enumerate().rev() {
+        result = format!("{}{}", result, match &node.ntype {
+            NodeType::And { children } | NodeType::Or { children } => {
+                let mut mm_node = format!("\t\t{}{} --> ", mermaidify_type(&ddnnf, position), marking_insert(marking, position));
 
-            if children_series.len() != 0 {
-                res.push_str(&mm_node);
+                let mut children_series = children.clone();
+                children_series.sort_by(|c1, c2| compute_depth(ddnnf, *c1).cmp(&&compute_depth(ddnnf, *c2)));
 
-                for child in children_series {
-                    if ddnnf.nodes[child].ntype == NodeType::True {
-                        continue;
+                if children_series.len() != 0 {
+                    for (i, &child) in children_series.iter().enumerate() {
+                        if ddnnf.nodes[child].ntype == NodeType::True {
+                            continue;
+                        }
+                        mm_node.push_str(&child.to_string());
+                        if i != children_series.len() - 1 {
+                            mm_node.push_str(" & ");
+                        } else {
+                            mm_node.push_str(";\n");
+                        }
                     }
-                    let con = format!("{} & ", mermaidify_type(&ddnnf, child));
-                    res.push_str(&con);
                 }
-
-                res.drain(res.len()-3..);
-                res.push_str(";\n")
-            }
-
-            for child in children {
-                res.push_str(&mermaidify_node(ddnnf, *child));
-            }
-            res
-        },
-        _ => String::new(),
+                mm_node
+            },
+            NodeType::Literal { literal: _ } | NodeType::False => { 
+                format!("\t\t{}{};\n", mermaidify_type(&ddnnf, position), marking_insert(marking, position))
+            },
+            _ => String::new()
+        });
     }
+
+    result
 }
 
 /// Each node in the mermaid graph contains information about
@@ -142,4 +157,13 @@ fn compute_depth(ddnnf: &Ddnnf, position: usize) -> usize {
         NodeType::True => 0,
         _ => 1
     }
+}
+
+fn marking_insert(marking: &[usize], position: usize) -> &str {
+    let marking_insert = if marking.binary_search(&position).is_ok() {
+        ":::marked"
+    } else {
+        ""
+    };
+    marking_insert
 }

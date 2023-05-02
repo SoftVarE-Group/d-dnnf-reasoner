@@ -109,3 +109,17 @@ impl Ddnnf {
         }
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    use crate::parser::build_ddnnf;
+
+    #[test]
+    fn features_opposing_indexes() {
+        let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        
+        assert_eq!(vec![3, 2, 6], ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4]));
+        assert_eq!(vec![0, 1, 4, 5], ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4]));
+    }
+}
