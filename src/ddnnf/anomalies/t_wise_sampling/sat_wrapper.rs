@@ -45,7 +45,6 @@ impl<'a> SatWrapper<'a> {
         root: usize,
         cached_state: &mut Vec<bool>,
     ) -> bool {
-        println!("Config: {:?}", config);
         self.ddnnf.sat_propagate(config, cached_state, Some(root))
     }
 }

@@ -294,8 +294,8 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "sat", "csv"),
             StreamQueries { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "stream", "csv"),
-            TWise { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "t-wise", "csv"),
+            TWise { custom_output_file, t }
+                => construct_ouput_path(custom_output_file, format!("{}-wise", t).as_str(), "csv"),
             Anomalies { custom_output_file }
                 => construct_ouput_path(custom_output_file, "anomalies", "txt"),
             AtomicSets { custom_output_file, .. }
@@ -331,7 +331,6 @@ fn main() {
             },
             TWise { t, custom_output_file: _ } => {
                 let sample_result = ddnnf.sample_t_wise(*t);
-                println!("sample done");
                 save_sample_to_file(&sample_result,  &output_file_path).unwrap();
                 println!("\nComputed {}-wise samples and saved the results in {}.", t, output_file_path);
             },

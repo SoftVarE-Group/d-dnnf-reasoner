@@ -426,3 +426,49 @@ pub fn save_sample_to_file(
 
     wtr.flush()
 }
+
+#[cfg(test)]
+mod test {
+    use itertools::Itertools;
+
+    use crate::{Ddnnf, parser::build_ddnnf};
+
+    #[test]
+    fn t_wise_sampling_validity() {
+        let mut vp9: Ddnnf =
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut auto1: Ddnnf =
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+
+        check_validity_samplingresult(&mut vp9, 1);
+        check_validity_samplingresult(&mut vp9, 2);
+        check_validity_samplingresult(&mut vp9, 3);
+        check_validity_samplingresult(&mut vp9, 4);
+        check_validity_samplingresult(&mut auto1, 1);
+
+        fn check_validity_samplingresult(ddnnf: &mut Ddnnf, t: usize) {
+            let t_wise_samples = ddnnf.sample_t_wise(t);
+            let configs = t_wise_samples.get_sample().unwrap().iter()
+                .map(|config| config.get_literals()).collect_vec();
+
+            for config in configs.iter() {
+                // every config must be complete and satisfiable
+                assert_eq!(ddnnf.number_of_variables as usize, config.len(), "config is not complete");
+                assert!(ddnnf.sat(config));
+            }
+
+            let mut possible_features = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect_vec();
+            possible_features.remove(ddnnf.number_of_variables as usize); // remove the 0
+            for combi in possible_features.into_iter().combinations(t) {
+                // checks if the pair can be found in at least one of the samples
+                let combi_exists = |combi: &[i32]| -> bool {
+                    configs.iter().any(|config|
+                        combi.iter().all(|&f| config[f.abs() as usize - 1] == f)
+                    )
+                };
+                
+                assert!(combi_exists(&combi) || !ddnnf.sat(&combi), "combination: {:?} can neither be convered with samples nor is it unsat", combi)
+            }
+        }
+    }
+}
