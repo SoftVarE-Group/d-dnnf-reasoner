@@ -1,17 +1,23 @@
 pub mod c2d_lexer;
-use c2d_lexer::{lex_line, TId, C2DToken};
+use c2d_lexer::{lex_line_c2d, TId, C2DToken};
 
 pub mod d4_lexer;
 use colored::Colorize;
 use d4_lexer::{lex_line_d4, D4Token};
+
+pub mod from_cnf;
 
 pub mod persisting;
 pub mod util;
 
 use core::panic;
 use std::cmp::max;
-use std::fs::File;
+use std::ffi::OsStr;
+use std::fs::{File, self};
 use std::io::{BufRead, BufReader};
+use std::path::Path;
+use std::process::Command;
+use std::time::Instant;
 use std::{
     cell::RefCell,
     rc::Rc, process
@@ -28,6 +34,8 @@ use petgraph::{
     visit::DfsPostOrder,
     Direction::{Outgoing, Incoming},
 };
+
+use self::from_cnf::{check_for_cnf_header, CNFToken};
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -48,12 +56,45 @@ use petgraph::{
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf(path: &str, omitted_features: Option<u32>) -> Ddnnf {
+pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
+    match Path::new(path).extension().and_then(OsStr::to_str) {
+        Some(extension) => {
+            if extension == "dimacs" || extension == "cnf" {
+                let file = open_file_savely(path);
+                let lines = BufReader::new(file).lines();
+                for line in lines {
+                    let line = line.expect("Unable to read line");
+                    match check_for_cnf_header(line.as_str()).unwrap().1 {
+                        CNFToken::Header { features, clauses: _ } => {
+                            let time = Instant::now();
+                            print!("Compiling dDNNF from CNF file... ");
+
+                            #[cfg(debug_assertions)]
+                            Command::new("./target/debug/d4v2").args(["-i", path, "-m", "ddnnf-compiler", "--dump-ddnnf", ".intermediate.nnf"]).output().unwrap();
+                            
+                            #[cfg(not(debug_assertions))]
+                            Command::new("./target/release/d4v2").args(["-i", path, "-m", "ddnnf-compiler", "--dump-ddnnf", ".intermediate.nnf"]).output().unwrap();
+
+                            println!("Elapsed time: {:.3}s.", time.elapsed().as_secs_f64());
+                            path = ".intermediate.nnf";
+                            omitted_features = Some(features as u32);
+                            break
+                        },
+                        CNFToken::Comment | CNFToken::Clause => (),
+                    }
+                }
+            }
+        },
+        None => (),
+    }
+    
     let file = open_file_savely(path);
     let lines = BufReader::new(file)
         .lines()
         .map(|line| line.expect("Unable to read line"))
         .collect::<Vec<String>>();
+
+    if path == ".intermediate.nnf" { fs::remove_file(path).unwrap(); }
 
     distribute_building(lines, omitted_features)
 }
@@ -65,7 +106,7 @@ pub fn build_ddnnf(path: &str, omitted_features: Option<u32>) -> Ddnnf {
 pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) -> Ddnnf {
     use C2DToken::*;
     
-    match lex_line(lines[0].trim()) {
+    match lex_line_c2d(lines[0].trim()) {
         Ok((_, Header { nodes: _, edges: _, variables })) => {
             build_c2d_ddnnf(lines, variables as u32)
         },
@@ -104,7 +145,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     // works off each line of the file data seperatly
     // skip the first line, because we already looked at the header
     for line in lines.into_iter().skip(1) {
-        let next: Node = match lex_line(line.as_ref()).unwrap().1 {
+        let next: Node = match lex_line_c2d(line.as_ref()).unwrap().1 {
             And { children } => Node::new_and(
                 calc_and_count(&mut parsed_nodes, &children),
                 children,

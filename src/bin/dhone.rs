@@ -130,7 +130,7 @@ fn get_token_stream(path: &str) -> Vec<C2DToken> {
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
     for line in lines {
-        parsed_tokens.push(dparser::c2d_lexer::lex_line(line.as_ref()).unwrap().1);
+        parsed_tokens.push(dparser::c2d_lexer::lex_line_c2d(line.as_ref()).unwrap().1);
     }
 
     parsed_tokens

@@ -45,7 +45,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
             recognize(many_m_n(
                 2,
                 usize::MAX,
-                alt((pair(digit1, space1), pair(neg_digit1, space1))),
+                parse_signed_alt_space1_number1,
             )),
             tag("0"),
         ),
@@ -65,6 +65,11 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
             }
         },
     )(line)
+}
+
+// lexes multiple sequences of signed numbers
+pub(super) fn parse_signed_alt_space1_number1(line: &str) -> IResult<&str, (&str, &str)> {
+    alt((pair(digit1, space1), pair(neg_digit1, space1)))(line)
 }
 
 // lexes a sequence of numbers that start with a minues sign

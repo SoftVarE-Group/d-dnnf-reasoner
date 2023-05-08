@@ -93,6 +93,11 @@ Compute the cardinality of features for ```automotive01``` when compiled with d4
 ./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 -c
 ```
 
+Compute the cardinality of features for ```automotive01``` starting from a CNF file. Currently, it is necessary that the CNF file is indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-o``` Option is not necessary, because the needed information if part of the CNF.
+```properties
+./target/release/ddnnife example_input/auto1.cnf -c
+```
+
 An alternative to the above, using the possibility to load a model via stdin.
 ```properties
 cat example_input/auto1_d4.nnf | ./target/release/ddnnife -p -o 2513 -c

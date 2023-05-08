@@ -34,7 +34,7 @@ help_template("\
 ))]
 
 struct Cli {
-    /// The path to the file in c2d or d4 format. The ddnnf has to be either fulfill the requirements
+    /// The path to either a dDNNF file in c2d or d4 format or a CNF file. The ddnnf has to be either fulfill the requirements
     /// of the c2d format and be smooth or produced by the newest d4 compiler version to work properly!
     #[arg(verbatim_doc_comment)]
     file_path: Option<String>,
@@ -261,7 +261,8 @@ fn main() {
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
             println!(
-                "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s.",
+                "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s. \
+                (This includes compiling to dDNNF if needed)",
                 ddnnf.rc(),
                 elapsed_time
             );

@@ -72,23 +72,23 @@ pub enum C2DToken {
 /// use ddnnf_lib::parser::c2d_lexer::*;
 ///
 /// let and_str = "A 3 1 2 3";
-/// assert_eq!(lex_line(and_str).unwrap().1, C2DToken::And { children: vec![1_usize, 2_usize, 3_usize]});
+/// assert_eq!(lex_line_c2d(and_str).unwrap().1, C2DToken::And { children: vec![1_usize, 2_usize, 3_usize]});
 ///
 /// let header_str = "nnf 32 13 23";
-/// assert_eq!(lex_line(header_str).unwrap().1, C2DToken::Header { nodes: 32_usize, edges: 13_usize, variables: 23_usize});
+/// assert_eq!(lex_line_c2d(header_str).unwrap().1, C2DToken::Header { nodes: 32_usize, edges: 13_usize, variables: 23_usize});
 ///
 /// // same problem with PartialEq for the following
 /// let or_str = "O 10 2 20 24";
-/// assert_eq!(lex_line(or_str), Ok(("", C2DToken::Or { decision: 10, children: vec![20, 24] } )));
+/// assert_eq!(lex_line_c2d(or_str), Ok(("", C2DToken::Or { decision: 10, children: vec![20, 24] } )));
 ///
 /// let negative_literal_str = "L -3";
-/// assert_eq!(lex_line(negative_literal_str), Ok(("", C2DToken::Literal { feature: -3 } )));
+/// assert_eq!(lex_line_c2d(negative_literal_str), Ok(("", C2DToken::Literal { feature: -3 } )));
 ///
 /// let true_str = "A 0";
-/// assert_eq!(lex_line(true_str), Ok(("", C2DToken::True)));
+/// assert_eq!(lex_line_c2d(true_str), Ok(("", C2DToken::True)));
 /// ```
 #[inline]
-pub fn lex_line(line: &str) -> IResult<&str, C2DToken> {
+pub fn lex_line_c2d(line: &str) -> IResult<&str, C2DToken> {
     alt((
         lex_header,
         lex_true,
@@ -165,7 +165,7 @@ fn lex_false(line: &str) -> IResult<&str, C2DToken> {
 }
 
 // Returns a closure that lexes exactly one number which consists of multiple digits to form an usize
-fn split_numbers(out: &str) -> Vec<usize> {
+pub(super) fn split_numbers(out: &str) -> Vec<usize> {
     out.split_whitespace()
         .map(|num: &str| {
             num.parse::<usize>()
@@ -177,7 +177,7 @@ fn split_numbers(out: &str) -> Vec<usize> {
 }
 
 // parses an alternating sequence of one space and multiple digits which form a number
-fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
+pub(super) fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
     recognize(many1(pair(char(' '), digit1)))(input)
 }
 
@@ -219,13 +219,13 @@ mod test {
         let positive_literal_str = "L 3";
         let failed_and_str = "A THREE 11 TWELVE 13";
 
-        assert_eq!(lex_line(and_str).unwrap().1, And { children: vec![11,12,13] });
+        assert_eq!(lex_line_c2d(and_str).unwrap().1, And { children: vec![11,12,13] });
 
-        assert_eq!(lex_line(or_str).unwrap().1, Or { decision: 10, children: vec![40,44] } );
+        assert_eq!(lex_line_c2d(or_str).unwrap().1, Or { decision: 10, children: vec![40,44] } );
 
-        assert_eq!(lex_line(positive_literal_str).unwrap().1, Literal { feature: 3 } );
+        assert_eq!(lex_line_c2d(positive_literal_str).unwrap().1, Literal { feature: 3 } );
 
-        let result = std::panic::catch_unwind(|| lex_line(failed_and_str)).unwrap();
+        let result = std::panic::catch_unwind(|| lex_line_c2d(failed_and_str)).unwrap();
         assert!(result.is_err());
     }
 
