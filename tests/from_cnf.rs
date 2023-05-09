@@ -12,7 +12,7 @@ fn compiles_cnf_to_d_dnnf() -> Result<(), Box<dyn std::error::Error>> {
 
     // compiling from CNF to dDNNF
     cmd.assert().stdout(predicate::str::contains(
-    "Compiling dDNNF from CNF file..."
+    "Trying to compile a dDNNF from the CNF file... Elapsed time for compiling:"
     ));
     // count is correct
     cmd.assert().stdout(predicate::str::contains(

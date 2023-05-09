@@ -18,7 +18,7 @@ use core::panic;
 use std::cmp::max;
 use std::ffi::OsStr;
 use std::fs::{File, self};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::time::Instant;
 use std::{
@@ -68,14 +68,15 @@ pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
                     match check_for_cnf_header(line.as_str()).unwrap().1 {
                         CNFToken::Header { features, clauses: _ } => {
                             let time = Instant::now();
-                            print!("Compiling dDNNF from CNF file... ");
+                            print!("Trying to compile a dDNNF from the CNF file... ");
+                            std::io::stdout().flush().unwrap();
                             
                             let ddnnf_file = ".intermediate.nnf";
                             compile_cnf(path, ddnnf_file);
                             path = ddnnf_file;
                             omitted_features = Some(features as u32);
 
-                            println!("Elapsed time: {:.3}s.", time.elapsed().as_secs_f64());
+                            println!("Elapsed time for compiling: {:.3}s.", time.elapsed().as_secs_f64());
                             break
                         },
                         CNFToken::Comment | CNFToken::Clause => (),
@@ -647,7 +648,7 @@ pub fn open_file_savely(path: &str) -> File {
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
-            println!("{}", format!("ERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err).red());
+            eprintln!("{}", format!("ERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err).red());
             process::exit(1);
         }
     }
