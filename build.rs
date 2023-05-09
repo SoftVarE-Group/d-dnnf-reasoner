@@ -1,4 +1,4 @@
-use std::{process::Command, env};
+use std::{process::Command, env, fs::File, io::Write};
 
 fn main() {
     // Set up a local copy of the repository. We choose the forked version of d4v2 due to a missing library in the origin repo.
@@ -12,11 +12,9 @@ fn main() {
         Err(err) => eprintln!("An error occured while trying to build the d4v2 binary: {}", err),
     }
 
-    // debug build
-    #[cfg(debug_assertions)]
-    Command::new("cp").args(["./build/d4", "../target/debug/d4v2"]).output().unwrap();
-
-    // release build
-    #[cfg(not(debug_assertions))]
-    Command::new("cp").args(["./build/d4", "../target/release/d4v2"]).output().unwrap();
+    // Include the binary data of d4v2 in the source files.
+    // This allows us to staticlly bind it to the ddnnife binary.
+    const EXTERNAL_BINARY_DATA: &[u8] = include_bytes!("d4v2/build/d4");
+    let mut out = File::create("../src/parser/d4v2.bin").unwrap();
+    out.write_all(EXTERNAL_BINARY_DATA).unwrap();
 }

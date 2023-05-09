@@ -4,6 +4,7 @@ version = "0.5.0"
 authors = ["Heiko Raab; heiko.raab@uni-ulm-de", "Chico Sundermann; chico.sundermann@uni-ulm.de"]
 edition = "2021"
 license = "GNU LGPL-2.1"
+build = "build.rs"
 
 [lib]
 name = "ddnnf_lib"

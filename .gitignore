@@ -47,5 +47,6 @@ dockerfile
 ideas/
 *.iml
 
-# d4 repo
+# d4 repo and binary
 d4v2
+src/parser/d4v2.bin

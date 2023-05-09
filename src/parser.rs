@@ -6,6 +6,10 @@ use colored::Colorize;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod from_cnf;
+use from_cnf::{check_for_cnf_header, CNFToken};
+
+pub mod d4v2_wrapper;
+use crate::parser::d4v2_wrapper::compile_cnf;
 
 pub mod persisting;
 pub mod util;
@@ -16,7 +20,6 @@ use std::ffi::OsStr;
 use std::fs::{File, self};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
 use std::time::Instant;
 use std::{
     cell::RefCell,
@@ -34,8 +37,6 @@ use petgraph::{
     visit::DfsPostOrder,
     Direction::{Outgoing, Incoming},
 };
-
-use self::from_cnf::{check_for_cnf_header, CNFToken};
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -68,16 +69,13 @@ pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
                         CNFToken::Header { features, clauses: _ } => {
                             let time = Instant::now();
                             print!("Compiling dDNNF from CNF file... ");
-
-                            #[cfg(debug_assertions)]
-                            Command::new("./target/debug/d4v2").args(["-i", path, "-m", "ddnnf-compiler", "--dump-ddnnf", ".intermediate.nnf"]).output().unwrap();
                             
-                            #[cfg(not(debug_assertions))]
-                            Command::new("./target/release/d4v2").args(["-i", path, "-m", "ddnnf-compiler", "--dump-ddnnf", ".intermediate.nnf"]).output().unwrap();
+                            let ddnnf_file = ".intermediate.nnf";
+                            compile_cnf(path, ddnnf_file);
+                            path = ddnnf_file;
+                            omitted_features = Some(features as u32);
 
                             println!("Elapsed time: {:.3}s.", time.elapsed().as_secs_f64());
-                            path = ".intermediate.nnf";
-                            omitted_features = Some(features as u32);
                             break
                         },
                         CNFToken::Comment | CNFToken::Clause => (),
