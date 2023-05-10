@@ -33,8 +33,6 @@ valcom
 *-mermaid.md
 *.svg
 
-clean.sh
-
 # docker
 dockerfile
 .dockerignore
