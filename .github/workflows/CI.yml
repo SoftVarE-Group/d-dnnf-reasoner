@@ -1,32 +1,151 @@
 name: CI
 
-on: [push]
+on: [workflow_dispatch, push]
 
 jobs:
-  Build:
+  Build-Linux:
     runs-on: ubuntu-latest
+    strategy: 
+      fail-fast: false
+      matrix:
+        target: [aarch64-unknown-linux-gnu, x86_64-unknown-linux-gnu]
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Switch to aarch64 if necessary
+        if: ${{ matrix.target }} == aarch64-unknown-linux-gnu
+        uses: uraimo/run-on-arch-action@v2
+        id: runcmd
+        with:
+          arch: aarch64
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+          # Set an output parameter `uname` for use in subsequent steps
+          run: |
+            uname -a
+            echo ::set-output name=uname::$(uname -a)
+            
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build target
+        continue-on-error: true
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - name: Inspect Build
+        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------'; ls target/;
+      - name: Archieve Binary
+        uses: actions/upload-artifact@v2.2.4
+        with:
+          name: ddnnife_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/ddnnife
+  
+  Build-Macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: brew install boost; brew install ninja
+      - name: clone repo
+        run: mkdir d4v2; git clone https://github.com/SoftVarE-Group/d4v2.git d4v2/.
+      - name: use gcc instead of clang
+        run: brew install gcc; alias gcc="gcc-12"; alias g++="g++-12"; alias cc="cc-12"; alias c++="c++-12"
+      - name: build d4v2
+        continue-on-error: true
+        run: cd d4v2/; ./build.sh
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build target
+        continue-on-error: true
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: false
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - name: Inspect Build
+        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------'; ls target/;
+      - name: Archieve Binary
+        uses: actions/upload-artifact@v2.2.4
+        with:
+          name: ddnnife_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/ddnnife
+
+      
+  Build-wo-d4v2-Windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: Activate msys target
+        run: |
+          echo "C:\\msys64\\usr\\bin" >> $GITHUB_PATH
+          echo "C:\\msys64\\mingw64\\bin" >> $GITHUB_PATH
+          echo "PKG_CONFIG_PATH=/mingw64/lib/pkgconfig" >> $GITHUB_ENV
+      - name: Set Enviroment Variable
+        run: set EXCLUDE_D4V2=TRUE
+      - name: Build Release Binary
+        run: cargo build --release
+      - name: Inspect Build
+        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------';
+      - name: Archieve Binary
+        uses: actions/upload-artifact@v2.2.4
+        with:
+          name: ddnnife
+          path: target/release/ddnnife.exe
       
   Doc-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Doc-tests
-      run: cargo test --doc
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Doc-tests
+        run: cargo test --doc
       
   Integration-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Integration-tests
-      run: cargo test --release --tests
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Integration-tests
+        run: cargo test --release --tests
 
   Coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Coverage
-      run: cargo +stable install cargo-llvm-cov; cargo llvm-cov
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Coverage
+        run: cargo +stable install cargo-llvm-cov; cargo llvm-cov
+        

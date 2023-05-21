@@ -26,8 +26,8 @@ fn main() {
 
         // Set up a local copy of the repository. We choose the forked version of d4v2 due to a missing library in the origin repo.
         Command::new("rm").args(["-rf", "d4v2"]).output().unwrap();
-        Command::new("mkdir").arg("d4v2").output().unwrap();
-        Command::new("git").args(["clone", "https://github.com/SoftVarE-Group/d4v2.git", "d4v2/."]).output().unwrap();
+        Command::new("mkdir").arg("d4v2").output().expect("wasn't able to create the 'd4v2' folder");
+        Command::new("git").args(["clone", "https://github.com/SoftVarE-Group/d4v2.git", "d4v2/."]).output().expect("could not clone the d4v2 repository");
     
         // build the d4v2 binary
         let current_dir = &env::current_dir().unwrap();
