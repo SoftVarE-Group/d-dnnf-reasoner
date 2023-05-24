@@ -65,7 +65,7 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
       - name: d4v2 build dependencies
-        run: brew install boost; brew install ninja
+        run: brew install boost cmake ninja gmp
       - name: clone repo
         run: mkdir d4v2; git clone https://github.com/SoftVarE-Group/d4v2.git d4v2/.
       - name: use gcc instead of clang
