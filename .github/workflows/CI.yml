@@ -29,26 +29,11 @@ jobs:
             echo ::set-output name=uname::$(uname -a)
             
       - name: d4v2 build dependencies
-        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
-      - name: Install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-          target: ${{ matrix.target }}
-
+        run: sudo apt-get install libboost-all-dev ninja-build
       - name: Build target
-        continue-on-error: true
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: false
-          command: build
-          args: --release --target ${{ matrix.target }}
-      - name: Inspect Build
-        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------'; ls target/;
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Archieve Binary
-        uses: actions/upload-artifact@v2.2.4
+        uses: actions/upload-artifact@v3
         with:
           name: ddnnife_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/ddnnife
@@ -64,34 +49,25 @@ jobs:
         uses: actions/checkout@v3
       - name: Cache
         uses: Swatinem/rust-cache@v2
-      - name: d4v2 build dependencies
-        run: brew install boost cmake ninja gmp
-      - name: clone repo
-        run: mkdir d4v2; git clone https://github.com/SoftVarE-Group/d4v2.git d4v2/.
-      - name: use gcc instead of clang
-        run: brew install gcc; alias gcc="gcc-12"; alias g++="g++-12"; alias cc="cc-12"; alias c++="c++-12"
-      - name: build d4v2
-        continue-on-error: true
-        run: cd d4v2/; ./build.sh
-      - name: Install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-          target: ${{ matrix.target }}
-
-      - name: Build target
-        continue-on-error: true
+      #- name: d4v2 build dependencies
+      #  run: brew install boost ninja
+      #- name: clone repo
+      #  run: mkdir d4v2; git clone https://github.com/SoftVarE-Group/d4v2.git d4v2/.
+      #- name: use gcc instead of clang
+      #  run: brew install gcc; alias gcc="gcc-12"; alias g++="g++-12"; alias cc="cc-12"; alias c++="c++-12"
+      #- name: build d4v2
+      #  continue-on-error: true
+      #  run: cd d4v2/; ./build.sh
+      - name: Disable d4v2 inclusion
+        run: export EXCLUDE_D4V2=TRUE
+      - name: Build release binary
         uses: actions-rs/cargo@v1
         with:
-          use-cross: false
+          use-cross: ${{ matrix.cross }}
           command: build
           args: --release --target ${{ matrix.target }}
-      - name: Inspect Build
-        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------'; ls target/;
       - name: Archieve Binary
-        uses: actions/upload-artifact@v2.2.4
+        uses: actions/upload-artifact@v3
         with:
           name: ddnnife_${{ matrix.target }}
           path: target/${{ matrix.target }}/release/ddnnife
@@ -108,13 +84,11 @@ jobs:
           echo "C:\\msys64\\mingw64\\bin" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=/mingw64/lib/pkgconfig" >> $GITHUB_ENV
       - name: Set Enviroment Variable
-        run: set EXCLUDE_D4V2=TRUE
+        run: $Env:EXCLUDE_D4V2=TRUE
       - name: Build Release Binary
         run: cargo build --release
-      - name: Inspect Build
-        run: ls; echo '------'; ls d4v2; echo '------'; ls d4v2/build; echo '------';
       - name: Archieve Binary
-        uses: actions/upload-artifact@v2.2.4
+        uses: actions/upload-artifact@v3
         with:
           name: ddnnife
           path: target/release/ddnnife.exe
