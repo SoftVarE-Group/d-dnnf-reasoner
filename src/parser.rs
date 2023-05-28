@@ -8,8 +8,12 @@ use d4_lexer::{lex_line_d4, D4Token};
 pub mod from_cnf;
 use from_cnf::{check_for_cnf_header, CNFToken};
 
+pub mod intermediate_representation;
+
 pub mod d4v2_wrapper;
 use crate::parser::d4v2_wrapper::compile_cnf;
+use crate::parser::intermediate_representation::IntermediateGraph;
+use crate::parser::util::{calc_or_count, calc_and_count};
 
 pub mod persisting;
 pub mod util;
@@ -17,8 +21,8 @@ pub mod util;
 use core::panic;
 use std::cmp::max;
 use std::ffi::OsStr;
-use std::fs::{File, self};
-use std::io::{BufRead, BufReader, Write};
+use std::fs;
+use std::io::{BufReader, Write, BufRead};
 use std::path::Path;
 use std::time::Instant;
 use std::{
@@ -26,7 +30,6 @@ use std::{
     rc::Rc, process
 };
 
-use rug::{Integer, Complete};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
@@ -37,6 +40,8 @@ use petgraph::{
     visit::DfsPostOrder,
     Direction::{Outgoing, Incoming},
 };
+
+use self::util::open_file_savely;
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -136,9 +141,10 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     use C2DToken::*;
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
-
     let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
     let mut true_nodes = Vec::new();
+
+    let ddnnf_graph = StableGraph::<TId, ()>::new();
 
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
@@ -186,7 +192,8 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, variables)
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, NodeIndex::default(), FxHashMap::default());
+    Ddnnf::new(intermediate_graph, parsed_nodes, literals, true_nodes, variables)
 }
 
 /// Parses a ddnnf, referenced by the file path.
@@ -521,7 +528,8 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, omitted_features)
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, nx_literals.borrow().clone());
+    Ddnnf::new(intermediate_graph, parsed_nodes, literals, true_nodes, omitted_features)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes
@@ -583,73 +591,4 @@ fn get_literals(
         _ => (),
     }
     res
-}
-
-// multiplies the count of all child Nodes of an And Node
-#[inline]
-fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
-    Integer::product(indices.iter().map(|&index| &nodes[index].count))
-        .complete()
-}
-
-// adds up the count of all child Nodes of an And Node
-#[inline]
-fn calc_or_count(
-    nodes: &mut [Node],
-    indices: &[usize],
-) -> Integer {
-    Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()
-}
-
-/// Is used to parse the queries in the config files
-/// The format is:
-/// -> A feature is either positiv or negative i32 value with a leading "-"
-/// -> Multiple features in the same line form a query
-/// -> Queries are seperated by a new line ("\n")
-///
-/// # Example
-/// ```
-/// use ddnnf_lib::parser::parse_queries_file;
-///
-/// let config_path = "./tests/data/auto1.config";
-/// let queries: Vec<(usize, Vec<i32>)> = parse_queries_file(config_path);
-///
-/// assert_eq!((0, vec![1044, 885]), queries[0]);
-/// assert_eq!((1, vec![1284, -537]), queries[1]);
-/// assert_eq!((2, vec![-1767, 675]), queries[2]);
-/// ```
-/// # Panic
-///
-/// Panics for a path to a non existing file
-pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
-    let file = open_file_savely(path);
-
-    let lines = BufReader::new(file)
-        .lines()
-        .map(|line| line.expect("Unable to read line"));
-    let mut parsed_queries: Vec<(usize, Vec<i32>)> = Vec::new();
-
-    for (line_number, line) in lines.enumerate() {
-        // takes a line of the file and parses the i32 values
-        let res: Vec<i32> = line.split_whitespace().into_iter()
-        .map(|elem| elem.parse::<i32>()
-            .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
-        ).collect();
-        parsed_queries.push((line_number, res));
-    }
-    parsed_queries
-}
-
-/// Tries to open a file.
-/// If an error occurs the program prints the error and exists.
-pub fn open_file_savely(path: &str) -> File {
-    // opens the file with a BufReader and
-    // works off each line of the file data seperatly
-    match File::open(path) {
-        Ok(x) => x,
-        Err(err) => {
-            eprintln!("{}", format!("ERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err).red());
-            process::exit(1);
-        }
-    }
 }

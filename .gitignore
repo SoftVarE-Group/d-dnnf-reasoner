@@ -7,8 +7,8 @@
 
 # Local files for testing, debugging and analysing the code
 complete_exa/
-in*
-out*
+in.*
+out.*
 perf_analyse.sh
 history.txt
 tarpaulin-report.html

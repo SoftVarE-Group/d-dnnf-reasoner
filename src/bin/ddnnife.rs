@@ -4,7 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::{Parser, ArgGroup, Subcommand};
 
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
-use ddnnf_lib::parser::util::format_vec;
+use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use itertools::Itertools;
 
 use std::fs::File;
@@ -378,7 +378,7 @@ fn main() {
             StreamQueries { queries_input_file, ..} => {
                 let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
                 
-                let file = dparser::open_file_savely(queries_input_file);
+                let file = open_file_savely(queries_input_file);
                 let queries = BufReader::new(file)
                     .lines()
                     .map(|line| line.expect("Unable to read line"));
@@ -457,7 +457,7 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
         queries_file,
         output_file,
         elapsed_time,
-        elapsed_time / dparser::parse_queries_file(queries_file.as_str()).len() as f64
+        elapsed_time / parse_queries_file(queries_file.as_str()).len() as f64
     );
 }
 

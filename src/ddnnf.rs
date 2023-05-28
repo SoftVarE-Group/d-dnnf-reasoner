@@ -8,11 +8,16 @@ pub mod anomalies;
 use rug::{Integer};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::parser::intermediate_representation::IntermediateGraph;
+
 use self::node::{Node};
 
 #[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
+    /// An intermediate representation that can be changed without destroying the structure
+    _inter_graph: IntermediateGraph,
+    /// The nodes of the dDNNF
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
     pub literals: FxHashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
@@ -29,6 +34,7 @@ pub struct Ddnnf {
 impl Default for Ddnnf {
     fn default() -> Self {
         Ddnnf {
+            _inter_graph: IntermediateGraph::default(),
             nodes: Vec::new(),
             literals: FxHashMap::default(),
             true_nodes: Vec::new(),
@@ -43,12 +49,14 @@ impl Default for Ddnnf {
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
     pub fn new(
+        _inter_graph: IntermediateGraph,
         nodes: Vec<Node>,
         literals: FxHashMap<i32, usize>,
         true_nodes: Vec<usize>,
         number_of_variables: u32,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
+            _inter_graph,
             nodes,
             literals,
             true_nodes,

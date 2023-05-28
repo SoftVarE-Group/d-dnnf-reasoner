@@ -2,7 +2,7 @@ use std::{error::Error, sync::mpsc, thread, io::{BufWriter, Write}, fs::File};
 
 use workctl::{WorkQueue};
 
-use crate::{Ddnnf, parser};
+use crate::{Ddnnf, parser::util::parse_queries_file};
 
 impl Ddnnf{
     #[inline]
@@ -38,7 +38,7 @@ impl Ddnnf{
         let f = File::create(path_out).expect("Unable to create file");
         let mut wtr = BufWriter::new(f);
 
-        let work_queue: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
+        let work_queue: Vec<(usize, Vec<i32>)> = parse_queries_file(path_in);
 
         for (_, work) in &work_queue {
             let cardinality = operation(self, &work);
@@ -62,7 +62,7 @@ impl Ddnnf{
         path_in: &str,
         path_out: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let work: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
+        let work: Vec<(usize, Vec<i32>)> = parse_queries_file(path_in);
         let mut queue = WorkQueue::with_capacity(work.len());
 
         for e in work.clone() {
