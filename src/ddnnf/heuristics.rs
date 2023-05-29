@@ -131,12 +131,11 @@ impl Ddnnf {
         let s_x: f64 = (derivation / length as f64).sqrt();
 
         println!("\nThe d-DNNF has the following length attributes:\n\
-                \t |-> The shortest path is {:?} units long\n\
-                \t |-> The longest path is {:?} units long\n\
-                \t |-> The mean path is ≈{:.2} units long\n\
-                \t |-> The standard derivation is ≈{:.2} units\n\
-                \t |-> There are {:?} different paths. (different paths can sometimes just differ by one node)\n",
-                lowest, highest, mean, s_x, length);
+                \t |-> The shortest path is {lowest} units long\n\
+                \t |-> The longest path is {highest} units long\n\
+                \t |-> The mean path is ≈{mean:.2} units long\n\
+                \t |-> The standard derivation is ≈{s_x:.2} units\n\
+                \t |-> There are {length} different paths. (different paths can sometimes just differ by one node)\n");
     }
 }
 

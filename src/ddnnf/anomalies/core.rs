@@ -1,4 +1,9 @@
-use rustc_hash::FxHashSet;
+//! Core features in the context of feature models are essential and mandatory features that 
+//! must be included in a product or system. Dead features, on the other hand, 
+//! are features that have been deprecated or phased out and are no longer actively supported or 
+//! used in the current version of the product or system.
+
+use std::collections::HashSet;
 
 use crate::{Ddnnf};
 
@@ -11,21 +16,21 @@ impl Ddnnf {
             .filter(|f| {
                 self.literals.get(f).is_some() && self.literals.get(&-f).is_none()
             })
-            .collect::<FxHashSet<i32>>()
+            .collect::<HashSet<i32>>()
     }
 
     /// Checks if removing the feature assigment from the query does not change the query
     /// i.e. that feature is an included core feature or an excluded dead feature
     pub(crate) fn has_no_effect_on_query(&self, feature: &i32) -> bool {
-        return feature.is_positive() && self.core.contains(feature) ||
-               feature.is_negative() && self.core.contains(feature);
+        feature.is_positive() && self.core.contains(feature) ||
+        feature.is_negative() && self.core.contains(feature)
     }
 
     /// Checks if that feature assignment alone must result in an unsat query
     /// i.e. that feature is an excluded core feature or an included dead feature
     pub(crate) fn makes_query_unsat(&self, feature: &i32) -> bool {
-        return feature.is_negative() && self.core.contains(&-feature) ||
-               feature.is_positive() && self.core.contains(&-feature);
+        feature.is_negative() && self.core.contains(&-feature) ||
+        feature.is_positive() && self.core.contains(&-feature)
     }
 
     #[inline]

@@ -109,7 +109,7 @@ enum Operation {
         jobs: u16,
     },
     /// Computes multiple SAT queries.
-    SAT {
+    Sat {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
@@ -175,7 +175,7 @@ enum Operation {
         candidates: Option<Vec<u32>>,
     },
     /// Generates uniform random sample
-    URS {
+    Urs {
         /// The default ouput file is '{FILE_NAME}-urs.csv'.
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
@@ -251,12 +251,12 @@ fn main() {
     // If there is no prefix, we switch to the default fallback.
     let construct_ouput_path = 
         |maybe_prefix: &Option<String>, operation: &str, file_type: &str| {
-        format!("{}-{}.{}", maybe_prefix.clone().unwrap_or(input_file_path.clone()), operation.to_string(), file_type)
+        format!("{}-{}.{}", maybe_prefix.clone().unwrap_or(input_file_path.clone()), operation, file_type)
     };
 
 
     // print additional output, iff we are not in the stream mode
-    match &cli.operation.clone() {
+    match &cli.operation {
         Some(Operation::Stream) => (),
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
@@ -279,7 +279,7 @@ fn main() {
         match operation {
             CountFeatures { jobs, .. } |
             CountQueries { jobs, .. } |
-            SAT { jobs, .. } => {
+            Sat { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             },
             _ => ()
@@ -291,17 +291,17 @@ fn main() {
                 => construct_ouput_path(custom_output_file, "features", "csv"),
             CountQueries { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "queries", "csv"),
-            SAT { custom_output_file, .. }
+            Sat { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "sat", "csv"),
             StreamQueries { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "stream", "csv"),
             TWise { custom_output_file, t }
-                => construct_ouput_path(custom_output_file, format!("{}-wise", t).as_str(), "csv"),
+                => construct_ouput_path(custom_output_file, format!("{t}-wise").as_str(), "csv"),
             Anomalies { custom_output_file }
                 => construct_ouput_path(custom_output_file, "anomalies", "txt"),
             AtomicSets { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "atomic", "csv"),
-            URS { custom_output_file, .. }
+            Urs { custom_output_file, .. }
                 => construct_ouput_path(custom_output_file, "urs", "csv"),
             Core { custom_output_file }
                 => construct_ouput_path(custom_output_file, "core", "csv"),
@@ -314,26 +314,26 @@ fn main() {
         match &operation {
             AtomicSets { custom_output_file: _, assumptions, candidates } => {
                 let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                for set in ddnnf.get_atomic_sets(candidates.clone(), &assumptions) {
-                    wtr.write(format_vec(set.iter()).as_bytes()).unwrap();
-                    wtr.write("\n".as_bytes()).unwrap();
+                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions) {
+                    wtr.write_all(format_vec(set.iter()).as_bytes()).unwrap();
+                    wtr.write_all("\n".as_bytes()).unwrap();
                 }
                 wtr.flush().unwrap();
-                println!("\nComputed the atomic sets and saved the results in {}.", output_file_path);
+                println!("\nComputed the atomic sets and saved the results in {output_file_path}.");
             },
-            URS { assumptions, seed, number, custom_output_file: _ } => {
+            Urs { assumptions, seed, number, custom_output_file: _ } => {
                 let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                for sample in ddnnf.uniform_random_sampling(&assumptions, *number, *seed).unwrap() {
-                    wtr.write(format_vec(sample.iter()).as_bytes()).unwrap();
-                    wtr.write("\n".as_bytes()).unwrap();
+                for sample in ddnnf.uniform_random_sampling(assumptions, *number, *seed).unwrap() {
+                    wtr.write_all(format_vec(sample.iter()).as_bytes()).unwrap();
+                    wtr.write_all("\n".as_bytes()).unwrap();
                 }
                 wtr.flush().unwrap();
-                println!("\nComputed {} uniform random samples and saved the results in {}.", number, output_file_path);
+                println!("\nComputed {number} uniform random samples and saved the results in {output_file_path}.");
             },
             TWise { t, custom_output_file: _ } => {
                 let sample_result = ddnnf.sample_t_wise(*t);
                 save_sample_to_file(&sample_result,  &output_file_path).unwrap();
-                println!("\nComputed {}-wise samples and saved the results in {}.", t, output_file_path);
+                println!("\nComputed {t}-wise samples and saved the results in {output_file_path}.");
             },
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Count { features } => {
@@ -368,7 +368,7 @@ fn main() {
                     Ddnnf::execute_query
                 );
             },
-            SAT { queries_input_file, .. } => {
+            Sat { queries_input_file, .. } => {
                 compute_queries(&mut ddnnf,
                     queries_input_file,
                     &output_file_path,
@@ -384,12 +384,12 @@ fn main() {
                     .map(|line| line.expect("Unable to read line"));
                 
                 for query in queries {
-                    wtr.write(ddnnf.handle_stream_msg(&query).as_bytes()).unwrap();
-                    wtr.write("\n".as_bytes()).unwrap();
+                    wtr.write_all(ddnnf.handle_stream_msg(&query).as_bytes()).unwrap();
+                    wtr.write_all("\n".as_bytes()).unwrap();
                 }
 
                 wtr.flush().unwrap();
-                println!("\nComputed stream queries and saved the results in {}.", output_file_path);
+                println!("\nComputed stream queries and saved the results in {output_file_path}.");
             },
             // switch in the stream mode
             Stream => {
@@ -400,7 +400,7 @@ fn main() {
                         Ok(buffer) => {
                             let response = ddnnf.handle_stream_msg(&buffer);
                             if response.as_str() == "exit" { println!("End by 'exit' command"); break; }
-                            println!("{}", response);
+                            println!("{response}");
                         },
                         Err(_) => {
                             println!("End by closing input channel");
@@ -413,21 +413,21 @@ fn main() {
             // anomalies are: core, dead, false-optional features and atomic sets
             Anomalies { custom_output_file: _ } => {
                 ddnnf.write_anomalies(&output_file_path).unwrap();
-                println!("\nThe anomalies of the d-DNNF (i.e. core, dead, false-optional features, and atomic sets) are written into {}.", output_file_path);
+                println!("\nThe anomalies of the d-DNNF (i.e. core, dead, false-optional features, and atomic sets) are written into {output_file_path}.");
             },
             Core { custom_output_file: _ } => {
                 let mut core = ddnnf.core.clone().into_iter().collect_vec();
                 core.sort_unstable_by_key(|k| k.abs());
         
                 let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                wtr.write(format_vec(core.iter()).as_bytes()).unwrap();
-                wtr.write("\n".as_bytes()).unwrap();
+                wtr.write_all(format_vec(core.iter()).as_bytes()).unwrap();
+                wtr.write_all("\n".as_bytes()).unwrap();
                 wtr.flush().unwrap();
-                println!("\nComputed the core / dead features and saved the results in {}.", output_file_path);
+                println!("\nComputed the core / dead features and saved the results in {output_file_path}.");
             },
             Mermaid { custom_output_file: _, assumptions } => {
-                write_as_mermaid_md(&mut ddnnf, &assumptions, &output_file_path).unwrap();
-                println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", output_file_path);
+                write_as_mermaid_md(&mut ddnnf, assumptions, &output_file_path).unwrap();
+                println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {output_file_path}.");
             },
         }
     }
@@ -435,8 +435,8 @@ fn main() {
     // writes the d-DNNF to file
     if cli.save_ddnnf.is_some() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
-        write_ddnnf(&mut ddnnf, &path).unwrap();
-        println!("\nThe smooth d-DNNF was written into the c2d format in {}.", path);
+        write_ddnnf(&ddnnf, &path).unwrap();
+        println!("\nThe smooth d-DNNF was written into the c2d format in {path}.");
     }
 }
 

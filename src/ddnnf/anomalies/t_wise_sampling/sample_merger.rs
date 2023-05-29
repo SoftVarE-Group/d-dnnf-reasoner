@@ -1,9 +1,11 @@
+use std::collections::HashSet;
+
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::Ddnnf;
 use rand::prelude::StdRng;
 
-pub mod similarity_merger;
-pub mod zipping_merger;
+pub(crate) mod similarity_merger;
+pub(crate) mod zipping_merger;
 
 pub(super) trait SampleMerger {
     /// Creates a new sample by merging two samples.
@@ -127,3 +129,25 @@ impl SampleMerger for DummyOrMerger {
 }
 
 impl OrMerger for DummyOrMerger {}
+
+fn _new_sample_from_configs(configs: Vec<Config>) -> Sample {
+    let mut literals: Vec<i32> = configs
+        .iter()
+        .flat_map(|c| c.get_decided_literals())
+        .collect();
+    literals.sort_unstable();
+    literals.dedup();
+
+    let vars: HashSet<u32> =
+        literals.iter().map(|x| x.unsigned_abs()).collect();
+
+    let mut sample = Sample {
+        complete_configs: vec![],
+        partial_configs: vec![],
+        vars,
+        literals,
+    };
+
+    sample.extend(configs);
+    sample
+}

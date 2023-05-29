@@ -1,3 +1,5 @@
+//! A collection of small utility functions.
+
 use std::{fs::File, io::{BufReader, BufRead}, process};
 
 use colored::Colorize;
@@ -52,9 +54,9 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
 
     for (line_number, line) in lines.enumerate() {
         // takes a line of the file and parses the i32 values
-        let res: Vec<i32> = line.split_whitespace().into_iter()
-        .map(|elem| elem.parse::<i32>()
-            .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
+        let res: Vec<i32> = line.split_whitespace()
+            .map(|elem| elem.parse::<i32>()
+            .unwrap_or_else(|_| panic!("Unable to parse {elem} into an i32 value while trying to parse the querie file at {path}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n"))
         ).collect();
         parsed_queries.push((line_number, res));
     }
@@ -69,16 +71,19 @@ pub fn open_file_savely(path: &str) -> File {
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
-            eprintln!("{}", format!("ERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err).red());
+            eprintln!("{}", format!("ERROR: The following error code occured while trying to open the file \"{path}\":\n{err}\nAborting...").red());
             process::exit(1)
         }
     }
 }
 
+/// Builds a string from a vector without commas or brackets.
+/// Example: format_vec([1, 2, 3]) => "1 2 3".
 pub fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
     vals.map(|v| v.to_string()).collect::<Vec<String>>().join(" ")
 }
 
+/// Does the same as [format_vec] and divides the vectors by a semicolon.
 pub fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
     where
     T: IntoIterator,

@@ -7,7 +7,7 @@ const EXECUTABLE_PATH: &str = "src/parser/.d4v2";
 
 /// Using the d4v2 CNF to dDNNF compiler from cril,
 /// we take a CNF from path_in and write the dDNNF to path_out
-pub fn compile_cnf(path_in: &str, path_out: &str) {
+pub(crate) fn compile_cnf(path_in: &str, path_out: &str) {
     // If the byte array is empty, we did not include d4v2. Consequently, we can't compile and have to exit.
     if D4V2.is_empty() {
         eprintln!("{}", "\nERROR: d4v2 is not part of that binary! \

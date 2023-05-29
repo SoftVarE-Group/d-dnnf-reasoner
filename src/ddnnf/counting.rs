@@ -10,8 +10,8 @@
 //
 // We assume that we have MAX_WORKER processor cores which will do work for us.
 // You could use the num_cpus crate to find this for a particular machine.
-pub mod features;
+mod features;
 
 // Modules that provide the basic counting logic.
-pub mod default_count;
-pub mod marking;
+mod default_count;
+mod marking;

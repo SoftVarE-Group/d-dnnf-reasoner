@@ -10,7 +10,7 @@ use std::iter;
 pub struct Config {
     /// A vector of selected features (positive values) and deselected features (negative values)
     literals: Vec<i32>,
-    pub sat_state: Option<Vec<bool>>,
+    pub(crate) sat_state: Option<Vec<bool>>,
     sat_state_complete: bool,
 }
 
@@ -161,13 +161,13 @@ impl Config {
             .all(|&literal| self.contains(literal))
     }
 
-    pub fn contains(&self, literal: i32) -> bool {
+    pub(crate) fn contains(&self, literal: i32) -> bool {
         debug_assert!(literal != 0);
         let index = literal.unsigned_abs() as usize - 1;
         self.literals[index] == literal
     }
 
-    pub fn add(&mut self, literal: i32) {
+    pub(crate) fn add(&mut self, literal: i32) {
         if literal == 0 {
             return;
         }
@@ -182,7 +182,7 @@ impl Config {
 /// The sample differentiates between complete and partial configs.
 /// A config is complete (in the context of this sample) if it contains all variables this sample
 /// defines. Otherwise the config is partial.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Sample {
     /// Configs that contain all variables of this sample
     pub complete_configs: Vec<Config>,
@@ -226,45 +226,7 @@ impl Sample {
         }
     }
 
-    /// Create a new sample that will contain the given configs
-    ///
-    /// # Examples
-    /// ```
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-    ///
-    /// let conf_a = Config::from(&[1,2], 3);
-    /// let conf_b = Config::from(&[1,2,3], 3);
-    /// let sample = Sample::new_from_configs(vec![conf_a, conf_b]);
-    ///
-    /// assert_eq!(2, sample.len());
-    /// assert_eq!(1, sample.complete_configs.len());
-    /// assert_eq!(1, sample.partial_configs.len());
-    /// assert_eq!(Some(&Config::from(&[1,2,3], 3)), sample.complete_configs.get(0));
-    /// assert_eq!(Some(&Config::from(&[1,2], 3)), sample.partial_configs.get(0));
-    /// ```
-    pub fn new_from_configs(configs: Vec<Config>) -> Self {
-        let mut literals: Vec<i32> = configs
-            .iter()
-            .flat_map(|c| c.get_decided_literals())
-            .collect();
-        literals.sort_unstable();
-        literals.dedup();
-
-        let vars: HashSet<u32> =
-            literals.iter().map(|x| x.unsigned_abs()).collect();
-
-        let mut sample = Self {
-            complete_configs: vec![],
-            partial_configs: vec![],
-            vars,
-            literals,
-        };
-
-        sample.extend(configs);
-        sample
-    }
-
-    pub fn new_from_samples(samples: &[&Self]) -> Self {
+    pub(crate) fn new_from_samples(samples: &[&Self]) -> Self {
         let vars: HashSet<u32> = samples
             .iter()
             .flat_map(|sample| sample.vars.iter())
@@ -282,16 +244,6 @@ impl Sample {
         sample
     }
 
-    /// Create an empty sample with no variables defined
-    pub fn default() -> Self {
-        Self {
-            complete_configs: vec![],
-            partial_configs: vec![],
-            vars: HashSet::new(),
-            literals: vec![],
-        }
-    }
-
     /// Create a sample that only contains a single configuration with a single literal
     pub fn from_literal(literal: i32, number_of_variables: usize) -> Self {
         let mut sample = Self::new(HashSet::from([literal.unsigned_abs()]));
@@ -300,11 +252,11 @@ impl Sample {
         sample
     }
 
-    pub fn get_literals(&self) -> &[i32] {
+    pub(crate) fn get_literals(&self) -> &[i32] {
         &self.literals
     }
 
-    pub fn get_vars(&self) -> &HashSet<u32> {
+    pub(crate) fn get_vars(&self) -> &HashSet<u32> {
         &self.vars
     }
 
@@ -333,18 +285,7 @@ impl Sample {
     }
 
     /// Determines whether the config is complete (true) or partial (false).
-    ///
-    /// # Examples
-    /// ```
-    /// use std::collections::HashSet;
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-    ///
-    /// let sample = Sample::new(HashSet::from([1,2,3]));
-    ///
-    /// assert!(sample.is_config_complete(&Config::from(&[1,2,3], 3)));
-    /// assert!(!sample.is_config_complete(&Config::from(&[1,2], 3)));
-    /// ```
-    pub fn is_config_complete(&self, config: &Config) -> bool {
+    pub(crate) fn is_config_complete(&self, config: &Config) -> bool {
         let decided_literals = config.get_decided_literals().count();
         debug_assert!(
             decided_literals <= self.vars.len(),
@@ -360,7 +301,7 @@ impl Sample {
             .chain(self.partial_configs.iter())
     }
 
-    pub fn iter_with_completeness(
+    pub(crate) fn iter_with_completeness(
         &self,
     ) -> impl Iterator<Item=(&Config, bool)> {
         let partial_iter = self.partial_configs.iter().zip(iter::repeat(false));
@@ -372,28 +313,16 @@ impl Sample {
     }
 
     /// Returns the number of configs in this sample
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.complete_configs.len() + self.partial_configs.len()
     }
 
-    /// Returns true if the sample contains no configs
-    ///
-    /// # Examples
-    /// ```
-    /// use std::collections::HashSet;
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-    /// let mut s = Sample::new(HashSet::from([1,2,3]));
-    ///
-    /// assert!(s.is_empty());
-    /// s.add_partial(Config::from(&[1,3], 3));
-    /// assert!(!s.is_empty());
-    /// ```
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.complete_configs.is_empty() && self.partial_configs.is_empty()
     }
 
     /// Checks if this sample covers the given interaction
-    pub fn covers(&self, interaction: &[i32]) -> bool {
+    pub(crate) fn covers(&self, interaction: &[i32]) -> bool {
         debug_assert!(!interaction.contains(&0));
         self.iter().any(|conf| conf.covers(interaction))
     }

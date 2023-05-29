@@ -1,3 +1,7 @@
+//! SAT solving refers to the process of determining the satisfiability of a feature model, 
+//! which involves finding a valid configuration that satisfies all the constraints and dependencies specified by the model. 
+//! It is also used to determine of a partial configuration is still satisfiable.
+
 use crate::{Ddnnf, NodeType::*};
 
 impl Ddnnf {
@@ -18,7 +22,7 @@ impl Ddnnf {
 
     /// Does the exact same as 'sat' with the difference of choosing the marking Vec by ourself.
     /// That allows reusing that vector and therefore enabeling an efficient method to do decision propogation.
-    /// If wanted, one can supply an marking Vec<bool>, that can be reused in following method calls to propagate satisfiability.
+    /// If wanted, one can supply an marking `Vec<bool>`, that can be reused in following method calls to propagate satisfiability.
     /// The root_index does not have to be the root of the DAG. Instead it can be any node. If 'None' is supplied we use the root of the DAG.
     #[inline]
     pub fn sat_propagate(&self, features: &[i32], mark: &mut Vec<bool>, root_index: Option<usize>) -> bool {
@@ -29,14 +33,11 @@ impl Ddnnf {
         }
 
         for feature in features {
-            match self.literals.get(&-feature) {
-                Some(&index) => {
-                    self.propagate_mark(index, mark);
-                    // if the root is unsatisfiable after any of the literals in the query,
-                    // then the whole query must be unsatisfiable too. 
-                    if mark[root_index] { return false; }
-                },
-                None => (),
+            if let Some(&index) = self.literals.get(&-feature) {
+                self.propagate_mark(index, mark);
+                // if the root is unsatisfiable after any of the literals in the query,
+                // then the whole query must be unsatisfiable too. 
+                if mark[root_index] { return false; }
             }
         }
         
@@ -52,18 +53,12 @@ impl Ddnnf {
             return;
         }
 
-        match &self.nodes[index].ntype {
-            // And nodes are always unsatisfiable if any of its children is unsatisfiable
-            // (multiplying anything with zero equals always zero)
-            Or { children } => {
-                // An Or node is only unsatisfiable if all of its children are either marked
-                // or have an count of zero (that handle False nodes).
-                if !children.iter().all(|&c| mark[c] || self.nodes[c].count == 0) {
-                    return;
-                }
+        if let Or { children } = &self.nodes[index].ntype {
+            // An Or node is only unsatisfiable if all of its children are either marked
+            // or have an count of zero (that handle False nodes).
+            if !children.iter().all(|&c| mark[c] || self.nodes[c].count == 0) {
+                return;
             }
-            // Literals, True, and False nodes are trivial and handled at a higher level
-            _ => (),
         }
 
         mark[index] = true;

@@ -1,12 +1,13 @@
-pub mod stream;
+mod stream;
 pub mod node;
-pub mod heuristics;
-pub mod counting;
-pub mod multiple_queries;
+mod heuristics;
+mod counting;
+mod multiple_queries;
 pub mod anomalies;
 
+use std::collections::{HashMap, HashSet};
+
 use rug::{Integer};
-use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::parser::intermediate_representation::IntermediateGraph;
 
@@ -20,12 +21,13 @@ pub struct Ddnnf {
     /// The nodes of the dDNNF
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
-    pub literals: FxHashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
     /// The core/dead features of the model corresponding with this ddnnf
-    pub core: FxHashSet<i32>,
+    pub core: HashSet<i32>,
     /// An interim save for the marking algorithm
     pub md: Vec<usize>,
+    /// The total number of variables
     pub number_of_variables: u32,
     /// The number of threads
     pub max_worker: u16,
@@ -36,9 +38,9 @@ impl Default for Ddnnf {
         Ddnnf {
             _inter_graph: IntermediateGraph::default(),
             nodes: Vec::new(),
-            literals: FxHashMap::default(),
+            literals: HashMap::new(),
             true_nodes: Vec::new(),
-            core: FxHashSet::default(),
+            core: HashSet::new(),
             md: Vec::new(),
             number_of_variables: 0,
             max_worker: 4,
@@ -51,7 +53,7 @@ impl Ddnnf {
     pub fn new(
         _inter_graph: IntermediateGraph,
         nodes: Vec<Node>,
-        literals: FxHashMap<i32, usize>,
+        literals: HashMap<i32, usize>,
         true_nodes: Vec<usize>,
         number_of_variables: u32,
     ) -> Ddnnf {
@@ -60,7 +62,7 @@ impl Ddnnf {
             nodes,
             literals,
             true_nodes,
-            core: FxHashSet::default(),
+            core: HashSet::new(),
             md: Vec::new(),
             number_of_variables,
             max_worker: 4,
@@ -69,8 +71,8 @@ impl Ddnnf {
         ddnnf
     }
 
-    // returns the current count of the root node in the ddnnf
-    // that value is the same during all computations
+    /// Returns the current count of the root node in the ddnnf
+    /// that value is the same during all computations
     pub fn rc(&self) -> Integer {
         self.nodes[self.nodes.len() - 1].count.clone()
     }

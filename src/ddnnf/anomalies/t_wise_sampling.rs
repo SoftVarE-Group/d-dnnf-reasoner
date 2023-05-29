@@ -1,13 +1,21 @@
-pub mod covering_strategies;
-pub mod data_structure;
-pub mod t_iterator;
-pub mod sample_merger;
-pub mod sat_wrapper;
+//! T-wise sampling in the context of feature models is a technique used to systematically 
+//! select a subset of feature combinations for testing or analysis. 
+//! The "t" in t-wise sampling represents the interaction strength, 
+//! indicating the maximum number of features that can vary together in a combination. 
+//! By selecting t-wise samples, which cover all possible combinations of t features, 
+//! it provides a representative subset of configurations to analyze or test, 
+//! reducing the overall number of combinations to consider while still ensuring coverage of important interactions.
+
+mod covering_strategies;
+mod data_structure;
+mod t_iterator;
+mod sample_merger;
+mod sat_wrapper;
 
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::{fs, io, iter};
+use std::{fs, io, iter, fmt};
 
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
@@ -26,6 +34,7 @@ use self::sample_merger::zipping_merger::ZippingMerger;
 use self::sat_wrapper::SatWrapper;
 
 impl Ddnnf {
+    /// Computes a minimal amount of samples that cover all t-wise interactions of the dDNNF.
     pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
         let sat_solver = SatWrapper::new(self);
         let and_merger = ZippingMerger {
@@ -75,6 +84,7 @@ struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A sample. Depending on the general conditions, we might not be able to compute a valid sample.
 pub enum SamplingResult {
     /// An empty result that is *valid* (i.e., a regular sample that contains 0 configurations).
     /// This is used to indicate that a subgraph evaluates to true.
@@ -87,32 +97,20 @@ pub enum SamplingResult {
 }
 
 impl SamplingResult {
-    pub fn get_sample(&self) -> Option<&Sample> {
+    pub(crate) fn get_sample(&self) -> Option<&Sample> {
         if let ResultWithSample(sample) = self {
             Some(sample)
         } else {
             None
         }
     }
+}
 
-    pub fn len(&self) -> usize {
+impl fmt::Display for SamplingResult {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SamplingResult::Empty | SamplingResult::Void => 0,
-            ResultWithSample(sample) => sample.len(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            SamplingResult::Empty | SamplingResult::Void => true,
-            ResultWithSample(sample) => sample.is_empty(),
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            SamplingResult::Empty | SamplingResult::Void => String::new(),
-            ResultWithSample(sample) => format_vec(sample.iter()),
+            SamplingResult::Empty | SamplingResult::Void => write!(f, ""),
+            ResultWithSample(sample) => write!(f, "{}", format_vec(sample.iter())),
         }
     }
 }
@@ -336,7 +334,7 @@ fn trim_sample(
     ranks: &[f64],
     avg_rank: f64,
 ) -> (Sample, HashSet<i32>) {
-    let mut literals_to_resample: HashSet<i32> = HashSet::new();
+    let mut literals_to_resample: HashSet<i32> = HashSet::default();
     let mut new_sample = Sample::new_from_samples(&[sample]);
     let complete_len = sample.complete_configs.len();
 
@@ -397,6 +395,7 @@ fn find_unique_covering_conf(
     result
 }
 
+/// Saves a [SamplingResult] to file.
 pub fn save_sample_to_file(
     sampling_result: &SamplingResult,
     file_path: &str,

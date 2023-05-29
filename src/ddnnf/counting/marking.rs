@@ -114,11 +114,11 @@ impl Ddnnf {
         }
     }
 
-    // creates a clone of the nodes which were marked when computing the cardinality
-    // for a given partial configuration
+    /// Creates a clone of the nodes which were marked when computing the cardinality
+    /// for a given partial configuration.
     pub fn get_marked_nodes_clone(&mut self, features: &[i32]) -> Vec<usize> {           
-        let opposing_indices = &self.map_features_opposing_indexes(&features);
-        self.mark_assumptions(&opposing_indices);
+        let opposing_indices = &self.map_features_opposing_indexes(features);
+        self.mark_assumptions(opposing_indices);
         
         // add the literal nodes
         for index in opposing_indices.iter() {

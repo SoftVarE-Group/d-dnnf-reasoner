@@ -8,9 +8,9 @@ use d4_lexer::{lex_line_d4, D4Token};
 pub mod from_cnf;
 use from_cnf::{check_for_cnf_header, CNFToken};
 
-pub mod intermediate_representation;
+pub(crate) mod intermediate_representation;
 
-pub mod d4v2_wrapper;
+pub(crate) mod d4v2_wrapper;
 use crate::parser::d4v2_wrapper::compile_cnf;
 use crate::parser::intermediate_representation::IntermediateGraph;
 use crate::parser::util::{calc_or_count, calc_and_count};
@@ -20,6 +20,7 @@ pub mod util;
 
 use core::panic;
 use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{BufReader, Write, BufRead};
@@ -29,8 +30,6 @@ use std::{
     cell::RefCell,
     rc::Rc, process
 };
-
-use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
 
@@ -63,33 +62,31 @@ use self::util::open_file_savely;
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
-    match Path::new(path).extension().and_then(OsStr::to_str) {
-        Some(extension) => {
-            if extension == "dimacs" || extension == "cnf" {
-                let file = open_file_savely(path);
-                let lines = BufReader::new(file).lines();
-                for line in lines {
-                    let line = line.expect("Unable to read line");
-                    match check_for_cnf_header(line.as_str()).unwrap().1 {
-                        CNFToken::Header { features, clauses: _ } => {
-                            let time = Instant::now();
-                            print!("Trying to compile a dDNNF from the CNF file... ");
-                            std::io::stdout().flush().unwrap();
-                            
-                            let ddnnf_file = ".intermediate.nnf";
-                            compile_cnf(path, ddnnf_file);
-                            path = ddnnf_file;
-                            omitted_features = Some(features as u32);
-
-                            println!("Elapsed time for compiling: {:.3}s.", time.elapsed().as_secs_f64());
-                            break
-                        },
-                        CNFToken::Comment | CNFToken::Clause => (),
-                    }
+    if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
+        if extension == "dimacs" || extension == "cnf" {
+            let file = open_file_savely(path);
+            let lines = BufReader::new(file).lines();
+            
+            for line in lines {
+                let line = line.expect("Unable to read line");
+                match check_for_cnf_header(line.as_str()).unwrap().1 {
+                    CNFToken::Header { features, clauses: _ } => {
+                        let time = Instant::now();
+                        print!("Trying to compile a dDNNF from the CNF file... ");
+                        std::io::stdout().flush().unwrap();
+                        
+                        let ddnnf_file = ".intermediate.nnf";
+                        compile_cnf(path, ddnnf_file);
+                        path = ddnnf_file;
+                        omitted_features = Some(features as u32);
+                        
+                        println!("Elapsed time for compiling: {:.3}s.", time.elapsed().as_secs_f64());
+                        break
+                    },
+                    CNFToken::Comment | CNFToken::Clause => (),
                 }
             }
-        },
-        None => (),
+        }
     }
     
     let file = open_file_savely(path);
@@ -141,7 +138,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     use C2DToken::*;
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
     let mut true_nodes = Vec::new();
 
     let ddnnf_graph = StableGraph::<TId, ()>::new();
@@ -192,7 +189,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, NodeIndex::default(), FxHashMap::default());
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, NodeIndex::default(), HashMap::new());
     Ddnnf::new(intermediate_graph, parsed_nodes, literals, true_nodes, variables)
 }
 
@@ -211,10 +208,10 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let nx_literals: Rc<RefCell<FxHashMap<NodeIndex, i32>>> =
-        Rc::new(RefCell::new(FxHashMap::default()));
-    let literals_nx: Rc<RefCell<FxHashMap<i32, NodeIndex>>> =
-        Rc::new(RefCell::new(FxHashMap::default()));
+    let nx_literals: Rc<RefCell<HashMap<NodeIndex, i32>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
+        Rc::new(RefCell::new(HashMap::new()));
 
     let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, ()>,
                                literals: Vec<i32>|
@@ -336,7 +333,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     let balance_or_children =
         |ddnnf_graph: &mut StableGraph<TId, ()>,
          from: NodeIndex,
-         children: Vec<(NodeIndex, FxHashSet<u32>)>| {
+         children: Vec<(NodeIndex, HashSet<u32>)>| {
         for child in children {
             let and_node = ddnnf_graph.add_node(TId::And);
 
@@ -369,21 +366,13 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         let mut current_vec = Vec::new();
         let mut current = start;
         loop {
-            match ddnnf_graph[current] {
-                TId::And => {
-                    // remove the AND node and all parent nodes that are also AND nodes
-                    let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
-                    loop {
-                        match parents.next_node(&ddnnf_graph) {
-                            Some(parent) => {
-                                current_vec.push(parent);
-                            },
-                            None => break,
-                        }
-                    }
-                    ddnnf_graph.remove_node(current);
-                },
-                _ => (),
+            if ddnnf_graph[current] == TId::And {
+                // remove the AND node and all parent nodes that are also AND nodes
+                let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
+                while let Some(parent) = parents.next_node(ddnnf_graph) {
+                    current_vec.push(parent);
+                }
+                ddnnf_graph.remove_node(current);
             }
 
             match current_vec.pop() {
@@ -453,7 +442,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut safe: FxHashMap<NodeIndex, FxHashSet<u32>> = FxHashMap::default();
+    let mut safe: HashMap<NodeIndex, HashSet<u32>> = HashMap::new();
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
@@ -473,10 +462,10 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
     dfs = DfsPostOrder::new(&ddnnf_graph, root);
-    let mut nd_to_usize: FxHashMap<NodeIndex, usize> = FxHashMap::default();
+    let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
     let mut true_nodes = Vec::new();
     let nx_lit = nx_literals.borrow();
 
@@ -535,10 +524,10 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
 // determine the differences in literal-nodes occuring in the child nodes
 fn get_literal_diff(
     di_graph: &StableGraph<TId, ()>,
-    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
-    nx_literals: &FxHashMap<NodeIndex, i32>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
     or_node: NodeIndex,
-) -> Vec<(NodeIndex, FxHashSet<u32>)> {
+) -> Vec<(NodeIndex, HashSet<u32>)> {
     let mut inter_res = Vec::new();
     let neighbors = di_graph.neighbors_directed(or_node, Outgoing);
 
@@ -547,9 +536,9 @@ fn get_literal_diff(
             .push((neighbor, get_literals(di_graph, safe, nx_literals, neighbor)));
     }
 
-    let mut res: Vec<(NodeIndex, FxHashSet<u32>)> = Vec::new();
+    let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
     for i in 0..inter_res.len() {
-        let mut val: FxHashSet<u32> = FxHashSet::default();
+        let mut val: HashSet<u32> = HashSet::default();
         for (j, i_res) in inter_res.iter().enumerate() {
             if i != j {
                 val.extend(&i_res.1);
@@ -566,16 +555,16 @@ fn get_literal_diff(
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
     di_graph: &StableGraph<TId, ()>,
-    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
-    nx_literals: &FxHashMap<NodeIndex, i32>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
     or_child: NodeIndex,
-) -> FxHashSet<u32> {
+) -> HashSet<u32> {
     let lookup = safe.get(&or_child);
     if let Some(x) = lookup {
         return x.clone();
     }
 
-    let mut res = FxHashSet::default();
+    let mut res = HashSet::new();
     use c2d_lexer::TokenIdentifier::*;
     match di_graph[or_child] {
         And | Or => {
@@ -585,7 +574,7 @@ fn get_literals(
             safe.insert(or_child, res.clone());
         }
         PositiveLiteral | NegativeLiteral => {
-            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs() as u32);
+            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs());
             safe.insert(or_child, res.clone());
         }
         _ => (),

@@ -4,17 +4,14 @@ fn main() {
     // Include or exclude d4v2 depending on the enviroment variable
     println!("cargo:rerun-if-changed=EXCLUDE_D4V2");
     let exclude_d4 = std::env::var("EXCLUDE_D4V2");
-    match exclude_d4 {
-        Ok(val) => {
-            if val == "TRUE" {
-                println!("Not including d4v2");
-                // create an empty binary file so the constant referencing it has a value
-                let mut out = File::create("src/parser/d4v2.bin").unwrap();
-                out.write_all(b"").unwrap();
-                exit(0);
-            }
-        },
-        Err(_) => (), // not set -> we expect that the user wants to use d4
+    if let Ok(val) = exclude_d4 {
+        if val == "TRUE" {
+            println!("Not including d4v2");
+            // create an empty binary file so the constant referencing it has a value
+            let mut out = File::create("src/parser/d4v2.bin").unwrap();
+            out.write_all(b"").unwrap();
+            exit(0);
+        }
     }
     
     // Force rerunning this build script if src/parser/d4v2.bin gets deleted or changed in any way
@@ -34,7 +31,7 @@ fn main() {
         env::set_current_dir(current_dir.canonicalize().unwrap().join("d4v2").as_path()).unwrap();
         match Command::new("./build.sh").output() {
             Ok(_) => (),
-            Err(err) => eprintln!("An error occured while trying to build the d4v2 binary: {}", err),
+            Err(err) => eprintln!("An error occured while trying to build the d4v2 binary: {err}"),
         }
         env::set_current_dir(current_dir).unwrap();
     }

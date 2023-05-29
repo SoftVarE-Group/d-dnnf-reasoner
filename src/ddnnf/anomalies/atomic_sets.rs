@@ -1,18 +1,22 @@
+//! Atomic sets in the context of feature models refer to sets of features that cannot be further decomposed or subdivided.
+//! They represent the smallest, indivisible units within the feature model.
+//! An atomic set is characterized in that a cardinality of feature for all features in the 
+//! set is identical to the cardinality if we select all features.
+
 use bitvec::prelude::*;
 use itertools::Itertools;
 use rug::Integer;
-use rustc_hash::FxHashMap;
 
 use crate::Ddnnf;
 
-use std::hash::Hash;
+use std::{hash::Hash, collections::HashMap};
 
 /// A quite basic union-find implementation that uses ranks and path compresion
 #[derive(Debug, Clone, PartialEq)]
 struct UnionFind<N: Hash + Eq + Clone> {
     size: usize,
-    parents: FxHashMap<N, N>,
-    rank: FxHashMap<N, usize>,
+    parents: HashMap<N, N>,
+    rank: HashMap<N, usize>,
 }
 
 trait UnionFindTrait<N: Eq + Hash + Clone> {
@@ -32,8 +36,8 @@ where T: Eq + Hash + Clone {
 impl<T> UnionFind<T>
 where T: Eq + Hash + Clone {
     fn new() -> UnionFind<T> {
-        let parents: FxHashMap<T, T> = FxHashMap::default();
-        let rank: FxHashMap<T, usize> = FxHashMap::default();
+        let parents: HashMap<T, T> = HashMap::new();
+        let rank: HashMap<T, usize> = HashMap::new();
 
         UnionFind {
             size: 0,
@@ -98,7 +102,7 @@ where T: Eq + Hash + Ord + Clone {
 
     // computes all subsets by grouping values with the same root
     fn subsets(&mut self) -> Vec<Vec<T>> {
-        let mut result: FxHashMap<T, Vec<T>> = FxHashMap::default();
+        let mut result: HashMap<T, Vec<T>> = HashMap::new();
 
         let rank_cp = self.rank.clone();
     
@@ -180,9 +184,8 @@ impl Ddnnf {
 
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
 
-        let samples;
-        match self.uniform_random_sampling(assumptions, SAMPLE_AMOUNT, 10) {
-            Some(x) => samples = x,
+        let samples = match self.uniform_random_sampling(assumptions, SAMPLE_AMOUNT, 10) {
+            Some(x) => x,
             None => {
                 // If the assumptions make the query unsat, then we get no samples.
                 // Hence, we can't exclude any combination of features
@@ -191,7 +194,7 @@ impl Ddnnf {
                 }
                 return signed_excludes;
             },
-        }
+        };
 
         for var in 0..self.number_of_variables as usize {
             let mut bitvec = bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT];

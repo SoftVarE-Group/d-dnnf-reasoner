@@ -1,3 +1,5 @@
+//! A lexer that categorizes a dDNNF in c2d format into its coresponding tokens.
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -37,21 +39,29 @@ use C2DToken::*;
 pub enum C2DToken {
     /// The header of the nnf file
     Header {
+        /// The number of nodes,
         nodes: usize,
+        /// edges,
         edges: usize,
+        /// and variables in the dDNNF file
         variables: usize
     },
     /// An inner node that contains atleast one child
     And {
+        /// The indices of the children nodes
         children: Vec<usize>
     },
     /// An inner node that contains exactly two child nodes
     Or {
+        /// The indices of the children nodes
         children: Vec<usize>,
+        /// The variable indicates that the feature is included in one of the children
+        /// and excluded in the other one.
         decision: u32
     },
     /// A leaf node that countains a positive/negative number of a variable
     Literal {
+        /// The number corresponding to the feature
         feature: i32
     },
     /// A special And node that has zero childs
@@ -170,7 +180,7 @@ pub(super) fn split_numbers(out: &str) -> Vec<usize> {
         .map(|num: &str| {
             num.parse::<usize>()
             .unwrap_or_else(|_| {
-                panic!( "Was not able to parse usize for node. String was {}", out)
+                panic!( "Was not able to parse usize for node. String was {out}")
             })
         })
         .collect::<Vec<usize>>()
@@ -181,10 +191,11 @@ pub(super) fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
     recognize(many1(pair(char(' '), digit1)))(input)
 }
 
+/// Disects a C2DToken back into its string representation
 #[allow(non_snake_case)]
 pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
     match C2DToken {
-        Header { nodes, edges, variables } => format!("nnf {} {} {}\n", nodes, edges, variables),
+        Header { nodes, edges, variables } => format!("nnf {nodes} {edges} {variables}\n"),
         And { children: c} => {
             let mut s = String::from("A ");
             s.push_str(&c.len().to_string());
@@ -202,7 +213,7 @@ pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
             s
         }
         Or { decision, children: c } => format!("O {} 2 {} {}\n", decision, c[0], c[1]),
-        Literal { feature } => format!("L {}\n", feature),
+        Literal { feature } => format!("L {feature}\n"),
         False => String::from("O 0 0\n"),
         True => String::from("A 0\n"),
     }

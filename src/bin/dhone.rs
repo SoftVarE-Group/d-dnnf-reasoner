@@ -2,8 +2,8 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::Parser;
-use rustc_hash::FxHashMap;
 
+use std::collections::HashMap;
 use std::time::Instant;
 
 use std::fs::File;
@@ -85,7 +85,7 @@ fn main() {
 fn preprocess(path: &str) -> Vec<C2DToken> {
     let mut token_stream: Vec<C2DToken> = get_token_stream(path);
 
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
 
     // indices of nodes that should be replaced with true nodes
     let mut changes: Vec<usize> = Vec::new();

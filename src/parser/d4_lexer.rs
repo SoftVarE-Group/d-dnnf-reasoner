@@ -1,3 +1,5 @@
+//! A lexer that categorizes a dDNNF in d4 format into its coresponding tokens.
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -23,8 +25,11 @@ pub enum D4Token {
     False,
     /// An Edge between two nodes, with
     Edge {
+        /// a start node,
         from: i32,
+        /// a target node,
         to: i32,
+        /// and all the features on that edge.
         features: Vec<i32>
     },
 }
@@ -54,7 +59,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                 .split_whitespace()
                 .map(|num: &str| {
                     num.parse::<i32>().unwrap_or_else(|_| {
-                        panic!("Was not able to parse i32 for edge. String was {}", out)
+                        panic!("Was not able to parse i32 for edge. String was {out}")
                     })
                 })
                 .collect::<Vec<i32>>();

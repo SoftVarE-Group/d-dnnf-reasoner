@@ -9,8 +9,8 @@ use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
-pub struct SimilarityMerger {
-    pub t: usize,
+pub(crate) struct SimilarityMerger {
+    pub(crate) t: usize,
 }
 
 // Mark SimilarityMerger as an OrMerger
@@ -155,6 +155,8 @@ impl<'a> Candidate<'a> {
 
 #[cfg(test)]
 mod test {
+    use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::_new_sample_from_configs;
+
     use super::*;
     use rand::SeedableRng;
 
@@ -163,12 +165,12 @@ mod test {
         let merger = SimilarityMerger { t: 2 };
         let mut rng = StdRng::seed_from_u64(42);
 
-        let left = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
-        let right = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
+        let left = _new_sample_from_configs(vec![Config::from(&[1], 1)]);
+        let right = _new_sample_from_configs(vec![Config::from(&[1], 1)]);
         let merged = merger.merge(0, &left, &right, &mut rng);
         assert_eq!(
             merged,
-            Sample::new_from_configs(vec![Config::from(&[1], 1)])
+            _new_sample_from_configs(vec![Config::from(&[1], 1)])
         );
     }
 
@@ -179,7 +181,7 @@ mod test {
         let mut candidate = Candidate::new(&candidate_config);
         let mut rng = StdRng::seed_from_u64(42);
 
-        let sample = Sample::new_from_configs(vec![
+        let sample = _new_sample_from_configs(vec![
             Config::from(&[1, 2, 3], number_of_variables),
             Config::from(&[1, 4], number_of_variables),
             Config::from(&[2, 4], number_of_variables),
@@ -193,7 +195,7 @@ mod test {
         assert!(candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
 
         let mut candidate = Candidate::new(&candidate_config);
-        let sample = Sample::new_from_configs(vec![
+        let sample = _new_sample_from_configs(vec![
             Config::from(&[1, 2, 3], number_of_variables),
             Config::from(&[1, 4], number_of_variables),
             Config::from(&[2, 4], number_of_variables),

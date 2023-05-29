@@ -11,10 +11,10 @@ use rand::prelude::{SliceRandom, StdRng};
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Clone)]
-pub struct ZippingMerger<'a> {
-    pub t: usize,
-    pub sat_solver: &'a SatWrapper<'a>,
-    pub ddnnf: &'a Ddnnf,
+pub(crate) struct ZippingMerger<'a> {
+    pub(crate) t: usize,
+    pub(crate) sat_solver: &'a SatWrapper<'a>,
+    pub(crate) ddnnf: &'a Ddnnf,
 }
 
 // Mark ZippingMerger as an AndMerger
@@ -145,7 +145,7 @@ impl ZippingMerger<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::parser::build_ddnnf;
+    use crate::{parser::build_ddnnf, ddnnf::anomalies::t_wise_sampling::sample_merger::_new_sample_from_configs};
 
     use super::*;
     use rand::SeedableRng;
@@ -153,11 +153,11 @@ mod test {
 
     #[test]
     fn test_zip_samples() {
-        let left = Sample::new_from_configs(vec![
+        let left = _new_sample_from_configs(vec![
             Config::from(&[1, 2], 4),
             Config::from(&[-1, -2], 4),
         ]);
-        let right = Sample::new_from_configs(vec![
+        let right = _new_sample_from_configs(vec![
             Config::from(&[3, 4], 4),
             Config::from(&[-3, -4], 4),
         ]);
@@ -205,12 +205,12 @@ mod test {
             new_with_literals(HashSet::from([2, 3]), vec![-2, 3]);
         left_sample.add_partial(Config::from(&[3], 4));
         let right_sample =
-            Sample::new_from_configs(vec![Config::from(&[1, 4], 4)]);
+            _new_sample_from_configs(vec![Config::from(&[1, 4], 4)]);
 
         let result =
             zipping_merger.merge(node, &left_sample, &right_sample, &mut rng);
         let expected =
-            Sample::new_from_configs(vec![Config::from(&[-2, 1, 3, 4], 4)]);
+            _new_sample_from_configs(vec![Config::from(&[-2, 1, 3, 4], 4)]);
         assert_eq!(result, expected);
     }
 }

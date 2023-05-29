@@ -1,3 +1,5 @@
+//! A lexer that categorizes a CNF into its coresponding tokens.
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -18,7 +20,9 @@ pub enum CNFToken {
     Clause,
     /// The head of a CNF file of the format p cnf #FEATURES #CLAUSESs
     Header {
+        /// The number of features in the CNF
         features: usize,
+        /// The number of clauses in the CNF
         clauses: usize,
     },
 }

@@ -21,11 +21,11 @@ impl StreamingIterator for TIndicesIter {
         }
 
         self.tuple[0] += 1;
-        if self.tuple[0] as usize >= self.number_of_vars {
+        if self.tuple[0] >= self.number_of_vars {
             let mut p: usize = 0;
 
             // carry over to the next places - like 0999 -> 1000
-            while self.tuple[p] as usize >= self.number_of_vars - p
+            while self.tuple[p] >= self.number_of_vars - p
                 && self.tuple[self.t] == 0
             {
                 self.tuple[p] = 0;
@@ -54,7 +54,7 @@ impl StreamingIterator for TIndicesIter {
 }
 
 impl TIndicesIter {
-    pub fn new(number_of_vars: usize, t: usize) -> Self {
+    pub(crate) fn new(number_of_vars: usize, t: usize) -> Self {
         let tuple = (0..t).rev().chain(iter::once(0)).collect();
         Self {
             number_of_vars,

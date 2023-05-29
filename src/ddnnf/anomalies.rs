@@ -1,3 +1,7 @@
+//! All the different types of queries ddnnife provides are summarized under anomalies.
+//! This includes atomic sets, enumeration of valid configurations, uniform random sampling,
+//! core and dead features, false optional features, SAT solving, and t-wise sampling.
+
 pub mod atomic_sets;
 pub mod config_creation;
 pub mod core;
@@ -23,7 +27,7 @@ impl Ddnnf {
         // false-optionals
 
         // atomic sets
-        let mut atomic_sets = self.get_atomic_sets(None, &vec![]);
+        let mut atomic_sets = self.get_atomic_sets(None, &[]);
         atomic_sets.sort_unstable();
         file.write_all(format!("atomic sets: {atomic_sets:?}\n").as_bytes())?;
 

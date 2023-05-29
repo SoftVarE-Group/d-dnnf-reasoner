@@ -62,14 +62,14 @@ impl Ddnnf {
                         match args[param_index-1] {
                             "seed" | "s" => { seed = match args[param_index].parse::<u64>() {
                                     Ok(x) => x,
-                                    Err(e) => return format!("E3 error: {}", e),
+                                    Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
                             },
                             "limit" | "l" => {
                                 limit = match args[param_index].parse::<usize>() {
                                     Ok(x) => Some(x),
-                                    Err(e) => return format!("E3 error: {}", e),
+                                    Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
                             },
@@ -84,7 +84,7 @@ impl Ddnnf {
                         return format!("E4 error: param \"{}\" was used, but no value supplied", args[param_index-1]);
                     }
                 },
-                other => return format!("E4 error: the option \"{}\" is not valid in this context", other),
+                other => return format!("E4 error: the option \"{other}\" is not valid in this context"),
             }
         }
 
@@ -157,11 +157,8 @@ impl Ddnnf {
                 }
             },
             "random" => {
-                let limit_interpretation = match limit {
-                    Some(limit) => limit,
-                    None => 1,
-                };
-                let samples = self.uniform_random_sampling(&mut params, limit_interpretation, seed);
+                let limit_interpretation = limit.unwrap_or(1);
+                let samples = self.uniform_random_sampling(&params, limit_interpretation, seed);
                 match samples {
                     Some(s) => format_vec_vec(s.iter()),
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
@@ -192,13 +189,10 @@ impl Ddnnf {
                 }
             },
             "t-wise" => {
-                let limit_interpretation = match limit {
-                    Some(limit) => limit,
-                    None => 1,
-                };
+                let limit_interpretation = limit.unwrap_or(1);
                 self.sample_t_wise(limit_interpretation).to_string()
             }
-            other => format!("E2 error: the operation \"{}\" is not supported", other),
+            other => format!("E2 error: the operation \"{other}\" is not supported"),
         }
     }
 }
@@ -278,7 +272,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
         match range {
             // '0' isn't valid in this context and gets removed
             Ok(num) => num.1.into_iter().for_each(|f| if f != 0 { numbers.push(f) }),
-            Err(e) => return Err(format!("E3 {}", e)),
+            Err(e) => return Err(format!("E3 {e}")),
         }
         parsed_str_count += 1;
     }

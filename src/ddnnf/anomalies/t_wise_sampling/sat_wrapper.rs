@@ -1,5 +1,6 @@
 use crate::Ddnnf;
 
+/// A Wrapper for computing Sat queries. We encourage using [.sat] directly as method on Ddnnf instead.
 #[derive(Debug, Clone)]
 pub struct SatWrapper<'a> {
     ddnnf: &'a Ddnnf,
