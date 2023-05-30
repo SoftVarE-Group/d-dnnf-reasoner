@@ -23,7 +23,9 @@ impl IntermediateGraph {
 
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
     /// list of nodes which we use for counting operations and other types of queries.
-    pub fn redo_nodes(&self) {
+    pub fn rebuild(&self) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
+        println!("{:?}\n", self.graph); println!("{:?}\n", self.nx_literals); println!("{:?}\n", self.root);
+
         // perform a depth first search to get the nodes ordered such
         // that child nodes are listed before their parents
         // transform that interim representation into a node vector
@@ -43,14 +45,13 @@ impl IntermediateGraph {
             let next: Node = match self.graph[nx] {
                 // extract the parsed Token
                 TId::PositiveLiteral |
-                TId::NegativeLiteral => {
-                    Node::new_literal(self.nx_literals.get(&nx).unwrap().to_owned())
-                }
+                TId::NegativeLiteral => Node::new_literal(
+                    self.nx_literals.get(&nx).unwrap().to_owned()
+                ),
                 TId::And => Node::new_and(
                     calc_and_count(&mut parsed_nodes, &neighs),
                     neighs,
                 ),
-
                 TId::Or => Node::new_or(
                     0,
                     calc_or_count(&mut parsed_nodes, &neighs),
@@ -62,6 +63,7 @@ impl IntermediateGraph {
             };
 
             match &next.ntype {
+                // build additional references from the child to its parent
                 NodeType::And { children } |
                 NodeType::Or { children } => {
                     let next_indize: usize = parsed_nodes.len();
@@ -81,5 +83,8 @@ impl IntermediateGraph {
 
             parsed_nodes.push(next);
         }
+
+        println!("{:?} \n", parsed_nodes); println!("{:?} \n", literals); println!("{:?} \n", true_nodes);
+        (parsed_nodes, literals, true_nodes)
     }
 }

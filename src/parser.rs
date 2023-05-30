@@ -31,7 +31,7 @@ use std::{
     rc::Rc, process
 };
 
-use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
+use crate::ddnnf::{Ddnnf};
 
 use petgraph::{
     stable_graph::StableGraph,
@@ -137,60 +137,50 @@ pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) ->
 fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     use C2DToken::*;
 
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
-    let mut literals: HashMap<i32, usize> = HashMap::new();
-    let mut true_nodes = Vec::new();
-
-    let ddnnf_graph = StableGraph::<TId, ()>::new();
+    let mut ddnnf_graph = StableGraph::<TId, ()>::new();
+    let mut node_indices = Vec::with_capacity(lines.len());
+    let mut nx_literals: HashMap<NodeIndex, i32> = HashMap::new();
 
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
     // skip the first line, because we already looked at the header
     for line in lines.into_iter().skip(1) {
-        let next: Node = match lex_line_c2d(line.as_ref()).unwrap().1 {
-            And { children } => Node::new_and(
-                calc_and_count(&mut parsed_nodes, &children),
-                children,
-            ),
-            Or { decision, children } => {
-                Node::new_or(
-                    decision,
-                    calc_or_count(&mut parsed_nodes, &children),
-                    children,
-                )
+        node_indices.push(
+            match lex_line_c2d(line.as_ref()).unwrap().1 {
+                And { children } => {
+                    let from = ddnnf_graph.add_node(TId::And);
+                    for child in children {
+                        ddnnf_graph.add_edge(from, node_indices[child], ());
+                    }
+                    from
+                },
+                Or { decision: _, children } => {
+                    let from = ddnnf_graph.add_node(TId::Or);
+                    for child in children {
+                        ddnnf_graph.add_edge(from, node_indices[child], ());
+                    }
+                    from
+                },
+                Literal { feature } => {
+                    let literal_node = if feature.is_positive() {
+                        ddnnf_graph.add_node(TId::PositiveLiteral)
+                    } else {
+                        ddnnf_graph.add_node(TId::NegativeLiteral)
+                    };
+                    nx_literals.insert(literal_node, feature);
+                    literal_node
+                },
+                True => { ddnnf_graph.add_node(TId::True) },
+                False => { ddnnf_graph.add_node(TId::False) },
+                _ => panic!(
+                    "Tried to parse the header of the .nnf at the wrong time"
+                ),
             }
-            Literal { feature } => Node::new_literal(feature),
-            True => Node::new_bool(true),
-            False => Node::new_bool(false),
-            _ => panic!(
-                "Tried to parse the header of the .nnf at the wrong time"
-            ),
-        };
-
-        // fill the parent node pointer, save literals
-        match &next.ntype {
-            NodeType::And { children } |
-            NodeType::Or { children } => {
-                let next_indize: usize = parsed_nodes.len();
-                for &i in children {
-                    parsed_nodes[i].parents.push(next_indize);
-                }
-            }
-            // fill the FxHashMap with the literals
-            NodeType::Literal { literal } => {
-                literals.insert(*literal, parsed_nodes.len());
-            }
-            NodeType::True => {
-                true_nodes.push(parsed_nodes.len());
-            }
-            _ => (),
-        }
-
-        parsed_nodes.push(next);
+        );
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, NodeIndex::default(), HashMap::new());
-    Ddnnf::new(intermediate_graph, parsed_nodes, literals, true_nodes, variables)
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, node_indices[node_indices.len() - 1], nx_literals);
+    Ddnnf::new(intermediate_graph, variables)
 }
 
 /// Parses a ddnnf, referenced by the file path.
@@ -458,67 +448,8 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         }
     }
 
-    // perform a depth first search to get the nodes ordered such
-    // that child nodes are listed before their parents
-    // transform that interim representation into a node vector
-    dfs = DfsPostOrder::new(&ddnnf_graph, root);
-    let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
-
-    let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
-    let mut literals: HashMap<i32, usize> = HashMap::new();
-    let mut true_nodes = Vec::new();
-    let nx_lit = nx_literals.borrow();
-
-    while let Some(nx) = dfs.next(&ddnnf_graph) {
-        nd_to_usize.insert(nx, parsed_nodes.len());
-        let neighs = ddnnf_graph
-            .neighbors(nx)
-            .map(|n| *nd_to_usize.get(&n).unwrap())
-            .collect::<Vec<usize>>();
-        let next: Node = match ddnnf_graph[nx] {
-            // extract the parsed Token
-            TId::PositiveLiteral |
-            TId::NegativeLiteral => {
-                Node::new_literal(nx_lit.get(&nx).unwrap().to_owned())
-            }
-            TId::And => Node::new_and(
-                calc_and_count(&mut parsed_nodes, &neighs),
-                neighs,
-            ),
-
-            TId::Or => Node::new_or(
-                0,
-                calc_or_count(&mut parsed_nodes, &neighs),
-                neighs,
-            ),
-            TId::True => Node::new_bool(true),
-            TId::False => Node::new_bool(false),
-            TId::Header => panic!("The d4 standard does not include a header!"),
-        };
-
-        match &next.ntype {
-            NodeType::And { children } |
-            NodeType::Or { children } => {
-                let next_indize: usize = parsed_nodes.len();
-                for &i in children {
-                    parsed_nodes[i].parents.push(next_indize);
-                }
-            }
-            // fill the FxHashMap with the literals
-            NodeType::Literal { literal } => {
-                literals.insert(*literal, parsed_nodes.len());
-            }
-            NodeType::True => {
-                true_nodes.push(parsed_nodes.len());
-            }
-            _ => (),
-        }
-
-        parsed_nodes.push(next);
-    }
-
     let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, nx_literals.borrow().clone());
-    Ddnnf::new(intermediate_graph, parsed_nodes, literals, true_nodes, omitted_features)
+    Ddnnf::new(intermediate_graph, omitted_features)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes

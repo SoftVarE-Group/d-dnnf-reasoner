@@ -17,7 +17,7 @@ use self::node::{Node};
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
     /// An intermediate representation that can be changed without destroying the structure
-    _inter_graph: IntermediateGraph,
+    inter_graph: IntermediateGraph,
     /// The nodes of the dDNNF
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
@@ -36,7 +36,7 @@ pub struct Ddnnf {
 impl Default for Ddnnf {
     fn default() -> Self {
         Ddnnf {
-            _inter_graph: IntermediateGraph::default(),
+            inter_graph: IntermediateGraph::default(),
             nodes: Vec::new(),
             literals: HashMap::new(),
             true_nodes: Vec::new(),
@@ -51,17 +51,15 @@ impl Default for Ddnnf {
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
     pub fn new(
-        _inter_graph: IntermediateGraph,
-        nodes: Vec<Node>,
-        literals: HashMap<i32, usize>,
-        true_nodes: Vec<usize>,
+        inter_graph: IntermediateGraph,
         number_of_variables: u32,
     ) -> Ddnnf {
+        let dfs_ig = inter_graph.rebuild();
         let mut ddnnf = Ddnnf {
-            _inter_graph,
-            nodes,
-            literals,
-            true_nodes,
+            inter_graph,
+            nodes: dfs_ig.0,
+            literals: dfs_ig.1,
+            true_nodes: dfs_ig.2,
             core: HashSet::new(),
             md: Vec::new(),
             number_of_variables,
@@ -69,6 +67,19 @@ impl Ddnnf {
         };
         ddnnf.get_core();
         ddnnf
+    }
+
+    /// We invalidate all collected data that belongs to the dDNNF and build it again
+    /// by doing a DFS. That is necessary if we altered the intermedidate graph in any way.
+    pub fn rebuild(&mut self) {
+        self.nodes.clear();
+        self.literals.clear();
+        self.true_nodes.clear();
+        self.core.clear();
+        self.md.clear();
+        self.number_of_variables = 0;
+
+        //TODO refill the values
     }
 
     /// Returns the current count of the root node in the ddnnf
@@ -129,7 +140,7 @@ mod test {
     fn features_opposing_indexes() {
         let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
         
-        assert_eq!(vec![3, 2, 6], ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4]));
-        assert_eq!(vec![0, 1, 4, 5], ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4]));
+        assert_eq!(vec![4, 2, 9], ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4]));
+        assert_eq!(vec![0, 1, 5, 8], ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4]));
     }
 }
