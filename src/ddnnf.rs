@@ -5,7 +5,7 @@ mod counting;
 mod multiple_queries;
 pub mod anomalies;
 
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, cmp::max};
 
 use rug::{Integer};
 
@@ -72,14 +72,28 @@ impl Ddnnf {
     /// We invalidate all collected data that belongs to the dDNNF and build it again
     /// by doing a DFS. That is necessary if we altered the intermedidate graph in any way.
     pub fn rebuild(&mut self) {
-        self.nodes.clear();
-        self.literals.clear();
-        self.true_nodes.clear();
-        self.core.clear();
+        let dfs_ig = self.inter_graph.rebuild();
+        self.nodes = dfs_ig.0;
+        self.literals = dfs_ig.1;
+        self.true_nodes = dfs_ig.2;
+        
+        self.get_core();
         self.md.clear();
-        self.number_of_variables = 0;
+        // The highest absolute value of literals must be is also the number of variables because
+        // there are no gaps in the feature to number mapping
+        self.number_of_variables = self.literals.keys().fold(0, |acc, x| max(acc, x.abs() as u32));
+    }
 
-        //TODO refill the values
+    /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
+    /// The clauses are disjuncted.
+    /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4) 
+    pub fn apply_changes(&mut self, clauses: Vec<Vec<i32>>) {
+        for _clause in clauses {
+            // somehow apply changes to the intermediate graph
+            todo!();
+        }
+        
+        self.rebuild();
     }
 
     /// Returns the current count of the root node in the ddnnf
@@ -142,5 +156,28 @@ mod test {
         
         assert_eq!(vec![4, 2, 9], ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4]));
         assert_eq!(vec![0, 1, 5, 8], ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4]));
+    }
+
+    #[test]
+    fn rebuild_ddnnf() {
+        let mut ddnnfs = Vec::new();
+        ddnnfs.push(build_ddnnf("tests/data/auto1_c2d.nnf", None));
+        ddnnfs.push(build_ddnnf("tests/data/auto1_d4.nnf", Some(2513)));
+        ddnnfs.push(build_ddnnf("tests/data/VP9_d4.nnf", Some(42)));
+        ddnnfs.push(build_ddnnf("tests/data/small_ex_c2d.nnf", None));
+
+        for ddnnf in ddnnfs {
+            let mut rebuild_clone = ddnnf.clone();
+            // rebuild 10 times to ensure that negative effects do not occur no matter
+            // how many times we rebuild
+            for _ in 0..10 { rebuild_clone.rebuild(); }
+
+            // check each field seperatly due to intermediate_graph.graph not being able to derive PartialEq
+            assert_eq!(ddnnf.nodes, rebuild_clone.nodes);
+            assert_eq!(ddnnf.literals, rebuild_clone.literals);
+            assert_eq!(ddnnf.core, rebuild_clone.core);
+            assert_eq!(ddnnf.true_nodes, rebuild_clone.true_nodes);
+            assert_eq!(ddnnf.number_of_variables, rebuild_clone.number_of_variables);
+        }
     }
 }

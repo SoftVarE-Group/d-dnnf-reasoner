@@ -24,8 +24,6 @@ impl IntermediateGraph {
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
     /// list of nodes which we use for counting operations and other types of queries.
     pub fn rebuild(&self) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
-        println!("{:?}\n", self.graph); println!("{:?}\n", self.nx_literals); println!("{:?}\n", self.root);
-
         // perform a depth first search to get the nodes ordered such
         // that child nodes are listed before their parents
         // transform that interim representation into a node vector
@@ -84,7 +82,6 @@ impl IntermediateGraph {
             parsed_nodes.push(next);
         }
 
-        println!("{:?} \n", parsed_nodes); println!("{:?} \n", literals); println!("{:?} \n", true_nodes);
         (parsed_nodes, literals, true_nodes)
     }
 }
