@@ -19,6 +19,9 @@ valcom
 # ddnnife config input
 *.config
 
+# allow everything in the example_input folder
+!example_input/*
+
 # ddnnife output files (direct and indirect)
 *-features.csv
 *-queries.csv
