@@ -2,8 +2,8 @@ use std::{process::{Command, self}, fs};
 
 use colored::Colorize;
 
-const D4V2: &[u8] = include_bytes!("d4v2.bin");
-const EXECUTABLE_PATH: &str = "src/parser/.d4v2";
+const D4V2: &[u8] = include_bytes!("./../bin/d4v2.bin"); // relative from source file
+const EXECUTABLE_PATH: &str = ".d4v2"; // relative from the root of the project
 
 /// Using the d4v2 CNF to dDNNF compiler from cril,
 /// we take a CNF from path_in and write the dDNNF to path_out
@@ -20,9 +20,9 @@ pub fn compile_cnf(path_in: &str, path_out: &str) {
     std::fs::write(EXECUTABLE_PATH, D4V2)
         .expect("failed to write file");
     set_permissions();
-    
+
     // execute the command to compile a dDNNF from a CNF file
-    Command::new(EXECUTABLE_PATH)
+    Command::new(String::from("./") + EXECUTABLE_PATH)
         .args(["-i", path_in, "-m", "ddnnf-compiler", "--dump-ddnnf", path_out])
         .output().unwrap();
     

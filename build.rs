@@ -41,6 +41,6 @@ fn main() {
 
     // Include the binary data of d4v2 in the source files.
     // This allows us to staticlly bind it to the ddnnife binary.
-    let mut out = File::create("src/parser/d4v2.bin").unwrap();
+    let mut out = File::create("src/bin/d4v2.bin").unwrap();
     out.write_all(&std::fs::read("d4v2/build/d4").unwrap()).unwrap();
 }
