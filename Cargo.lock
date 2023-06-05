@@ -203,6 +203,7 @@ dependencies = [
  "rustc-hash",
  "serial_test",
  "streaming-iterator",
+ "winapi",
  "workctl",
 ]
 

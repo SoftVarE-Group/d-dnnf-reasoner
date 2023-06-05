@@ -2,7 +2,8 @@ use std::{process::{Command, self}, fs};
 
 use colored::Colorize;
 
-const D4V2: &[u8] = include_bytes!("./../bin/d4v2.bin"); // relative from source file
+#[cfg(windows)] const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
+#[cfg(unix)] const D4V2: &[u8] = include_bytes!("../bin/d4v2.bin");
 const EXECUTABLE_PATH: &str = ".d4v2"; // relative from the root of the project
 
 /// Using the d4v2 CNF to dDNNF compiler from cril,
@@ -50,11 +51,13 @@ fn set_permissions() {
     {
         use std::fs::OpenOptions;
         use std::os::windows::fs::OpenOptionsExt;
+        use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL};
+
         let mut options = OpenOptions::new();
         options.write(true)
             .create(true)
             .truncate(true)
-            .custom_flags(winapi::um::winnt::FILE_ATTRIBUTE_NORMAL | winapi::um::winnt::FILE_FLAG_BACKUP_SEMANTICS);
+            .custom_flags(FILE_ATTRIBUTE_NORMAL);
         let file = options.open(EXECUTABLE_PATH)
             .expect("failed to open file");
         let mut permissions = file.metadata()
