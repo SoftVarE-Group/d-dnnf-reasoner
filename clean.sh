@@ -3,10 +3,10 @@
 if [ $# -eq 0 ]
 then
     echo "USAGE: sh clean-all.sh [FILES TO CLEAR]"
-    echo "\t0: All of the below"
-    echo "\t1: Target directory"
-    echo "\t2: d4v2 related files"
-    echo "\t3: ddnnife results"
+    echo -e "\t0: All of the below"
+    echo -e "\t1: Target directory"
+    echo -e "\t2: d4v2 related files"
+    echo -e "\t3: ddnnife results"
     exit 0
 fi
 
