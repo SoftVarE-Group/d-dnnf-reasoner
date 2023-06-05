@@ -1,32 +1,99 @@
 name: CI
 
-on: [push]
+on: [workflow_dispatch, push]
 
 jobs:
-  Build:
+  Build-Linux:
     runs-on: ubuntu-latest
+    strategy: 
+      fail-fast: false
+      matrix:
+        target: [x86_64-unknown-linux-gnu]
     steps:
-    - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev ninja-build
+      - name: Build target
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Archieve Binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ddnnife_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/ddnnife
+  
+  Build-wo-d4v2-Macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-apple-darwin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Build target
+        run: EXCLUDE_D4V2=TRUE cargo build --release --target ${{ matrix.target }}
+      - name: Archieve Binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ddnnife_${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/ddnnife
+
+      
+  #Build-wo-d4v2-Windows:
+  #  runs-on: ubuntu-latest
+  #  strategy:
+  #    fail-fast: false
+  #  steps:
+  #    - uses: actions/checkout@v3
+  #    - uses: Swatinem/rust-cache@v2
+  #    - name: Set env variable
+  #      run: export EXCLUDE_D4V2=TRUE 
+  #    - name: Install dependencies
+  #      run: |
+  #        rustup target add x86_64-pc-windows-gnu
+  #    - name: Build
+  #      uses: actions-rs/cargo@v1
+  #      with:
+  #        use-cross: true
+  #        command: build
+  #        args: --target x86_64-pc-windows-gnu --release
+  #    - name: Archieve Binary
+  #      uses: actions/upload-artifact@v3
+  #      with:
+  #        name: ddnnife
+  #        path: target/release/ddnnife.exe
       
   Doc-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Doc-tests
-      run: cargo test --doc
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Doc-tests
+        run: cargo test --doc
       
   Integration-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Integration-tests
-      run: cargo test --release --tests
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Integration-tests
+        run: cargo test --release --tests
 
   Coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Coverage
-      run: cargo +stable install cargo-llvm-cov; cargo llvm-cov
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: d4v2 build dependencies
+        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+      - name: Coverage
+        run: cargo +stable install cargo-llvm-cov; cargo llvm-cov

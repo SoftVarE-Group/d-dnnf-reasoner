@@ -9,6 +9,7 @@ use std::fs;
 use std::fs::File;
 
 #[test]
+#[serial]
 fn card_of_features_c2d() {
     let c2d_out = "./tests/data/auto1_c2d_fs.csv";
     let mut ddnnf: Ddnnf =
@@ -26,6 +27,7 @@ fn card_of_features_c2d() {
 }
 
 #[test]
+#[serial]
 fn card_of_features_d4() {
     let d4_out = "./tests/data/auto1_d4_fs.csv";
     let mut ddnnf: Ddnnf =
@@ -61,6 +63,7 @@ fn card_of_features_cnf() {
 }
 
 #[test]
+#[serial]
 fn card_of_pc_c2d() {
     let c2d_out = "./tests/data/auto1_c2d_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
@@ -82,6 +85,7 @@ fn card_of_pc_c2d() {
 }
 
 #[test]
+#[serial]
 fn card_of_pc_d4() {
     let d4_out = "./tests/data/auto1_d4_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
@@ -125,6 +129,7 @@ fn card_of_pc_cnf() {
 }
 
 #[test]
+#[serial]
 fn heuristics_test() {
     let mut ddnnf: Ddnnf =
         parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
