@@ -17,7 +17,7 @@ use self::node::{Node};
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
     /// An intermediate representation that can be changed without destroying the structure
-    inter_graph: IntermediateGraph,
+    pub inter_graph: IntermediateGraph,
     /// The nodes of the dDNNF
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation

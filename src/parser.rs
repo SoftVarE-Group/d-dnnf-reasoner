@@ -241,11 +241,11 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     // remove the weighted edges and substitute it with the corresponding
     // structure that uses AND-Nodes and Literal-Nodes. Example:
     //
-    //                   n1                       n1
-    //                 /   \                   /    \
-    //              Ln|    |Lm     into     AND    AND
-    //                \   /                /   \  /   \
-    //                 n2                 Ln    n2    Lm
+    //                   n1                    n1
+    //                 /   \                   |
+    //              Ln|    |Lm     into       AND    
+    //                \   /                 /  |  \
+    //                 n2                 Ln  n2  Lm
     //
     //
     let resolve_weighted_edge =
@@ -324,16 +324,16 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         |ddnnf_graph: &mut StableGraph<TId, ()>,
          from: NodeIndex,
          children: Vec<(NodeIndex, HashSet<u32>)>| {
-        for child in children {
+        for (child_nx, child_literals) in children {
             let and_node = ddnnf_graph.add_node(TId::And);
 
             // place the newly created and node between the or node and its child
             ddnnf_graph
-                .remove_edge(ddnnf_graph.find_edge(from, child.0).unwrap());
+                .remove_edge(ddnnf_graph.find_edge(from, child_nx).unwrap());
             ddnnf_graph.add_edge(from, and_node, ());
-            ddnnf_graph.add_edge(and_node, child.0, ());
+            ddnnf_graph.add_edge(and_node, child_nx, ());
 
-            for literal in child.1 {
+            for literal in child_literals {
                 add_literal_node(ddnnf_graph, literal, and_node);
             }
         }
@@ -432,19 +432,27 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut safe: HashMap<NodeIndex, HashSet<u32>> = HashMap::new();
+    let literal_diff: HashMap<NodeIndex, HashSet<i32>>
+        = get_literal_diffs(&ddnnf_graph, &nx_literals.borrow(), root);
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
         // have any weights attached to them. Therefore, we can skip them
         if ddnnf_graph[nx] == TId::Or {
-            let diffrences = get_literal_diff(
-                &ddnnf_graph,
-                &mut safe,
-                &nx_literals.borrow(),
-                nx,
-            );
-            balance_or_children(&mut ddnnf_graph, nx, diffrences);
+            let children_diff = ddnnf_graph
+                .neighbors_directed(nx, Outgoing)
+                .map(|c|
+                    (c, HashSet::from_iter(
+                        literal_diff.get(&c)
+                            .unwrap()
+                            .clone()
+                            .drain()
+                            .map(|l| l.unsigned_abs() as u32))
+                    )
+                )
+                .collect();
+
+            balance_or_children(&mut ddnnf_graph, nx, diff(children_diff));
         }
     }
 
@@ -452,63 +460,63 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     Ddnnf::new(intermediate_graph, omitted_features)
 }
 
-// determine the differences in literal-nodes occuring in the child nodes
-fn get_literal_diff(
-    di_graph: &StableGraph<TId, ()>,
-    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
-    nx_literals: &HashMap<NodeIndex, i32>,
-    or_node: NodeIndex,
-) -> Vec<(NodeIndex, HashSet<u32>)> {
-    let mut inter_res = Vec::new();
-    let neighbors = di_graph.neighbors_directed(or_node, Outgoing);
-
-    for neighbor in neighbors {
-        inter_res
-            .push((neighbor, get_literals(di_graph, safe, nx_literals, neighbor)));
-    }
-
+// Computes the difference between the children of a Node
+fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32>)> {
     let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
-    for i in 0..inter_res.len() {
+    for i in 0..literals.len() {
         let mut val: HashSet<u32> = HashSet::default();
-        for (j, i_res) in inter_res.iter().enumerate() {
+        for (j, i_res) in literals.iter().enumerate() {
             if i != j {
-                val.extend(&i_res.1);
+                val.extend(i_res.1.clone());
             }
         }
-        val = &val - &inter_res[i].1;
+        val = &val - &literals[i].1;
         if !val.is_empty() {
-            res.push((inter_res[i].0, val));
+            res.push((literals[i].0, val));
         }
     }
     res
 }
 
+/// Computes the combined literals used in its children
+pub fn get_literal_diffs(
+    di_graph: &StableGraph<TId, ()>,
+    nx_literals: &HashMap<NodeIndex, i32>,
+    root: NodeIndex
+) -> HashMap<NodeIndex, HashSet<i32>> {
+    let mut safe: HashMap<NodeIndex, HashSet<i32>> = HashMap::new();
+    let mut dfs = DfsPostOrder::new(di_graph, root);
+    while let Some(nx) = dfs.next(di_graph) {
+        get_literals(di_graph, &mut safe, nx_literals, nx);
+    }
+    safe
+}
+
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
     di_graph: &StableGraph<TId, ()>,
-    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    safe: &mut HashMap<NodeIndex, HashSet<i32>>,
     nx_literals: &HashMap<NodeIndex, i32>,
-    or_child: NodeIndex,
-) -> HashSet<u32> {
-    let lookup = safe.get(&or_child);
+    deciding_node_child: NodeIndex,
+) -> HashSet<i32> {
+    let lookup = safe.get(&deciding_node_child);
     if let Some(x) = lookup {
         return x.clone();
     }
 
-    let mut res = HashSet::new();
     use c2d_lexer::TokenIdentifier::*;
-    match di_graph[or_child] {
+    let mut res = HashSet::new();
+    match di_graph[deciding_node_child] {
         And | Or => {
-            di_graph.neighbors_directed(or_child, Outgoing).for_each(|n| {
+            di_graph.neighbors_directed(deciding_node_child, Outgoing).for_each(|n| {
                 res.extend(get_literals(di_graph, safe, nx_literals, n))
             });
-            safe.insert(or_child, res.clone());
         }
         PositiveLiteral | NegativeLiteral => {
-            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs());
-            safe.insert(or_child, res.clone());
+            res.insert(*nx_literals.get(&deciding_node_child).unwrap());
         }
         _ => (),
     }
+    safe.insert(deciding_node_child, res.clone());
     res
 }
