@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, cmp::{Reverse}};
 
 use petgraph::{stable_graph::{StableGraph, NodeIndex}, visit::{DfsPostOrder, Bfs}, algo::is_cyclic_directed};
 
@@ -77,7 +77,7 @@ impl IntermediateGraph {
                         parsed_nodes[i].parents.push(next_indize);
                     }
                 }
-                // fill the FxHashMap with the literals
+                // create mapping from literal to its node index
                 NodeType::Literal { literal } => {
                     literals.insert(*literal, parsed_nodes.len());
                 }
@@ -93,29 +93,40 @@ impl IntermediateGraph {
         (parsed_nodes, literals, true_nodes)
     }
 
-    pub fn closest_unsplittable_and(&mut self, clause: &[i32]) -> (usize, HashSet<i32>) {
+    /// For a given clause we search for the AND node that contains all literals of that clause
+    /// and therefore all other clauses that contain those literals and that has as little children
+    /// as possible.
+    pub fn closest_unsplitable_and(&mut self, clause: &[i32]) -> (NodeIndex, HashSet<i32>) {
         use crate::c2d_lexer::TokenIdentifier::*;
 
-        if clause.is_empty() { return (0, HashSet::default()) }
+        if clause.is_empty() { return (NodeIndex::new(0), HashSet::default()) }
 
-        let mut last_cached_and: NodeIndex<u32> = NodeIndex::new(usize::MAX);
-        let mut last_cached_literals: &HashSet<i32> = &HashSet::default();
+        let mut cached_ands: Vec<(NodeIndex<u32>, &HashSet<i32>)> = Vec::new();
         let mut bfs = Bfs::new(&self.graph, self.root);
         while let Some(nx) = bfs.next(&self.graph) {
             match self.graph[nx] {
                 And => {
                     let diffs = self.literal_children.get(&nx).unwrap();
-                    if clause.iter().all(|e| diffs.contains(e)) 
-                        && (diffs.len() < last_cached_literals.len() && diffs.is_subset(last_cached_literals)
-                            || last_cached_literals.is_empty()) {
-                        last_cached_and = nx;
-                        last_cached_literals = diffs;
+                    if clause.iter().all(|e| diffs.contains(e)) {
+                        cached_ands.push((nx, diffs));
                     }
                 },
                 _ => (), // we are only interested in AND nodes
             }
         }
-        (last_cached_and.index(), last_cached_literals.clone())
+        
+        // sort by descending length, aka from closest to farthest from root
+        cached_ands.sort_unstable_by_key(|and| Reverse(and.1.len()));
+        let mut try_and = cached_ands[0]; 
+        for i in 0..cached_ands.len() {
+            if cached_ands[i+1..].iter()
+                .all(|(_nx, and)| and.is_subset(cached_ands[i].1)) {
+                try_and = cached_ands[i];
+            } else {
+                break;
+            }
+        }  
+        (try_and.0, try_and.1.clone())
     }
 }
 
@@ -130,12 +141,21 @@ mod test {
         let mut ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let _nodes = ddnnf.inter_graph.rebuild().0;
 
-        let input = vec![vec![], vec![4], vec![5], vec![4, 5], vec![42]];
-        let output = vec![vec![], vec![-5, 4], vec![-4, 5], vec![-5, -4, -3, 4, 5], vec![-41, 42]];
+        let input = vec![
+            vec![], vec![4], vec![5], vec![4, 5],
+            vec![42], vec![-5], vec![-8], vec![1, 39]
+        ];
+        let root_literals = ddnnf.inter_graph.literal_children.get(&ddnnf.inter_graph.root).unwrap().clone();
+        let mut root_literals_as_vec = HashSet::<_>::from_iter(root_literals).into_iter().collect::<Vec<i32>>();
+        root_literals_as_vec.sort();
+        let output = vec![
+            vec![], vec![-5, 4], vec![-4, 5], vec![-5, -4, -3, 4, 5],
+            vec![-41, 42], vec![-5, -4, -3, 3, 4, 5], vec![-9, -8, -7, 7, 8, 9], root_literals_as_vec
+        ];
 
         for (index, inp) in input.iter().enumerate() {
             let mut literals_as_vec = HashSet::<_>::from_iter(
-                (ddnnf.inter_graph.closest_unsplittable_and(inp)).1.iter().copied())
+                (ddnnf.inter_graph.closest_unsplitable_and(inp)).1.iter().copied())
                 .into_iter()
                 .collect::<Vec<i32>>();
             literals_as_vec.sort();
