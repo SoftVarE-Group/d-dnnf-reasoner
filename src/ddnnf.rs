@@ -54,7 +54,7 @@ impl Ddnnf {
         inter_graph: IntermediateGraph,
         number_of_variables: u32,
     ) -> Ddnnf {
-        let dfs_ig = inter_graph.rebuild();
+        let dfs_ig = inter_graph.rebuild(None);
         let mut ddnnf = Ddnnf {
             inter_graph,
             nodes: dfs_ig.0,
@@ -72,7 +72,7 @@ impl Ddnnf {
     /// We invalidate all collected data that belongs to the dDNNF and build it again
     /// by doing a DFS. That is necessary if we altered the intermedidate graph in any way.
     pub fn rebuild(&mut self) {
-        let dfs_ig = self.inter_graph.rebuild();
+        let dfs_ig = self.inter_graph.rebuild(None);
         self.nodes = dfs_ig.0;
         self.literals = dfs_ig.1;
         self.true_nodes = dfs_ig.2;

@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, cmp::{Reverse}};
 
 use petgraph::{stable_graph::{StableGraph, NodeIndex}, visit::{DfsPostOrder, Bfs}, algo::is_cyclic_directed};
 
-use crate::{c2d_lexer::TId, Node, NodeType, parser::get_literal_diffs};
+use crate::{c2d_lexer::TId, Node, NodeType, parser::{get_literal_diffs, util::format_vec}};
 
 use super::{calc_and_count, calc_or_count};
 
@@ -28,14 +28,14 @@ impl IntermediateGraph {
 
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
     /// list of nodes which we use for counting operations and other types of queries.
-    pub fn rebuild(&self) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
+    pub fn rebuild(&self, alt_root: Option<NodeIndex>) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
         // always make sure that there are no cycles
         debug_assert!(!is_cyclic_directed(&self.graph));
 
         // perform a depth first search to get the nodes ordered such
         // that child nodes are listed before their parents
         // transform that interim representation into a node vector
-        let mut dfs = DfsPostOrder::new(&self.graph, self.root);
+        let mut dfs = DfsPostOrder::new(&self.graph, alt_root.unwrap_or(self.root));
         let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
         let mut parsed_nodes: Vec<Node> = Vec::with_capacity(self.graph.node_count());
@@ -128,18 +128,74 @@ impl IntermediateGraph {
         }  
         (try_and.0, try_and.1.clone())
     }
+
+    pub fn transform_to_cnf(&self, starting_point: NodeIndex) -> Vec<String> {
+        let (mut nodes, _, _) = self.rebuild(Some(starting_point));
+        
+        let mut re_index_mapping = HashMap::new();
+        let mut cnf = vec![String::from("p cnf ")];
+        let mut counter = self.literal_children
+            .get(&self.root)
+            .unwrap()
+            .into_iter()
+            .map(|v| v.unsigned_abs())
+            .collect::<HashSet<u32>>().len() as i32 + 1;
+        let mut lit_counter = 1;
+        let mut clause_var: Vec<i32> = std::iter::repeat(0).take(nodes.len()).collect::<Vec<_>>(); //(0..=counter).collect_vec();
+
+        nodes.pop(); // remove root
+        for (index, node) in nodes.iter().enumerate() {
+            match &node.ntype {
+                NodeType::And { children } => {
+                    for &child in children {
+                        cnf.push(format!("{} {} 0\n", -counter, clause_var[child]));
+                    }
+                    cnf.push(format!("{} {} 0\n", format_vec(children.iter().map(|&c| -clause_var[c])), counter));
+                    
+                    clause_var[index] = counter;
+                    counter += 1;
+                },
+                NodeType::Or { children } => {
+                    for &child in children {
+                        cnf.push(format!("{} {} 0\n", counter, -clause_var[child]));
+                    }
+                    cnf.push(format!("{} {} 0\n", format_vec(children.iter().map(|&c| clause_var[c])), -counter));
+
+                    clause_var[index] = counter;
+                    counter += 1;
+                }
+                NodeType::Literal { literal } => {
+                    let cached_re_index = re_index_mapping.get(&literal.unsigned_abs());
+                    if cached_re_index.is_some() {
+                        clause_var[index] = if literal.is_positive() { *cached_re_index.unwrap() } else { -cached_re_index.unwrap() };
+                    } else {
+                        re_index_mapping.insert(literal.unsigned_abs(), lit_counter);
+                        clause_var[index] = if literal.is_positive() { lit_counter } else { -lit_counter };
+                        lit_counter += 1;
+                    }
+                },
+                _ => panic!("Node is of type: {:?} which is not allowed here!", node.ntype)
+            }
+        }
+        // add root again
+        cnf.push(format!("{} 0\n", clause_var[nodes.len() - 1]));
+
+        let clause_count = cnf.len() - 1;
+        cnf[0] += &format!("{} {}\n", counter - 1, clause_count);
+        //println!("{:?}", clause_var);
+        cnf
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, fs::{File, self}, io::Write};
 
-    use crate::parser::build_ddnnf;
+    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf};
 
     #[test]
     fn closest_unsplittable_and() {
         let mut ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let _nodes = ddnnf.inter_graph.rebuild().0;
 
         let input = vec![
             vec![], vec![4], vec![5], vec![4, 5],
@@ -161,5 +217,24 @@ mod test {
             literals_as_vec.sort();
             assert_eq!(output[index], literals_as_vec);
         }
+    }
+
+    #[test]
+    fn from_ddnnf_to_cnf() {
+        let mut ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        let complete_configs_direct = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
+        
+        let cnf = ddnnf.inter_graph.transform_to_cnf(ddnnf.inter_graph.root).join("");
+        let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
+        cnf_file.write_all(cnf.as_bytes()).unwrap();
+
+        compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
+        let mut ddnnf = build_ddnnf("tests/data/redone.nnf", None);
+        let complete_configs_recompilation = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
+
+        assert_eq!(complete_configs_direct, complete_configs_recompilation);
+
+        fs::remove_file("tests/data/redone.cnf").unwrap();
+        fs::remove_file("tests/data/redone.nnf").unwrap();
     }
 }
