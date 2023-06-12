@@ -129,11 +129,17 @@ impl IntermediateGraph {
         (try_and.0, try_and.1.clone())
     }
 
-    pub fn transform_to_cnf(&self, starting_point: NodeIndex) -> Vec<String> {
-        let (mut nodes, _, _) = self.rebuild(Some(starting_point));
+    /// From an starting point in the dDNNF, we Transform that subgraph into the CNF format,
+    /// using Tseitings Transformation.
+    /// Besides the CNF itself, the return type also gives a Map to Map the Literals to their
+    /// new correponding number. That is necessary, because the CNF format does not allow gaps in their
+    /// variables.
+    pub fn transform_to_cnf(&self, starting_point: NodeIndex) -> (Vec<String>, HashMap<i32, i32>) {
+        let (nodes, _, _) = self.rebuild(Some(starting_point));
         
-        let mut re_index_mapping = HashMap::new();
+        let mut re_index_mapping: HashMap<i32, i32> = HashMap::new();
         let mut cnf = vec![String::from("p cnf ")];
+        // compute the offset for the Tseitin variables. We need want to reserve
         let mut counter = self.literal_children
             .get(&self.root)
             .unwrap()
@@ -143,14 +149,15 @@ impl IntermediateGraph {
         let mut lit_counter = 1;
         let mut clause_var: Vec<i32> = std::iter::repeat(0).take(nodes.len()).collect::<Vec<_>>(); //(0..=counter).collect_vec();
 
-        nodes.pop(); // remove root
         for (index, node) in nodes.iter().enumerate() {
             match &node.ntype {
+                // Handle And and Or nodes like described in Tseitins Transformation for transforming
+                // any arbitrary boolean formula into CNF. https://en.wikipedia.org/wiki/Tseytin_transformation
                 NodeType::And { children } => {
                     for &child in children {
                         cnf.push(format!("{} {} 0\n", -counter, clause_var[child]));
                     }
-                    cnf.push(format!("{} {} 0\n", format_vec(children.iter().map(|&c| -clause_var[c])), counter));
+                    cnf.push(format!("{} {} 0\n", counter, format_vec(children.iter().map(|&c| -clause_var[c]))));
                     
                     clause_var[index] = counter;
                     counter += 1;
@@ -159,31 +166,47 @@ impl IntermediateGraph {
                     for &child in children {
                         cnf.push(format!("{} {} 0\n", counter, -clause_var[child]));
                     }
-                    cnf.push(format!("{} {} 0\n", format_vec(children.iter().map(|&c| clause_var[c])), -counter));
+                    cnf.push(format!("{} {} 0\n", -counter, format_vec(children.iter().map(|&c| clause_var[c]))));
 
                     clause_var[index] = counter;
                     counter += 1;
                 }
                 NodeType::Literal { literal } => {
-                    let cached_re_index = re_index_mapping.get(&literal.unsigned_abs());
+                    // Literals have to be mapped to a new index because we may have to
+                    // transform parts of the dDNNF that do not contain all variables. The resulting
+                    // gaps must be filled. Example: 1 5 42 -> 1 2 3.
+                    let cached_re_index = re_index_mapping.get(&(literal.unsigned_abs() as i32));
+                    let re_index;
                     if cached_re_index.is_some() {
-                        clause_var[index] = if literal.is_positive() { *cached_re_index.unwrap() } else { -cached_re_index.unwrap() };
+                        re_index = *cached_re_index.unwrap();
                     } else {
-                        re_index_mapping.insert(literal.unsigned_abs(), lit_counter);
-                        clause_var[index] = if literal.is_positive() { lit_counter } else { -lit_counter };
+                        re_index_mapping.insert(literal.unsigned_abs() as i32, lit_counter);
+                        re_index = lit_counter;
                         lit_counter += 1;
                     }
+
+                    clause_var[index] = if literal.is_positive() { re_index as i32 } else { -(re_index as  i32) };
                 },
                 _ => panic!("Node is of type: {:?} which is not allowed here!", node.ntype)
             }
         }
-        // add root again
+        // add root as unit clause
         cnf.push(format!("{} 0\n", clause_var[nodes.len() - 1]));
 
+        // add the header information about the number of variables and clauses
         let clause_count = cnf.len() - 1;
         cnf[0] += &format!("{} {}\n", counter - 1, clause_count);
-        //println!("{:?}", clause_var);
-        cnf
+
+        // Swaps key with value in the key value pairs
+        // Example:
+        // Before swap: {"one": 1, "two": 2, "three": 3}
+        // After swap: {1: "one", 2: "two", 3: "three"}
+        let pairs: Vec<(i32, i32)> = re_index_mapping.drain().collect();
+        for (key, value) in pairs {
+            re_index_mapping.insert(value, key);
+        }
+
+        (cnf, re_index_mapping)
     }
 }
 
@@ -221,20 +244,47 @@ mod test {
 
     #[test]
     fn from_ddnnf_to_cnf() {
-        let mut ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
-        let complete_configs_direct = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
-        
-        let cnf = ddnnf.inter_graph.transform_to_cnf(ddnnf.inter_graph.root).join("");
-        let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
-        cnf_file.write_all(cnf.as_bytes()).unwrap();
+        let ddnnf_file_paths = vec![
+            ("tests/data/small_ex_c2d.nnf", 4),
+            ("tests/data/small_ex_d4.nnf", 4),
+            ("tests/data/VP9_d4.nnf", 42)
+        ];
 
-        compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
-        let mut ddnnf = build_ddnnf("tests/data/redone.nnf", None);
-        let complete_configs_recompilation = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
+        for (path, features) in ddnnf_file_paths {
+            let mut ddnnf = build_ddnnf(path, Some(features));
+            let mut complete_configs_direct = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
+            
+            let (cnf, reverse_indexing) = ddnnf.inter_graph.transform_to_cnf(ddnnf.inter_graph.root);
+            let cnf_flat = cnf.join("");
+            let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
+            cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-        assert_eq!(complete_configs_direct, complete_configs_recompilation);
+            compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
+            let mut ddnnf_redone = build_ddnnf("tests/data/redone.nnf", Some(features));
+            let mut complete_configs_recompilation = ddnnf_redone.enumerate(&mut vec![], 1_000_000).unwrap();
 
-        fs::remove_file("tests/data/redone.cnf").unwrap();
-        fs::remove_file("tests/data/redone.nnf").unwrap();
+            assert_eq!(complete_configs_direct.len(), complete_configs_recompilation.len());
+
+            // adjust the indices of the recompiled configurations
+            for config in complete_configs_recompilation.iter_mut() {
+                for i in 0..config.len() {
+                    match reverse_indexing.get(&(config[i].unsigned_abs() as i32)) {
+                        Some(&val) => { 
+                            config[i] = if config[i].is_positive() { val } else { -val }
+                        },
+                        None => (), // We don't have to remap tseitin variables that correspond to And an Or nodes
+                    }
+                }
+                config.sort_by_key(|v| v.abs());
+                config.drain((ddnnf.number_of_variables as usize)..);
+            }
+
+            complete_configs_direct.sort();
+            complete_configs_recompilation.sort();
+            assert_eq!(complete_configs_direct, complete_configs_recompilation);
+
+            fs::remove_file("tests/data/redone.cnf").unwrap();
+            fs::remove_file("tests/data/redone.nnf").unwrap();
+        }
     }
 }
