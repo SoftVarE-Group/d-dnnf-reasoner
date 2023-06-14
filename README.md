@@ -88,14 +88,14 @@ Compute the cardinality of features for ```busybox-1.18.0.dimacs.nnf``` with 2 t
 ./target/release/ddnnife example_input/busybox-1.18.0.dimacs.nnf -c busybox -j 2
 ```
 
-Compute the cardinality of features for ```automotive01``` when compiled with d4. Here we need the ```-o``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4-features.csv```.
+Compute the cardinality of features for ```automotive01``` when compiled with d4. Here we need the ```-t``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4-features.csv```.
 ```properties
-./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 -c
+./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 -c
 ```
 
 An alternative to the above, using the possibility to load a model via stdin.
 ```properties
-cat example_input/auto1_d4.nnf | ./target/release/ddnnife -p -o 2513 -c
+cat example_input/auto1_d4.nnf | ./target/release/ddnnife -p -t 2513 -c
 ```
 
 Compute the cardinality of partial configurations for ```X264.dimacs.nnf``` with 4 threads (default) and save the result as ```X264.dimacs-queries.txt"```(default) in the current working directory (default).
@@ -105,12 +105,12 @@ Compute the cardinality of partial configurations for ```X264.dimacs.nnf``` with
 
 Compute 100 uniform random samples for the auto1 model for the seed 42.
 ```properties
-./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 urs -n 100 -s 42
+./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 urs -n 100 -s 42
 ```
 
 Compute the atomic sets for auto1.
 ```properties
-./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 atomic-sets
+./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 atomic-sets
 ```
 
 Display the help information for the sat command.
@@ -156,7 +156,7 @@ With the ```stream``` command, we introduce the possibility to interact with ddn
 
 We start ddnnife in stream mode for the ```automotive01``` model via
 ```properties
-./target/release/ddnnife example_input/auto1_d4.nnf -o 2513 stream
+./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 stream
 ```
 
 From here on, we can use the following types of queries:
