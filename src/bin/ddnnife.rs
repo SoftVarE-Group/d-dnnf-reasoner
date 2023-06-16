@@ -10,8 +10,6 @@ use itertools::Itertools;
 use std::fs::File;
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
 use std::path::{Path};
-use std::sync::mpsc::{self, Receiver};
-use std::thread::{self};
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
@@ -125,7 +123,12 @@ enum Operation {
     },
 
     /// Starts ddnnife in stream mode.
-    Stream,
+    Stream {
+        /// Specify how many threads should be used.
+        /// Possible values are between 1 and 32.
+        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 1, verbatim_doc_comment)]
+        jobs: u16,
+    },
     /// Evaluates multiple queries of the stream format from a file.
     StreamQueries{
         /// Path to a file that may contain multiple queries.
@@ -257,7 +260,7 @@ fn main() {
 
     // print additional output, iff we are not in the stream mode
     match &cli.operation.clone() {
-        Some(Operation::Stream) => (),
+        Some(Operation::Stream { .. }) => (),
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
             println!(
@@ -278,6 +281,7 @@ fn main() {
         match operation {
             CountFeatures { jobs, .. } |
             CountQueries { jobs, .. } |
+            Stream { jobs } |
             SAT { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             },
@@ -391,22 +395,8 @@ fn main() {
                 println!("\nComputed stream queries and saved the results in {}.", output_file_path);
             },
             // switch in the stream mode
-            Stream => {
-                let stdin_channel = spawn_stdin_channel();
-        
-                loop {
-                    match stdin_channel.recv() {
-                        Ok(buffer) => {
-                            let response = ddnnf.handle_stream_msg(&buffer);
-                            if response.as_str() == "exit" { println!("End by 'exit' command"); break; }
-                            println!("{}", response);
-                        },
-                        Err(_) => {
-                            println!("End by closing input channel");
-                            break;
-                        },
-                    }
-                }
+            Stream { .. } => {
+                ddnnf.init_stream();
             },
             // writes the anomalies of the d-DNNF to file
             // anomalies are: core, dead, false-optional features and atomic sets
@@ -458,17 +448,4 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
         elapsed_time,
         elapsed_time / dparser::parse_queries_file(queries_file.as_str()).len() as f64
     );
-}
-
-// spawns a new thread that listens on stdin and delivers its request to the stream message handling
-fn spawn_stdin_channel() -> Receiver<String> {
-    let (tx, rx) = mpsc::channel::<String>();
-    thread::spawn(move || {
-        let stdin = io::stdin();
-        let lines = stdin.lock().lines();
-        for line in lines {
-            tx.send(line.unwrap()).unwrap()
-        }
-    });
-    rx
 }

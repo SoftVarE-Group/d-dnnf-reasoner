@@ -1,4 +1,12 @@
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+use std::io::BufRead;
 use std::iter::{FromIterator};
+use std::process::exit;
+use std::sync::Arc;
+use std::sync::atomic::{Ordering, AtomicBool};
+use std::sync::mpsc::{TryRecvError, Receiver, self};
+use std::{thread, io};
 use std::{path::Path};
 
 use itertools::Itertools;
@@ -8,11 +16,132 @@ use nom::bytes::complete::tag;
 use nom::character::complete::{digit1, char};
 use nom::combinator::{map_res, opt, recognize};
 use nom::sequence::{tuple, pair};
+use workctl::WorkQueue;
 
 use crate::{Ddnnf, parser::util::*};
 use crate::parser::persisting::write_ddnnf;
 
 impl Ddnnf {
+    /// Initiate the Stream mode. This enables a commincation channel between stdin and stdout.
+    /// Queries from stdin will be computed using max_worker many threads und results will be written
+    /// to stdout. 'exit' as Input and breaking the stdin pipe exits Stream mode.
+    pub fn init_stream(&self) {
+        let mut queue: WorkQueue<(u32, String)> = WorkQueue::new();
+        let stop = Arc::new(AtomicBool::new(false)); 
+        // Create a MPSC (Multiple Producer, Single Consumer) channel. Every worker
+        // is a producer, the main thread is a consumer; the producers put their
+        // work into the channel when it's done.
+        let (results_tx, results_rx) = mpsc::channel();  
+        let mut threads = Vec::new();
+
+        for _ in 0..self.max_worker {
+            // copy all the data each worker needs
+            let mut t_queue = queue.clone();
+            let t_stop = stop.clone();
+            let t_results_tx = results_tx.clone();
+            let mut ddnnf: Ddnnf = self.clone();
+
+            // spawn a worker thread with its shared and exclusive data
+            let handle = thread::spawn(move || {
+                loop {
+                    if t_stop.load(Ordering::SeqCst) { break; }
+                    if let Some((id, buffer)) = t_queue.pull_work() {
+                        let response = ddnnf.handle_stream_msg(&buffer);
+                        match t_results_tx.send((id, response)) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                eprintln!("Error while worker thread tried to sent \
+                                a result to the master: {err}");
+                                break;
+                            }
+                        }       
+                    }
+                }
+            });
+
+            // Add the handle for the newly spawned thread to the list of handles
+            threads.push(handle);
+        }
+
+        // Main thread reads all the tasks from stdin and puts them in the queue
+        let stdin_channel = spawn_stdin_channel();
+        let mut remaining_answers = 0;
+        let mut id = 0_u32;
+        let mut output_id = 0_u32;
+        let mut results: BinaryHeap<Reverse<(u32, String)>> = BinaryHeap::new();
+
+        // Check whether next result/s to print is/are already in the result heap.
+        // If thats the case, we print it/them. Anotherwise, we do nothing.
+        let mut print_result = |results: &mut BinaryHeap<Reverse<(u32, String)>>| {
+            while let Some(Reverse((id, res))) = results.peek() {
+                if *id == output_id {
+                    println!("{id} {res}");
+                    results.pop();
+                    output_id += 1;
+                } else {
+                    break;
+                }
+            }
+        };
+
+        // loop til there are no more tasks to do
+        loop {
+            print_result(&mut results);
+
+            // Check if there is anything we can distribute to the workers
+            match results_rx.try_recv() {
+                Ok(val) => {
+                    results.push(Reverse(val));
+                    remaining_answers -= 1;
+                },
+                Err(err) => {
+                    if err == TryRecvError::Disconnected {
+                        eprintln!("A worker thread disconnected \
+                        while working on a stream task. Aborting...");
+                        exit(1);
+                    }
+                }
+            }
+
+            // Check if we got any result
+            match stdin_channel.try_recv() {
+                Ok(buffer) => {
+                    if buffer.as_str() == "exit" { break; }
+                    queue.push_work((id, buffer.clone()));
+                    id += 1;
+                    remaining_answers += 1;
+                },
+                Err(err) => {
+                    if err == TryRecvError::Disconnected { break; }
+                },
+            }
+        }
+
+        // After all tasks are distributed, we wait for the remaining results and print them.
+        while remaining_answers != 0 {
+            match results_rx.recv() {
+                Ok(val) => {
+                    results.push(Reverse(val));
+                    remaining_answers -= 1;
+                },
+                Err(err) => {
+                    eprintln!("A worker thread send an error ({err}) \
+                    while working on a stream task. Aborting...");
+                    exit(1);
+                }
+            }
+            print_result(&mut results);
+        }
+
+        // Stop busy worker loops
+        stop.store(true, Ordering::SeqCst);
+
+        // join threads
+        for handle in threads {
+            handle.join().unwrap();
+        }
+    }
+
     /// error codes:
     /// E1 Operation is not yet supported
     /// E2 Operation does not exist. Neither now nor in the future
@@ -293,6 +422,19 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
         return Err(format!("E3 error: not all parameters are within the boundary of {} to {}", -(boundary as i32), boundary as i32));
     }
     Ok((numbers, parsed_str_count))
+}
+
+// spawns a new thread that listens on stdin and delivers its request to the stream message handling
+fn spawn_stdin_channel() -> Receiver<String> {
+    let (tx, rx) = mpsc::channel::<String>();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        let lines = stdin.lock().lines();
+        for line in lines {
+            tx.send(line.unwrap()).unwrap()
+        }
+    });
+    rx
 }
 
 #[cfg(test)]
