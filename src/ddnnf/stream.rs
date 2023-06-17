@@ -75,7 +75,7 @@ impl Ddnnf {
         let mut print_result = |results: &mut BinaryHeap<Reverse<(u32, String)>>| {
             while let Some(Reverse((id, res))) = results.peek() {
                 if *id == output_id {
-                    println!("{id} {res}");
+                    println!("{res}");
                     results.pop();
                     output_id += 1;
                 } else {
@@ -88,7 +88,7 @@ impl Ddnnf {
         loop {
             print_result(&mut results);
 
-            // Check if there is anything we can distribute to the workers
+            // Check if we got any result
             match results_rx.try_recv() {
                 Ok(val) => {
                     results.push(Reverse(val));
@@ -103,7 +103,7 @@ impl Ddnnf {
                 }
             }
 
-            // Check if we got any result
+            // Check if there is anything we can distribute to the workers
             match stdin_channel.try_recv() {
                 Ok(buffer) => {
                     if buffer.as_str() == "exit" { break; }
@@ -439,8 +439,9 @@ fn spawn_stdin_channel() -> Receiver<String> {
 
 #[cfg(test)]
 mod test {
-    use std::{env, fs, collections::HashSet};
+    use std::{env, fs::{self}, collections::HashSet};
 
+    use assert_cmd::Command;
     use itertools::Itertools;
 
     use super::*;
@@ -859,5 +860,27 @@ mod test {
             Ok((vec![1, 2, 3, 4, 5], 1)),
             get_numbers(vec!["1..5", "a", "6", "7", "3", "4", "5"].as_ref(), 20)
         );
+    }
+
+    #[test]
+    fn parallel_stream() {
+        let mut ddnnf: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+
+        let mut card_of_features_input = String::new();
+        let mut should_be = String::new();
+        for i in 1..=2513 {
+            card_of_features_input += format!("count a {i}\n").as_str(); // form the query for stream
+            should_be += format!("{:?}\n", ddnnf.execute_query(&[i])).as_str(); // build the expected result
+        }
+        card_of_features_input += "exit\n";
+
+        // execute all the 2513 queries with 4 threads
+        let cmd = Command::cargo_bin("ddnnife")
+            .unwrap()
+            .args(["example_input/auto1_d4.nnf", "-t", "2513", "stream", "-j", "4"])
+            .write_stdin(card_of_features_input.clone())
+            .unwrap();
+
+        assert_eq!(should_be, String::from_utf8(cmd.stdout).unwrap());
     }
 }
