@@ -88,15 +88,14 @@ Compute the cardinality of features for ```busybox-1.18.0_c2d.nnf``` with 2 thre
 ./target/release/ddnnife example_input/busybox-1.18.0_c2d.nnf -c busybox -j 2
 ```
 
-Compute the cardinality of features for ```auto1``` when compiled with d4. Here we need the ```-o``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4_2513-features.csv```.
+Compute the cardinality of features for ```auto1``` when compiled with d4. Here we need the ```-t``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4_2513-features.csv```. (Note that for the example input the number of features is part of the file name for d4 models).
 ```properties
-./target/release/ddnnife example_input/auto1_d4_2513.nnf -o 2513 -c
+./target/release/ddnnife example_input/auto1_d4_2513.nnf -t 2513 -c
 ```
 
-Compute the cardinality of features for ```automotive01``` starting from a CNF file. Currently, it is necessary that the CNF file is indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-o``` Option is not necessary, because the needed information if part of the CNF.
+Compute the cardinality of features for ```auto1``` starting from a CNF file. Currently, it is necessary that the CNF file is indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-t``` Option is not necessary, because the needed information if part of the CNF.
 ```properties
 ./target/release/ddnnife example_input/auto1.cnf -c
-./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 -c
 ```
 
 An alternative to the above, using the possibility to load a model via stdin.
@@ -116,7 +115,6 @@ Compute 100 uniform random samples for the auto1 model for the seed 42.
 
 Compute the atomic sets for auto1.
 ```properties
-./target/release/ddnnife example_input/auto1_d4_2513.nnf -o 2513 atomic-sets
 ./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 atomic-sets
 ```
 
