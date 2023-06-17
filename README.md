@@ -74,33 +74,39 @@ and ddnnife
 ```
 
 ### Examples <a name="usage_cl_ex"></a>
-Preprocesses the d-DNNF: ```berkeleydb_dsharp.dimacs.nnf``` which may need preprocessing because it was created with dsharp (in this case it is actually necessary) and save the resulting d-DNNF as ```berkeleydb_prepo.dimacs.nnf```
+Preprocesses the d-DNNF: ```berkeleydb_dsharp.nnf``` which may need preprocessing because it was created with dsharp (in this case it is actually necessary) and save the resulting d-DNNF as ```berkeleydb_prepo.nnf```
 ```properties
-./target/release/dhone example_input/berkeleydb_dsharp.dimacs.nnf -s example_input/berkeleydb_prepo.dimacs.nnf
+./target/release/dhone example_input/berkeleydb_dsharp.nnf -s example_input/berkeleydb_prepo.nnf
 ```
-Compute the cardinality of a feature model for ```automotive01```.
+Compute the cardinality of a feature model for ```auto1```.
 ```properties
-./target/release/ddnnife example_input/automotive01.dimacs.nnf
-```
-
-Compute the cardinality of features for ```busybox-1.18.0.dimacs.nnf``` with 2 threads and save the result as ```busybox-features.csv``` in the current working directory.
-```properties
-./target/release/ddnnife example_input/busybox-1.18.0.dimacs.nnf -c busybox -j 2
+./target/release/ddnnife example_input/auto1_c2d.nnf
 ```
 
-Compute the cardinality of features for ```automotive01``` when compiled with d4. Here we need the ```-t``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4-features.csv```.
+Compute the cardinality of features for ```busybox-1.18.0_c2d.nnf``` with 2 threads and save the result as ```busybox-features.csv``` in the current working directory.
 ```properties
+./target/release/ddnnife example_input/busybox-1.18.0_c2d.nnf -c busybox -j 2
+```
+
+Compute the cardinality of features for ```auto1``` when compiled with d4. Here we need the ```-o``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4_2513-features.csv```.
+```properties
+./target/release/ddnnife example_input/auto1_d4_2513.nnf -o 2513 -c
+```
+
+Compute the cardinality of features for ```automotive01``` starting from a CNF file. Currently, it is necessary that the CNF file is indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-o``` Option is not necessary, because the needed information if part of the CNF.
+```properties
+./target/release/ddnnife example_input/auto1.cnf -c
 ./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 -c
 ```
 
 An alternative to the above, using the possibility to load a model via stdin.
 ```properties
-cat example_input/auto1_d4.nnf | ./target/release/ddnnife -p -t 2513 -c
+cat example_input/auto1_d4_2513.nnf | ./target/release/ddnnife -p -t 2513 -c
 ```
 
-Compute the cardinality of partial configurations for ```X264.dimacs.nnf``` with 4 threads (default) and save the result as ```X264.dimacs-queries.txt"```(default) in the current working directory (default).
+Compute the cardinality of partial configurations for ```X264_c2d.nnf``` with 4 threads (default) and save the result as ```X264_c2d-queries.csv"```(default) in the current working directory (default).
 ```properties
-./target/release/ddnnife example_input/X264.dimacs.nnf -q example_input/X264.config
+./target/release/ddnnife example_input/X264_c2d.nnf -q example_input/X264.config
 ```
 
 Compute 100 uniform random samples for the auto1 model for the seed 42.
@@ -110,6 +116,7 @@ Compute 100 uniform random samples for the auto1 model for the seed 42.
 
 Compute the atomic sets for auto1.
 ```properties
+./target/release/ddnnife example_input/auto1_d4_2513.nnf -o 2513 atomic-sets
 ./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 atomic-sets
 ```
 
@@ -120,7 +127,7 @@ Display the help information for the sat command.
 
 Create the mermaid visualization of the small example dDNNF under assumptions. The model count is 4 and the count for the partial configuration (2,4) is 1.
 ```properties
-./target/debug/ddnnife example_input/small_example_c2d.nnf mermaid -a 2 4 
+./target/release/ddnnife example_input/small_example_c2d.nnf mermaid -a 2 4 
 ```
 
 ```mermaid

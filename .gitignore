@@ -14,7 +14,6 @@ history.txt
 tarpaulin-report.html
 tmp/
 valcom
-build.rs
 *.zip
 
 # ddnnife config input
@@ -34,8 +33,6 @@ build.rs
 *-mermaid.md
 *.svg
 
-clean.sh
-
 # docker
 dockerfile
 .dockerignore
@@ -47,3 +44,7 @@ dockerfile
 # intellij
 ideas/
 *.iml
+
+# d4 repo and binary
+d4v2
+d4v2.bin
