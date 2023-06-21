@@ -10,7 +10,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Copy, Debug, Clone, PartialEq)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
