@@ -131,11 +131,11 @@ impl IntermediateGraph {
         (try_and.0, try_and.1.clone())
     }
 
-    /// From an starting point in the dDNNF, we Transform that subgraph into the CNF format,
-    /// using Tseitings Transformation.
-    /// Besides the CNF itself, the return type also gives a Map to Map the Literals to their
-    /// new correponding number. That is necessary, because the CNF format does not allow gaps in their
-    /// variables. All the new literal indices have a lower indice than the following tseitin variables.
+    /// From a starting point in the dDNNF, we transform that subgraph into the CNF format,
+    /// using Tseitin's transformation.
+    /// Besides the CNF itself, the return type also gives a map to map the literals to their
+    /// new corresponding number. That is necessary because the CNF format does not allow gaps in their
+    /// variables. All the new literal indices have a lower index than the following Tseitin variables.
     pub fn transform_to_cnf(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> (Vec<String>, HashMap<i32, i32>) {
         let (nodes, _, _) = self.rebuild(Some(starting_point));
 
