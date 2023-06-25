@@ -3,10 +3,11 @@
 if [ $# -eq 0 ]
 then
     echo "USAGE: sh clean-all.sh [FILES TO CLEAR]"
-    echo "\t0: All of the below"
-    echo "\t1: Target directory"
-    echo "\t2: d4v2 related files"
-    echo "\t3: ddnnife results"
+    echo -e "\t0: All of the below"
+    echo -e "\t1: Target directory"
+    echo -e "\t2: d4v2 related files"
+    echo -e "\t3: ddnnife results"
+    echo -e "\t4: ddnnife image"
     exit 0
 fi
 
@@ -23,6 +24,7 @@ then
     echo "Removing d4v2 related files..."
     rm -rf d4v2
     rm src/parser/d4v2.bin 2> /dev/null
+    rm src/bin/d4v2.bin 2> /dev/null
 fi
 
 if [ $1 -eq 0 ] || [ $1 -eq 3 ]
@@ -44,4 +46,10 @@ then
         out.txt \
         out.nnf \
         out.csv 2> /dev/null
+fi
+
+if [ $1 -eq 0 ] || [ $1 -eq 4 ]
+then
+    echo "Removing ddnnife image..."
+    docker image rm ddnnife &> /dev/null
 fi

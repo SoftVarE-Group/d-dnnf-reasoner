@@ -17,9 +17,12 @@ ddnnife takes a smooth d-DNNF as input following the [standard format specified 
    - [Create Documentation ](#docu)
    - [Run Tests ](#tests)
    - [Test Coverage ](#coverage)
+3. [Docker Alternative ](#docker)
+   - [Building ](#docker_build)
+   - [Usage ](#docker_usage)
 
 # Building <a name="building"></a>
-In the following, we describe the process to compile ddnnife. As an alternative, we offer binaries of the major releases on the main branch.
+In the following, we describe the process to compile ddnnife. As an alternative, we offer binaries of the major releases on the main branch as well as a [Dockerfile](#docker).
 
 ## Requirements for Building <a name="building_req"></a>
 
@@ -33,7 +36,7 @@ Additionally, we use rug for the computations. Make sure to install everything m
 
 *Rug [...] depends on the [GMP](https://gmplib.org/), [MPFR](https://www.mpfr.org/) and [MPC](https://www.multiprecision.org/mpc/) libraries through the low-level FFI bindings in the [gmp-mpfr-sys crate](https://crates.io/crates/gmp-mpfr-sys), which needs some setup to build; the [gmp-mpfr-sys documentation](https://docs.rs/gmp-mpfr-sys/1.4.7/gmp_mpfr_sys/index.html) has some details on usage under [different os][...].*
 
-To build on GNU/Linux, make sure you have ```diffutils, ggc, m4``` and ```make``` installed on your system. For example on Ubuntu:
+To build on GNU/Linux, make sure you have ```diffutils, gcc, m4``` and ```make``` installed on your system. For example on Ubuntu:
 ```properties
 sudo apt-get update && apt-get install diffutils gcc m4 make
 ```
@@ -41,6 +44,8 @@ sudo apt-get update && apt-get install diffutils gcc m4 make
 ## Build the Binaries <a name="building_bin"></a>
 
 Make sure that the current working directory is the one including the Cargo.toml file.
+Building on systems that are not linux x_86 like for instance apple m1/m2 is currently not possible directly.
+As an alternative you can use the provided [Dockerfile](#docker) to build yourself an image.
 
 ### Both <a name="building_both"></a>
 ```properties
@@ -270,4 +275,27 @@ usage:
 ```properties
 cargo +stable install cargo-llvm-cov
 cargo llvm-cov --release --open
+```
+
+# Dockerfile <a name="docker"></a>
+If natively building is not possible for your system or you want to avoid installing the necessary dependencies, you can build yourself an docker image. Nevertheless, we recommend a native binary if possible.
+## Building <a name="docker_build"></a>
+You can either use the provided script in the following way to build the image and also interact with it
+```properties
+./ddnnife_dw.sh
+```
+or you can build the image directly by hand. Here, ```ddnnife``` is the name of the image.
+```properties
+docker build -t ddnnife .
+```
+## Usage <a name="docker_usage"></a>
+Like in the previous section you can use ```./ddnnife_dw.sh``` to interact with the image or you can do the same by hand in with the following command:
+```properties
+docker run --platform linux/amd64 -i --rm -v [HOST FOLDER ABSOLUTE]:/data ddnnife
+```
+```--platform linux/amd64``` is necessary for host systems that are not ```linux x_86```, ```-i``` keeps STDIN open (which is relevant for the stream API), ```--rm``` removes the used container, and ```-v``` adds a volume to the container. [HOST FOLDER ABSOLUTE] is the folder on the host system that contains the input files for ```ddnnife```. ```ddnnife``` is the name of the image we created in the previous step.
+
+After that arguments for ```ddnnife``` can be passed. It is important that in order to access the files mounted via the volume, you need to add the ```/data/``` prefix to all the input and output files. An example to compute the cardinality of features for ```auto1``` can look like the following.
+```properties
+docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
 ```
