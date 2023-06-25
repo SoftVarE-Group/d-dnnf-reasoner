@@ -1,6 +1,6 @@
 # ddnnife a d-dnnf-reasoner
 
-ddnnife takes a smooth d-DNNF as input following the [standard format specified by c2d](http://reasoning.cs.ucla.edu/c2d/) or a d-DNNF conforming the [d4 standard](https://github.com/crillab/d4), which is an extension of the c2d standard. After parsing and storing the d-DNNF, ddnnife can be used to compute the cardinality of single features, all features, or partial configurations. Additionally, via the stream API, ddnnife is able to compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations, and produce uniform random samples. 
+ddnnife takes a smooth d-DNNF as an input following the [standard format specified by c2d](http://reasoning.cs.ucla.edu/c2d/) or a d-DNNF conforming to the [d4 standard](https://github.com/crillab/d4)(https://github.com/crillab/d4), which is an extension of the c2d standard. After parsing and storing the d-DNNF, ddnnife can be used to compute the cardinality of single features, all features, or partial configurations. Additionally, via the stream API, ddnnife can compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations, and produce uniform random samples. 
 
 # Table of contents
 1. [Building ](#building)
@@ -30,7 +30,7 @@ First, if not done already, you have to [install rust](https://www.rust-lang.org
 ```properties
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
-After that, we recommend entering "1" to proceed with installation (without customizations).
+After that, we recommend entering "1" to proceed with the installation (without customizations).
 
 Additionally, we use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There it says:
 
@@ -44,8 +44,8 @@ sudo apt-get update && apt-get install diffutils gcc m4 make
 ## Build the Binaries <a name="building_bin"></a>
 
 Make sure that the current working directory is the one including the Cargo.toml file.
-Building on systems that are not linux x_86 like for instance apple m1/m2 is currently not possible directly.
-As an alternative you can use the provided [Dockerfile](#docker) to build yourself an image.
+Building on systems that are not Linux x_86 like for instance apple m1/m2 is currently not possible directly.
+As an alternative, you can use the provided [Dockerfile](#docker) to build yourself an image.
 
 ### Both <a name="building_both"></a>
 ```properties
@@ -64,9 +64,9 @@ cargo build --release --bin dhone
 
 # Usage <a name="usage"></a>
 ## Binary on the Command Line <a name="usage_cl"></a>
-Simply execute the binaries with the -h, --help flag or no parameter at all to get an overview over all possible paramters and how to use them.
+Simply execute the binaries with the -h, --help flag or no parameter at all to get an overview of all possible parameters and how to use them.
 
-Note: In this and the following code examples, we added the ```./target/release/``` directories as prefix because that's where the binaries are placed when building. They are built according to the previous chapter and the working directory is not switched.
+Note: In this and the following code examples, we added the ```./target/release/``` directories as a prefix because that's where the binaries are placed when building. They are built according to the previous chapter and the working directory is not switched.
 
 Help for dhone
 ```properties
@@ -79,7 +79,7 @@ and ddnnife
 ```
 
 ### Examples <a name="usage_cl_ex"></a>
-Preprocesses the d-DNNF: ```berkeleydb_dsharp.nnf``` which may need preprocessing because it was created with dsharp (in this case it is actually necessary) and save the resulting d-DNNF as ```berkeleydb_prepo.nnf```
+Prepossesses the d-DNNF: ```berkeleydb_dsharp.nnf``` which may need preprocessing because it was created with dsharp (in this case it is necessary) and save the resulting d-DNNF as ```berkeleydb_prepo.nnf```
 ```properties
 ./target/release/dhone example_input/berkeleydb_dsharp.nnf -s example_input/berkeleydb_prepo.nnf
 ```
@@ -98,7 +98,7 @@ Compute the cardinality of features for ```auto1``` when compiled with d4. Here 
 ./target/release/ddnnife example_input/auto1_d4_2513.nnf -t 2513 -c
 ```
 
-Compute the cardinality of features for ```auto1``` starting from a CNF file. Currently, it is necessary that the CNF file is indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-t``` Option is not necessary, because the needed information if part of the CNF.
+Compute the cardinality of features for ```auto1``` starting from a CNF file. Currently, the CNF file must be indicated by either the file ending ```.cnf``` or ```.dimacs```. We use the d4 compiler to generate a dDNNF which we can use in the following steps. The ```-t``` Option is not necessary, because the needed information if part of the CNF.
 ```properties
 ./target/release/ddnnife example_input/auto1.cnf -c
 ```
@@ -113,7 +113,7 @@ Compute the cardinality of partial configurations for ```X264_c2d.nnf``` with 4 
 ./target/release/ddnnife example_input/X264_c2d.nnf -q example_input/X264.config
 ```
 
-Compute 100 uniform random samples for the auto1 model for the seed 42.
+Compute 100 uniform random samples for the auto1 model for seed 42.
 ```properties
 ./target/release/ddnnife example_input/auto1_d4.nnf -t 2513 urs -n 100 -s 42
 ```
@@ -162,7 +162,7 @@ Create the mermaid visualization of the small example dDNNF under assumptions. T
 ```
 
 ## Stream API <a name="building_stream"></a>
-With the ```stream``` command, we introduce the possibility to interact with ddnnife via stdin and stdout. The user can choose between different kinds of queries that can be further adjusted with additional parameters. The idea behind the stream API is to interact with ddnnife with another program, but for testing purposes one can use the stdin and stdout of a terminal to test the API.
+With the ```stream``` command, we introduce the possibility to interact with ddnnife via stdin and stdout. The user can choose between different kinds of queries that can be further adjusted with additional parameters. The idea behind the stream API is to interact with ddnnife with another program, but for testing purposes, one can use the stdin and stdout of a terminal to test the API.
 
 We start ddnnife in stream mode for the ```automotive01``` model via
 ```properties
@@ -186,7 +186,7 @@ Furthermore, where sensible, the types of queries can be combined with the param
 - ```s seed```: seeding for random operations
 - ```p path```: the absolute path, we want to save the d-DNNF
 
-The table below depicts the possible combinations of a query type with the parameters. The order of parameters has no influence on the result and if two or more paramters are valid, then every possible combination of those is also valid.
+The table below depicts the possible combinations of a query type with the parameters. The order of parameters does not influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
 
 | query type / parameter | variables | assumptions | limit | seed | path |
 |------------------------|-----------|-------------|-------|------|------|
@@ -199,20 +199,19 @@ The table below depicts the possible combinations of a query type with the param
 | save                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✔  |
 | exit                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✘  |
 
-Sub solutions (like multiple uniform random samples) will be separated by a ```";"```. Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
+Sub-solutions (like multiple uniform random samples) will be separated by a ```";"```. Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
 
-Syntactically wrong queries will result in an error message with error code. The different error codes are: 
+Syntactically wrong queries will result in an error message with an error code. The different error codes are: 
 - ```E1``` Operation is not yet supported
 - ```E2``` Operation does not exist. Neither now nor in the future
 - ```E3``` Parse error
 - ```E4``` Syntax error
-- ```E5``` Operation was not able to be done, because of wrong input
+- ```E5``` Operation was not able to be done, because of the wrong input
 - ```E6``` File or path error
 
 ### Examples <a name="building_stream_ex"></a>
 After entering the stream API, the following examples are conceivable.
-
-Check whether the features 10, 100, and 1000 are either core or dead under the assumption that feature 1 is deselected.
+Check whether features 10, 100, and 1000 are either core or dead under the assumption that feature 1 is deselected.
 ```properties
 core a -1 v 10 100 1000
 ```
@@ -227,7 +226,7 @@ Similarly to count, we compute whether the partial configuration is satisfiable:
 sat v 1 2 3 a -4 -5 -6
 ```
 
-Lists all possible complete and valid configurations, with feature 1 selected and feature 2 deselected, as long as there are some left. Each following call will result in configurations that were not yet computed as results. After all configurations were returned as result, we start again at the beginning.
+Lists all possible complete and valid configurations, with feature 1 selected and feature 2 deselected, as long as there are some left. Each following call will result in configurations that were not yet computed as results. After all configurations were returned as a result, we start again at the beginning.
 ```properties
 enum l 10 a 1 -2
 ```
@@ -251,8 +250,7 @@ Exit the stream mode and terminate the ddnnife instance.
 exit
 ```
 ## Create Documentation <a name="docu"></a>
-
-Genrates a Html file of the documentation and opens it in the default browser.
+Generates an Html file of the documentation and opens it in the default browser.
 ```properties
 cargo doc --open
 ```
@@ -271,14 +269,14 @@ Make sure to execute the following commands in the folder that also contains the
 
 usage:
 1) Install llvm-cov
-2) Run tests. The results will be displayed in your default browser if the ```--open``` flag is set. Alternatively, the report will be printed to the console.
+2) Run tests. The results will be displayed in your default browser if the ```--open``` flag is set. Alternatively, the report will be printed on the console.
 ```properties
 cargo +stable install cargo-llvm-cov
 cargo llvm-cov --release --open
 ```
 
 # Dockerfile <a name="docker"></a>
-If natively building is not possible for your system or you want to avoid installing the necessary dependencies, you can build yourself an docker image. Nevertheless, we recommend a native binary if possible.
+If natively building is not possible for your system, or you want to avoid installing the necessary dependencies, you can build yourself a docker image. Nevertheless, we recommend a native binary if possible.
 ## Building <a name="docker_build"></a>
 You can either use the provided script in the following way to build the image and also interact with it
 ```properties
@@ -295,7 +293,7 @@ docker run --platform linux/amd64 -i --rm -v [HOST FOLDER ABSOLUTE]:/data ddnnif
 ```
 ```--platform linux/amd64``` is necessary for host systems that are not ```linux x_86```, ```-i``` keeps STDIN open (which is relevant for the stream API), ```--rm``` removes the used container, and ```-v``` adds a volume to the container. [HOST FOLDER ABSOLUTE] is the folder on the host system that contains the input files for ```ddnnife```. ```ddnnife``` is the name of the image we created in the previous step.
 
-After that arguments for ```ddnnife``` can be passed. It is important that in order to access the files mounted via the volume, you need to add the ```/data/``` prefix to all the input and output files. An example to compute the cardinality of features for ```auto1``` can look like the following.
+After that arguments for ```ddnnife``` can be passed. It is important that to access the files mounted via the volume, you need to add the ```/data/``` prefix to all the input and output files. An example to compute the cardinality of features for ```auto1``` can look like the following.
 ```properties
 docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
 ```
