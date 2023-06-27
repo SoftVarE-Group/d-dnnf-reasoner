@@ -88,9 +88,8 @@ impl Ddnnf {
     /// The clauses are disjuncted.
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4) 
     pub fn apply_changes(&mut self, clauses: Vec<Vec<i32>>) {
-        for _clause in clauses {
-            // somehow apply changes to the intermediate graph
-            todo!();
+        for clause in clauses {
+            self.inter_graph.add_clause(&clause);
         }
         
         self.rebuild();
@@ -148,6 +147,8 @@ impl Ddnnf {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
+
     use crate::parser::build_ddnnf;
 
     #[test]
@@ -178,6 +179,29 @@ mod test {
             assert_eq!(ddnnf.core, rebuild_clone.core);
             assert_eq!(ddnnf.true_nodes, rebuild_clone.true_nodes);
             assert_eq!(ddnnf.number_of_variables, rebuild_clone.number_of_variables);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn incremental_applying_clause() {
+        let ddnnf_file_paths = vec![
+            ("tests/data/small_ex_c2d.nnf", 4, vec![vec![4]]),
+            //("tests/data/VP9_d4.nnf", 42, vec![vec![4, 5]])
+        ];
+
+        for (path, features, clause) in ddnnf_file_paths {
+            let mut ddnnf = build_ddnnf(path, Some(features));
+            println!("Card of Features before change:");
+            for i in 0..ddnnf.number_of_variables {
+                println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
+            }
+
+            ddnnf.apply_changes(clause);
+            println!("Card of Features after change:");
+            for i in 0..ddnnf.number_of_variables {
+                println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
+            }
         }
     }
 }

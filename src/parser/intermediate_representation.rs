@@ -1,5 +1,6 @@
 use std::{collections::{HashMap, HashSet}, cmp::{Reverse}, fs::{File, self}, io::Write};
 
+use itertools::{Itertools};
 use petgraph::{stable_graph::{StableGraph, NodeIndex}, visit::{DfsPostOrder, Bfs}, algo::is_cyclic_directed, Direction::{Incoming, Outgoing}};
 
 use crate::{c2d_lexer::TId, Node, NodeType, parser::{get_literal_diffs, util::format_vec, build_ddnnf}};
@@ -11,7 +12,7 @@ use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 #[derive(Clone, Debug, Default)]
 pub struct IntermediateGraph {
     graph: StableGraph::<TId, ()>,
-    root: NodeIndex,
+    pub root: NodeIndex,
     nx_literals: HashMap<NodeIndex, i32>,
     literal_children: HashMap<NodeIndex, HashSet<i32>>
 }
@@ -136,7 +137,7 @@ impl IntermediateGraph {
     /// Besides the CNF itself, the return type also gives a map to map the literals to their
     /// new corresponding number. That is necessary because the CNF format does not allow gaps in their
     /// variables. All the new literal indices have a lower index than the following Tseitin variables.
-    pub fn transform_to_cnf(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> (Vec<String>, HashMap<i32, i32>) {
+    pub fn transform_to_cnf_tseitin(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> (Vec<String>, HashMap<i32, i32>) {
         let (nodes, _, _) = self.rebuild(Some(starting_point));
 
         let mut re_index_mapping: HashMap<i32, i32> = HashMap::new();
@@ -219,10 +220,82 @@ impl IntermediateGraph {
         (cnf, re_index_mapping)
     }
 
+    /// Experimental distributive translation method to get from dDNNF to CNF and back
+    pub fn transform_to_cnf_distributive(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> Vec<String> {
+        let (nodes, _, _) = self.rebuild(Some(starting_point));
+        let mut clauses: Vec<Vec<Vec<i32>>> = Vec::new();
+        let mut literals = HashSet::new();
+        for node in nodes.iter() {
+            use NodeType::*;
+            match &node.ntype {
+                And { children } => {
+                    let mut and_clauses = Vec::new();
+                    for &child in children {
+                        and_clauses.extend_from_slice(&clauses[child]);
+                    }
+                    clauses.push(and_clauses);
+                },
+                Or { children } => {
+                    let mut or_clauses = HashSet::new();
+                    for &child in children {
+                        if !clauses[child].is_empty() {
+                            or_clauses.insert(clauses[child].clone());
+                        }
+                    }
+
+                    let cartesian_product: HashSet<Vec<Vec<i32>>> = or_clauses.iter().cloned().multi_cartesian_product().collect();
+                    let mut flattened_cp: HashSet<Vec<i32>> = cartesian_product.iter().map(|clause| clause.concat() ).collect();
+                    
+                    flattened_cp = flattened_cp.into_iter().map(|clause| clause.into_iter().unique().collect::<Vec<i32>>()).collect();
+
+                    // remove the clauses that contain at least one literal as selected and deselected
+                    flattened_cp.retain(|inner_vec| {
+                        !inner_vec.iter().any(|&num| inner_vec.contains(&-num))
+                    });
+
+                    // remove clauses that are subsets of other clauses
+                    let mut v:Vec<HashSet<i32>> = flattened_cp.iter()
+                        .map(|x| x.iter().cloned().collect())
+                        .collect();
+            
+                    let mut pos = 0;
+                    while pos < v.len() {
+                        let is_sub = v[pos+1..].iter().any(|x| v[pos].is_subset(x)) 
+                            || v[..pos].iter().any(|x| v[pos].is_subset(x));
+                
+                        if is_sub {
+                            v.swap_remove(pos);
+                        } else {
+                            pos+=1;
+                        }
+                    }
+
+                    let w = v.into_iter()
+                        .map(|clause| HashSet::<_>::from_iter(clause.iter().copied())
+                        .into_iter()
+                        .collect::<Vec<i32>>()).collect();
+
+                    clauses.push(w);
+                },
+                Literal { literal } => {
+                    literals.insert(literal.unsigned_abs());
+                    clauses.push(vec![vec![*literal]])
+                },
+                _ => panic!("Node is of type: {:?} which is not allowed here!", node.ntype)
+            }
+        }
+        let mut cnf = vec![format!("p cnf {} {}\n", literals.len(), clauses.last().unwrap().len())];
+        for clause in clauses.last().unwrap() {
+            cnf.push(format!("{} 0\n", format_vec(clause.iter())));
+        }
+        if clause.is_some() { cnf.push(format!("{} 0\n", format_vec(clause.unwrap().iter()))); }
+        cnf
+    }
+
     pub fn add_clause(&mut self, clause: &[i32]) {
         const INTER_CNF: &str = "intermediate.cnf"; const INTER_NNF: &str = "intermediate.nnf";
         let (replace, _) = self.closest_unsplitable_and(&clause);
-        let (cnf, re_indices) = self.transform_to_cnf(replace, Some(clause));
+        let (cnf, re_indices) = self.transform_to_cnf_tseitin(replace, Some(clause));
 
         // persist CNF
         let cnf_flat = cnf.join("");
@@ -327,7 +400,7 @@ mod test {
             let mut ddnnf = build_ddnnf(path, Some(features));
             let mut complete_configs_direct = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
             
-            let (cnf, reverse_indexing) = ddnnf.inter_graph.transform_to_cnf(ddnnf.inter_graph.root, None);
+            let (cnf, reverse_indexing) = ddnnf.inter_graph.transform_to_cnf_tseitin(ddnnf.inter_graph.root, None);
             let cnf_flat = cnf.join("");
             let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
@@ -355,6 +428,32 @@ mod test {
             complete_configs_direct.sort();
             complete_configs_recompilation.sort();
             assert_eq!(complete_configs_direct, complete_configs_recompilation);
+
+            fs::remove_file("tests/data/redone.cnf").unwrap();
+            fs::remove_file("tests/data/redone.nnf").unwrap();
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn from_ddnnf_to_cnf_distributive() {
+        let ddnnf_file_paths = vec![
+            ("tests/data/small_ex_c2d.nnf", 4),
+            ("tests/data/small_ex_d4.nnf", 4),
+            ("tests/data/VP9_d4.nnf", 42),
+        ];
+
+        for (path, features) in ddnnf_file_paths {
+            let ddnnf = build_ddnnf(path, Some(features));
+            let cnf = ddnnf.inter_graph.transform_to_cnf_distributive(ddnnf.inter_graph.root, None);
+            let cnf_flat = cnf.join("");
+            let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
+            cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
+
+            compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
+            let ddnnf_redone = build_ddnnf("tests/data/redone.nnf", Some(features));
+
+            assert_eq!(ddnnf.rc(), ddnnf_redone.rc());
 
             fs::remove_file("tests/data/redone.cnf").unwrap();
             fs::remove_file("tests/data/redone.nnf").unwrap();
