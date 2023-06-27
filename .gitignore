@@ -48,6 +48,12 @@ dockerfile
 ideas/
 *.iml
 
-# d4 repo and binary
+# d4 repo and binary for CNF to dDNNF transformation
 d4v2
 d4v2.bin
+
+# binary for dDNNF to CNF transformation
+d2c
+
+# Ignore .cnf files in the root folder
+/*.cnf
