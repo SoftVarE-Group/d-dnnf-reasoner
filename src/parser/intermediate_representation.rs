@@ -99,10 +99,13 @@ impl IntermediateGraph {
     /// For a given clause we search for the AND node that contains all literals of that clause
     /// and therefore all other clauses that contain those literals and that has as little children
     /// as possible.
-    pub fn closest_unsplitable_and(&mut self, clause: &[i32]) -> (NodeIndex, HashSet<i32>) {
+    /// If we can't find any suitable literal (for instance the clause contains a new literal)
+    /// or the best AND node is the root node, we return new solution because our best option is to recompile
+    /// the whole CNF.
+    pub fn closest_unsplitable_and(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
         use crate::c2d_lexer::TokenIdentifier::*;
 
-        if clause.is_empty() { return (NodeIndex::new(0), HashSet::default()) }
+        if clause.is_empty() { return None }
 
         let mut cached_ands: Vec<(NodeIndex<u32>, &HashSet<i32>)> = Vec::new();
         let mut bfs = Bfs::new(&self.graph, self.root);
@@ -110,7 +113,7 @@ impl IntermediateGraph {
             match self.graph[nx] {
                 And => {
                     let diffs = self.literal_children.get(&nx).unwrap();
-                    if clause.iter().any(|e| diffs.contains(e)) {
+                    if clause.iter().all(|e| diffs.contains(e)) {
                         cached_ands.push((nx, diffs));
                     }
                 },
@@ -120,7 +123,7 @@ impl IntermediateGraph {
         
         // sort by descending length, aka from closest to farthest from root
         cached_ands.sort_unstable_by_key(|and| Reverse(and.1.len()));
-        let mut try_and = cached_ands[0]; 
+        let mut try_and = if !cached_ands.is_empty() { cached_ands[0] } else { return None; };
         for i in 0..cached_ands.len() {
             if cached_ands[i+1..].iter()
                 .all(|(_nx, and)| and.is_subset(cached_ands[i].1)) {
@@ -128,8 +131,8 @@ impl IntermediateGraph {
             } else {
                 break;
             }
-        }  
-        (try_and.0, try_and.1.clone())
+        }
+        if try_and.0 == self.root { return None; } else { Some((try_and.0, try_and.1.clone())) }
     }
 
     /// From a starting point in the dDNNF, we transform that subgraph into the CNF format,
@@ -201,6 +204,7 @@ impl IntermediateGraph {
             cnf.push(format!("{} 0\n", format_vec(
                 clause.unwrap().iter()
                     .map(|f| {
+                        // mapping must contain feature because we searched for the fitting AND node earlier
                         let re_index = *re_index_mapping.get(&(f.unsigned_abs() as i32)).unwrap();
                         if f.is_positive() { re_index as i32 } else { -(re_index as  i32) }
                     })
@@ -292,9 +296,12 @@ impl IntermediateGraph {
         cnf
     }
 
-    pub fn add_clause(&mut self, clause: &[i32]) {
+    pub fn add_clause(&mut self, clause: &[i32]) -> bool {
         const INTER_CNF: &str = "intermediate.cnf"; const INTER_NNF: &str = "intermediate.nnf";
-        let (replace, _) = self.closest_unsplitable_and(&clause);
+        let (replace, _) = match self.closest_unsplitable_and(&clause) {
+            Some(and_node) => and_node,
+            None => { return false; }
+        };
         let (cnf, re_indices) = self.transform_to_cnf_tseitin(replace, Some(clause));
 
         // persist CNF
@@ -353,6 +360,7 @@ impl IntermediateGraph {
         // clean up temp files
         fs::remove_file(INTER_CNF).unwrap();
         fs::remove_file(INTER_NNF).unwrap();
+        true
     }
 }
 
@@ -379,7 +387,7 @@ mod test {
 
         for (index, inp) in input.iter().enumerate() {
             let mut literals_as_vec = HashSet::<_>::from_iter(
-                (ddnnf.inter_graph.closest_unsplitable_and(inp)).1.iter().copied())
+                (ddnnf.inter_graph.closest_unsplitable_and(inp)).unwrap().1.iter().copied())
                 .into_iter()
                 .collect::<Vec<i32>>();
             literals_as_vec.sort();
