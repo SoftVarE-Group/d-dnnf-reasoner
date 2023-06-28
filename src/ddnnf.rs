@@ -87,9 +87,9 @@ impl Ddnnf {
     /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
     /// The clauses are disjuncted.
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4) 
-    pub fn apply_changes(&mut self, clauses: Vec<Vec<i32>>) {
+    pub fn apply_changes(&mut self, clauses: &Vec<&[i32]>) {
         for clause in clauses {
-            self.inter_graph.add_clause(&clause);
+            self.inter_graph.add_clause(clause);
         }
         
         self.rebuild();
@@ -186,7 +186,7 @@ mod test {
     #[serial]
     fn incremental_applying_clause() {
         let ddnnf_file_paths = vec![
-            ("tests/data/small_ex_c2d.nnf", 4, vec![vec![4]]),
+            ("tests/data/small_ex_c2d.nnf", 4, vec![4]),
             //("tests/data/VP9_d4.nnf", 42, vec![vec![4, 5]])
         ];
 
@@ -197,7 +197,7 @@ mod test {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
             }
 
-            ddnnf.apply_changes(clause);
+            ddnnf.apply_changes(&vec![&clause]);
             println!("Card of Features after change:");
             for i in 0..ddnnf.number_of_variables {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));

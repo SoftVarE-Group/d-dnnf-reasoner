@@ -1,5 +1,7 @@
 //! A lexer that categorizes a CNF into its coresponding tokens.
 
+use std::{io::{BufReader, BufRead, Write}, fs::File, cmp::max};
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -28,6 +30,8 @@ pub enum CNFToken {
 }
 
 use CNFToken::*;
+
+use super::util::format_vec;
 
 /// Lexes a line and checks whether it is a CNF header, comment or clause.
 /// We are only interested in the header, because it contains the information about the number of features.
@@ -61,8 +65,99 @@ fn lex_comment(line: &str) -> IResult<&str, CNFToken> {
     value(Comment, char('c'))(line)
 }
 
+/// Appends the given clause to the CNF file. This function also updates the Header by incrementing
+/// the number of clauses as well as the number of variables if necessary.
+pub fn add_clause_cnf(path: &str, clause: &[i32]) {
+    let file = File::open(path).unwrap();
+    let lines = BufReader::new(file).lines();
+    let mut manipulated_cnf = Vec::new();
+    
+    for line in lines {
+        let line = line.expect("Unable to read line");
+        match check_for_cnf_header(line.as_str()).unwrap().1 {
+            Header { features, clauses } => {
+                let max_feature_number = max(features, clause.iter().map(|f| f.unsigned_abs()).max().unwrap() as usize);
+                manipulated_cnf.push(format!("p cnf {max_feature_number} {}", clauses + 1))
+            },
+            Comment | Clause => manipulated_cnf.push(line),
+        }
+    }
+    manipulated_cnf.push(format!("{} 0", format_vec(clause.iter())));
+
+    let mut wfile = File::create(path).unwrap();
+    wfile.write_all(manipulated_cnf.join("\n").as_bytes()).unwrap();
+}
+
+/// Removes the last amount many clauses from the CNF. The header gets also updated.
+/// The number of clauses automatically, the total number of features if supplied.
+pub fn remove_tail_clauses_cnf(path: &str, total_features: Option<usize>, amount: usize) {
+    let mut file = File::open(path).unwrap();
+    let lines = BufReader::new(file).lines();
+    let mut manipulated_cnf = Vec::new();
+    
+    for line in lines {
+        let line = line.expect("Unable to read line");
+        match check_for_cnf_header(line.as_str()).unwrap().1 {
+            Header { features, clauses } => {
+                manipulated_cnf.push(format!("p cnf {} {}", total_features.unwrap_or(features), clauses - amount))
+            },
+            Comment | Clause => manipulated_cnf.push(line),
+        }
+    }
+    manipulated_cnf.truncate(manipulated_cnf.len() - amount);
+
+    file = File::create(path).unwrap();
+    file.write_all(manipulated_cnf.join("\n").as_bytes()).unwrap();
+}
+
+/// Removes a specific clause from the CNF. Also removes duplicates. Does update the Header accordingly.
+pub fn remove_clause_cnf(path: &str, clause: &[i32], total_features: Option<usize>) {
+    let mut file = File::open(path).unwrap();
+    let lines = BufReader::new(file).lines();
+    let mut manipulated_cnf = Vec::new();
+    
+    for line in lines {
+        let line = line.expect("Unable to read line");
+        match check_for_cnf_header(line.as_str()).unwrap().1 {
+            Header { features, clauses } => {
+                manipulated_cnf.push(format!("p cnf {} {}", total_features.unwrap_or(features), clauses - 1))
+            },
+            Comment | Clause => {
+                if line != format!("{} 0", format_vec(clause.iter())) { // ignore clause
+                    manipulated_cnf.push(line)
+                }
+            },
+        }
+    }
+
+    file = File::create(path).unwrap();
+    file.write_all(manipulated_cnf.join("\n").as_bytes()).unwrap();
+}
+
+/// Reads a CNF file and returns all the contained clauses.
+pub fn get_all_clauses_cnf(path: &str) -> Vec<Vec<i32>> {
+    let file = File::open(path).unwrap();
+    let lines = BufReader::new(file).lines();
+    let mut clauses = Vec::new();
+    
+    for line in lines {
+        let line = line.expect("Unable to read line");
+        match check_for_cnf_header(line.as_str()).unwrap().1 {
+            Clause => {
+                let mut clause: Vec<i32> = line.split(" ").map(|num| num.parse::<i32>().unwrap()).collect();
+                clause.remove(clause.len() - 1); // remove the trailing 0
+                clauses.push(clause);
+            },
+            _ => ()
+        }
+    }
+    clauses
+}
+
 #[cfg(test)]
 mod test {
+    use std::fs::{self, read_to_string};
+
     use super::*;
 
     #[test]
@@ -74,5 +169,52 @@ mod test {
         assert_eq!(check_for_cnf_header(comment).unwrap().1, Comment);
         assert_eq!(check_for_cnf_header(header).unwrap().1, Header { features: 2513, clauses: 10275 } );
         assert_eq!(check_for_cnf_header(clause).unwrap().1, Clause );
+    }
+
+    #[test]
+    fn manipulate_cnf() {
+        const INTER_CNF_PATH: &str = ".inter.cnf";
+
+        let cnf = "p cnf 3 3\n1 2 0\n-1 -2 0\n1 2 3 0";
+        let mut file = File::create(INTER_CNF_PATH).unwrap();
+        file.write_all(cnf.as_bytes()).unwrap();
+
+        add_clause_cnf(INTER_CNF_PATH, &vec![3, -3]);
+        assert_eq!(
+            "p cnf 3 4\n1 2 0\n-1 -2 0\n1 2 3 0\n3 -3 0",
+            read_to_string(INTER_CNF_PATH).unwrap()
+        );
+
+        add_clause_cnf(INTER_CNF_PATH, &vec![1, 2, 3, 4]);
+        assert_eq!(
+            "p cnf 4 5\n1 2 0\n-1 -2 0\n1 2 3 0\n3 -3 0\n1 2 3 4 0",
+            read_to_string(INTER_CNF_PATH).unwrap()
+        );
+
+        remove_tail_clauses_cnf(INTER_CNF_PATH, None, 1);
+        assert_eq!(
+            "p cnf 4 4\n1 2 0\n-1 -2 0\n1 2 3 0\n3 -3 0",
+            read_to_string(INTER_CNF_PATH).unwrap()
+        );
+
+        remove_tail_clauses_cnf(INTER_CNF_PATH, Some(3), 2);
+        assert_eq!(
+            "p cnf 3 2\n1 2 0\n-1 -2 0",
+            read_to_string(INTER_CNF_PATH).unwrap()
+        );
+
+        add_clause_cnf(INTER_CNF_PATH, &vec![3, -3]);
+        remove_clause_cnf(INTER_CNF_PATH, &vec![-1, -2], None);
+        assert_eq!(
+            "p cnf 3 2\n1 2 0\n3 -3 0",
+            read_to_string(INTER_CNF_PATH).unwrap()
+        );
+
+        assert_eq!(
+            vec![vec![1, 2], vec![3, -3]],
+            get_all_clauses_cnf(INTER_CNF_PATH)
+        );
+
+        fs::remove_file(INTER_CNF_PATH).unwrap();
     }
 }

@@ -3,9 +3,13 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::{Parser, ArgGroup, Subcommand};
 
+use colored::Colorize;
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
+use ddnnf_lib::parser::build_ddnnf;
+use ddnnf_lib::parser::from_cnf::{get_all_clauses_cnf, remove_clause_cnf, add_clause_cnf};
 use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use itertools::Itertools;
+use rand_distr::num_traits::Signed;
 
 use std::fs::File;
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
@@ -219,6 +223,8 @@ enum Operation {
         #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
         assumptions: Vec<i32>
     },
+    /// Benchmarking/Debugging
+    Bench,
 }
 
 fn main() {
@@ -244,7 +250,7 @@ fn main() {
 
     // file path without last extension
     let input_file_path = String::from(
-        Path::new(&cli.file_path.unwrap_or(String::from("ddnnf.nnf")))
+        Path::new(&cli.file_path.clone().unwrap_or(String::from("ddnnf.nnf")))
         .with_extension("").file_name().unwrap().to_str().unwrap());
 
     // Uses the supplied file path if there is any.
@@ -428,6 +434,47 @@ fn main() {
             Mermaid { custom_output_file: _, assumptions } => {
                 write_as_mermaid_md(&mut ddnnf, assumptions, &output_file_path).unwrap();
                 println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {output_file_path}.");
+            },
+            Bench => {
+                let mut total_naive = 0.0; let mut diff_naive;
+                let mut total_recompile = 0.0; let mut diff_recompile;
+                let cnf_s = cli.file_path.unwrap();
+                let cnf = cnf_s.as_str();
+                let mut start;
+
+                let clauses = get_all_clauses_cnf(cnf);
+                for clause in clauses.into_iter() {
+                    println!("Clause: {clause:?}");
+                    remove_clause_cnf(cnf, &clause, None);
+                    let mut inter_ddnnf = build_ddnnf(cnf, Some(ddnnf.number_of_variables));
+                    
+                    start = Instant::now();
+                    if !inter_ddnnf.inter_graph.add_clause(&clause) {
+                        continue;
+                    }
+                    inter_ddnnf.inter_graph.rebuild(None);
+                    diff_recompile = start.elapsed().as_secs_f64();
+                    total_recompile += diff_recompile;
+                    add_clause_cnf(cnf, &clause);
+
+                    start = Instant::now();
+                    build_ddnnf(cnf, Some(ddnnf.number_of_variables));
+                    diff_naive = start.elapsed().as_secs_f64();
+                    total_naive += diff_naive;
+                
+                    let benefit = diff_naive - diff_recompile;
+                    if benefit.is_sign_positive() {
+                        println!("{} Recompile is {}s BETTER", "(+)".green(), benefit);
+                    } else {
+                        println!("{} Recompile is {}s WORSE", "(-)".red(), benefit);
+                    }
+
+                    println!("Current total time naive method:     {total_naive:.5}, diff: {diff_naive:.10}");
+                    println!("Current total time recompile method: {total_recompile:.5}, diff: {diff_recompile:.10}");
+                }
+
+                println!("Total time naive method:     {total_naive}");
+                println!("Total time recompile method: {total_recompile}");
             },
         }
     }

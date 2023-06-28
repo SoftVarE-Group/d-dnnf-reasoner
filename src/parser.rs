@@ -23,9 +23,8 @@ use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
-use std::io::{BufReader, Write, BufRead};
+use std::io::{BufReader, BufRead};
 use std::path::Path;
-use std::time::Instant;
 use std::{
     cell::RefCell,
     rc::Rc, process
@@ -71,16 +70,11 @@ pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
                 let line = line.expect("Unable to read line");
                 match check_for_cnf_header(line.as_str()).unwrap().1 {
                     CNFToken::Header { features, clauses: _ } => {
-                        let time = Instant::now();
-                        print!("Trying to compile a dDNNF from the CNF file... ");
-                        std::io::stdout().flush().unwrap();
-                        
                         let ddnnf_file = ".intermediate.nnf";
                         compile_cnf(path, ddnnf_file);
                         path = ddnnf_file;
                         omitted_features = Some(features as u32);
                         
-                        println!("Elapsed time for compiling: {:.3}s.", time.elapsed().as_secs_f64());
                         break
                     },
                     CNFToken::Comment | CNFToken::Clause => (),
