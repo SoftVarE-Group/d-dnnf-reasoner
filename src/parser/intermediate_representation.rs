@@ -1,7 +1,12 @@
 use std::{collections::{HashMap, HashSet}, cmp::{Reverse}, fs::{File, self}, io::Write};
 
 use itertools::{Itertools};
-use petgraph::{stable_graph::{StableGraph, NodeIndex}, visit::{DfsPostOrder, Bfs}, algo::is_cyclic_directed, Direction::{Incoming, Outgoing}};
+use petgraph::{
+    stable_graph::{StableGraph, NodeIndex},
+    visit::{DfsPostOrder, Bfs},
+    algo::is_cyclic_directed,
+    Direction::{Incoming, Outgoing}
+};
 
 use crate::{c2d_lexer::TId, Node, NodeType, parser::{get_literal_diffs, util::format_vec, build_ddnnf}};
 
@@ -297,6 +302,7 @@ impl IntermediateGraph {
     }
 
     pub fn add_clause(&mut self, clause: &[i32]) -> bool {
+        if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         const INTER_CNF: &str = "intermediate.cnf"; const INTER_NNF: &str = "intermediate.nnf";
         let (replace, _) = match self.closest_unsplitable_and(&clause) {
             Some(and_node) => and_node,
@@ -361,6 +367,33 @@ impl IntermediateGraph {
         fs::remove_file(INTER_CNF).unwrap();
         fs::remove_file(INTER_NNF).unwrap();
         true
+    }
+
+    /// Adds the necessary reference to extend a dDNNF by a unit clause
+    fn add_unit_clause(&mut self, feature: i32) {
+        // reindexing...
+        let mut literals_nx = HashMap::new();
+        let pairs: Vec<(NodeIndex, i32)> = self.nx_literals.clone().drain().collect();
+        for (key, value) in pairs {
+            literals_nx.insert(value, key);
+        }
+
+        match literals_nx.get(&feature) {
+            // add unit clause to an existing literal by adding an edge from root to literal
+            Some(node) => {
+                self.graph.add_edge(self.root, *node, ());
+            },
+            // add unit clause for a feature that does not exist yet by adding node + edge
+            None => {
+                let new_lit = if feature.is_positive() {
+                    self.graph.add_node(TId::PositiveLiteral)
+                } else {
+                    self.graph.add_node(TId::NegativeLiteral)
+                };
+                self.graph.add_edge(self.root, new_lit, ());
+                self.nx_literals.insert(new_lit, feature);
+            },
+        }
     }
 }
 
