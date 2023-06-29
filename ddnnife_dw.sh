@@ -15,7 +15,7 @@ fi
 if [[ "$(docker images -q ddnnife 2> /dev/null)" == "" ]] || [ "$1" == "rebuild" ]
 then
     echo -e "Building the docker image. Make sure that the current folder contains ddnnife as well as its Dockerfile...\n"
-    docker build -t ddnnife .
+    docker build --platform linux/amd64 -t ddnnife .
 fi
 
 if [ "$1" == "rebuild" ]
