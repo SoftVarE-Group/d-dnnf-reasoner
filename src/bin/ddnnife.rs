@@ -455,8 +455,8 @@ fn main() {
                     inter_ddnnf.inter_graph.rebuild(None);
                     diff_recompile = start.elapsed().as_secs_f64();
                     total_recompile += diff_recompile;
+                    
                     add_clause_cnf(cnf, &clause);
-
                     start = Instant::now();
                     build_ddnnf(cnf, Some(ddnnf.number_of_variables));
                     diff_naive = start.elapsed().as_secs_f64();

@@ -133,7 +133,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 
     let mut ddnnf_graph = StableGraph::<TId, ()>::new();
     let mut node_indices = Vec::with_capacity(lines.len());
-    let mut nx_literals: HashMap<NodeIndex, i32> = HashMap::new();
+    let mut literals_nx: HashMap<i32, NodeIndex> = HashMap::new();
 
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
@@ -156,12 +156,8 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
                     from
                 },
                 Literal { feature } => {
-                    let literal_node = if feature.is_positive() {
-                        ddnnf_graph.add_node(TId::PositiveLiteral)
-                    } else {
-                        ddnnf_graph.add_node(TId::NegativeLiteral)
-                    };
-                    nx_literals.insert(literal_node, feature);
+                    let literal_node = ddnnf_graph.add_node(TId::Literal { feature });
+                    literals_nx.insert(feature, literal_node);
                     literal_node
                 },
                 True => { ddnnf_graph.add_node(TId::True) },
@@ -173,7 +169,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         );
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, node_indices[node_indices.len() - 1], nx_literals);
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, node_indices[node_indices.len() - 1], literals_nx);
     Ddnnf::new(intermediate_graph, variables)
 }
 
@@ -192,41 +188,24 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let nx_literals: Rc<RefCell<HashMap<NodeIndex, i32>>> =
-        Rc::new(RefCell::new(HashMap::new()));
     let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
         Rc::new(RefCell::new(HashMap::new()));
 
     let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, ()>,
                                literals: Vec<i32>|
      -> Vec<NodeIndex> {
-        let mut nx_lit = nx_literals.borrow_mut();
         let mut lit_nx = literals_nx.borrow_mut();
-
         let mut literal_nodes = Vec::new();
 
         for literal in literals {
-            if literal.is_positive() {
-                literal_nodes.push(match lit_nx.get(&literal) {
-                    Some(x) => *x,
-                    None => {
-                        let nx = ddnnf_graph.add_node(TId::PositiveLiteral);
-                        nx_lit.insert(nx, literal);
-                        lit_nx.insert(literal, nx);
-                        nx
-                    }
-                })
-            } else {
-                literal_nodes.push(match lit_nx.get(&literal) {
-                    Some(x) => *x,
-                    None => {
-                        let nx = ddnnf_graph.add_node(TId::NegativeLiteral);
-                        nx_lit.insert(nx, literal);
-                        lit_nx.insert(literal, nx);
-                        nx
-                    }
-                })
-            }
+            literal_nodes.push(match lit_nx.get(&literal) {
+                Some(x) => *x,
+                None => {
+                    let nx = ddnnf_graph.add_node(TId::Literal { feature: literal });
+                    lit_nx.insert(literal, nx);
+                    nx
+                }
+            })
         }
         literal_nodes
     };
@@ -427,7 +406,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     //                                       -Lm   Lm
     //
     let literal_diff: HashMap<NodeIndex, HashSet<i32>>
-        = get_literal_diffs(&ddnnf_graph, &nx_literals.borrow(), root);
+        = get_literal_diffs(&ddnnf_graph, root);
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
@@ -450,7 +429,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         }
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, nx_literals.borrow().clone());
+    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, literals_nx.borrow().clone());
     Ddnnf::new(intermediate_graph, omitted_features)
 }
 
@@ -475,13 +454,12 @@ fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32
 /// Computes the combined literals used in its children
 pub fn get_literal_diffs(
     di_graph: &StableGraph<TId, ()>,
-    nx_literals: &HashMap<NodeIndex, i32>,
     root: NodeIndex
 ) -> HashMap<NodeIndex, HashSet<i32>> {
     let mut safe: HashMap<NodeIndex, HashSet<i32>> = HashMap::new();
     let mut dfs = DfsPostOrder::new(di_graph, root);
     while let Some(nx) = dfs.next(di_graph) {
-        get_literals(di_graph, &mut safe, nx_literals, nx);
+        get_literals(di_graph, &mut safe, nx);
     }
     safe
 }
@@ -490,7 +468,6 @@ pub fn get_literal_diffs(
 fn get_literals(
     di_graph: &StableGraph<TId, ()>,
     safe: &mut HashMap<NodeIndex, HashSet<i32>>,
-    nx_literals: &HashMap<NodeIndex, i32>,
     deciding_node_child: NodeIndex,
 ) -> HashSet<i32> {
     let lookup = safe.get(&deciding_node_child);
@@ -503,11 +480,11 @@ fn get_literals(
     match di_graph[deciding_node_child] {
         And | Or => {
             di_graph.neighbors_directed(deciding_node_child, Outgoing).for_each(|n| {
-                res.extend(get_literals(di_graph, safe, nx_literals, n))
+                res.extend(get_literals(di_graph, safe, n))
             });
         }
-        PositiveLiteral | NegativeLiteral => {
-            res.insert(*nx_literals.get(&deciding_node_child).unwrap());
+        Literal { feature } => {
+            res.insert(feature);
         }
         _ => (),
     }

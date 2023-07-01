@@ -19,10 +19,11 @@ pub enum TokenIdentifier {
     And,
     /// An inner node that contains exactly two child nodes
     Or,
-    /// A leaf node that countains a positive number of a variable
-    PositiveLiteral,
-    /// A leaf node that countains a negated number of a variable
-    NegativeLiteral,
+    /// A leaf node that countains a positive or negative number of a variable
+    Literal {
+        /// The number representing a feature in the FM
+        feature: i32
+    },
     /// A special And node that has zero childs
     True,
     /// A special Or node that has zero childs

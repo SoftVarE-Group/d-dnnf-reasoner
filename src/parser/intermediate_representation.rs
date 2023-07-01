@@ -18,19 +18,19 @@ use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 pub struct IntermediateGraph {
     graph: StableGraph::<TId, ()>,
     pub root: NodeIndex,
-    nx_literals: HashMap<NodeIndex, i32>,
+    literals_nx: HashMap<i32, NodeIndex>,
     literal_children: HashMap<NodeIndex, HashSet<i32>>
 }
 
 impl IntermediateGraph {
     /// Creates a new IntermediateGraph 
-    pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, nx_literals: HashMap<NodeIndex, i32>) -> IntermediateGraph {
+    pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, literals_nx: HashMap<i32, NodeIndex>) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
-            graph, root, nx_literals,
+            graph, root, literals_nx,
             literal_children: HashMap::new()
         };
-        inter_graph.literal_children = get_literal_diffs(&inter_graph.graph, &inter_graph.nx_literals, inter_graph.root);
+        inter_graph.literal_children = get_literal_diffs(&inter_graph.graph, inter_graph.root);
         inter_graph
     }
 
@@ -58,9 +58,8 @@ impl IntermediateGraph {
                 .collect::<Vec<usize>>();
             let next: Node = match self.graph[nx] {
                 // extract the parsed Token
-                TId::PositiveLiteral |
-                TId::NegativeLiteral => Node::new_literal(
-                    self.nx_literals.get(&nx).unwrap().to_owned()
+                TId::Literal { feature } => Node::new_literal(
+                    feature
                 ),
                 TId::And => Node::new_and(
                     calc_and_count(&mut parsed_nodes, &neighs),
@@ -118,6 +117,7 @@ impl IntermediateGraph {
             match self.graph[nx] {
                 And => {
                     let diffs = self.literal_children.get(&nx).unwrap();
+                    // we only consider and nodes that include all literals of the clause
                     if clause.iter().all(|e| diffs.contains(e)) {
                         cached_ands.push((nx, diffs));
                     }
@@ -319,33 +319,26 @@ impl IntermediateGraph {
         compile_cnf(INTER_CNF, INTER_NNF);
         let last_lit_number = re_indices.keys().map(|&k| k.unsigned_abs()).max().unwrap();
         let sup_ddnnf = build_ddnnf(INTER_NNF, Some(last_lit_number));
-        
-        // reindexing...
-        let mut literals_nx = HashMap::new();
-        let pairs: Vec<(NodeIndex, i32)> = self.nx_literals.clone().drain().collect();
-        for (key, value) in pairs {
-            literals_nx.insert(value, key);
-        }
 
         // add the new subgraph as unconnected additional graph
         let sub = sup_ddnnf.inter_graph;
         let mut dfs = DfsPostOrder::new(&sub.graph, sub.root);
         let mut cache = HashMap::new();
         while let Some(nx) = dfs.next(&sub.graph) {
-            let new_nx = if sub.graph[nx] == TId::PositiveLiteral || sub.graph[nx] == TId::NegativeLiteral {
-                let lit = sub.nx_literals.get(&nx).unwrap();
-                let re_lit = re_indices.get(&(lit.unsigned_abs() as i32));
-                if re_lit.is_some() {
-                    let signed_lit = re_lit.unwrap() * lit.signum();
-                    *literals_nx.get(&signed_lit).unwrap()
-                } else { // tseitin
-                    let new_lit_nx = self.graph.add_node(sub.graph[nx]);
-                    let offset_lit = if lit.is_positive() { lit + 1_000_000 } else { lit - 1_000_000 };
-                    self.nx_literals.insert(new_lit_nx, offset_lit);
-                    new_lit_nx
-                }
-            } else {
-                self.graph.add_node(sub.graph[nx])
+            let new_nx = match sub.graph[nx] {
+                TId::Literal { feature } => {
+                    let re_lit = re_indices.get(&(feature.unsigned_abs() as i32));
+                    if re_lit.is_some() {
+                        let signed_lit = re_lit.unwrap() * feature.signum();
+                        *self.literals_nx.get(&signed_lit).unwrap()
+                    } else { // tseitin
+                        let new_lit_nx = self.graph.add_node(sub.graph[nx]);
+                        let offset_lit = if feature.is_positive() { feature + 1_000_000 } else { feature - 1_000_000 };
+                        self.literals_nx.insert(offset_lit, new_lit_nx);
+                        new_lit_nx
+                    }
+                },
+                _ => self.graph.add_node(sub.graph[nx]),
             };
             cache.insert(nx, new_nx);
 
@@ -370,29 +363,17 @@ impl IntermediateGraph {
     }
 
     /// Adds the necessary reference to extend a dDNNF by a unit clause
-    fn add_unit_clause(&mut self, feature: i32) {
-        // reindexing...
-        let mut literals_nx = HashMap::new();
-        let pairs: Vec<(NodeIndex, i32)> = self.nx_literals.clone().drain().collect();
-        for (key, value) in pairs {
-            literals_nx.insert(value, key);
-        }
-
-        match literals_nx.get(&feature) {
+    fn _add_unit_clause(&mut self, feature: i32) {
+        match self.literals_nx.get(&feature) {
             // add unit clause to an existing literal by adding an edge from root to literal
             Some(node) => {
                 self.graph.add_edge(self.root, *node, ());
             },
             // add unit clause for a feature that does not exist yet by adding node + edge
             None => {
-                println!("built it");
-                let new_lit = if feature.is_positive() {
-                    self.graph.add_node(TId::PositiveLiteral)
-                } else {
-                    self.graph.add_node(TId::NegativeLiteral)
-                };
+                let new_lit = self.graph.add_node(TId::Literal { feature });
                 self.graph.add_edge(self.root, new_lit, ());
-                self.nx_literals.insert(new_lit, feature);
+                self.literals_nx.insert(feature, new_lit);
             },
         }
     }
@@ -416,7 +397,7 @@ mod test {
         ];
         let output = vec![
             None, Some(vec![-5, 4]), Some(vec![-4, 5]), Some(vec![-5, -4, -3, 4, 5]),
-            Some(vec![-41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 9])
+            Some(vec![-41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 8, 9])
         ];
 
         for (index, inp) in input.iter().enumerate() {
@@ -428,7 +409,6 @@ mod test {
                         .collect::<Vec<i32>>();
 
                     literals_as_vec.sort();
-                    println!("inp: {inp:?}, output: {literals_as_vec:?}");
                     assert_eq!(output[index].clone().unwrap(), literals_as_vec);
                 },
                 None => {
@@ -551,7 +531,7 @@ mod test {
         let mut ddnnf_missing_clause1 = build_ddnnf(CNF_PATH, None);
         let mut ddnnf_missing_clause2 = ddnnf_missing_clause1.clone();
 
-        ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
+        ddnnf_missing_clause1.inter_graph._add_unit_clause(1); // add the unit clause directly
         ddnnf_missing_clause2.inter_graph.add_clause(&vec![1]); // indirectly via adding a clause
         ddnnf_missing_clause1.rebuild();
         ddnnf_missing_clause2.rebuild();
