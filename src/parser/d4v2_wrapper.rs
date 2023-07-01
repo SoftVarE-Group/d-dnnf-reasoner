@@ -1,6 +1,7 @@
-use std::{process::{Command, self}, fs};
-
-use colored::Colorize;
+use std::{
+    process::{Command, self},
+    fs
+};
 
 #[cfg(windows)] const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
 #[cfg(unix)] const D4V2: &[u8] = include_bytes!("../bin/d4v2.bin");
@@ -11,9 +12,10 @@ const EXECUTABLE_PATH: &str = ".d4v2"; // relative from the root of the project
 pub fn compile_cnf(path_in: &str, path_out: &str) {
     // If the byte array is empty, we did not include d4v2. Consequently, we can't compile and have to exit.
     if D4V2.is_empty() {
-        eprintln!("{}", "\nERROR: d4v2 is not part of that binary! \
+        // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+        eprintln!("\x1b[1;38;5;196m\nERROR: d4v2 is not part of that binary! \
             Hence, CNF files can not be handled by this binary file. \
-            Compile again with 'EXCLUDE_D4V2=FALSE cargo build --release' to use d4v2.\nAborting...".red());
+            Compile again with 'EXCLUDE_D4V2=FALSE cargo build --release' to use d4v2.\nAborting...");
         process::exit(1);
     }
 
