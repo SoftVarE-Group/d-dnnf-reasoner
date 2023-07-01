@@ -2,7 +2,6 @@ pub mod c2d_lexer;
 use c2d_lexer::{lex_line_c2d, TId, C2DToken};
 
 pub mod d4_lexer;
-use colored::Colorize;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod from_cnf;
@@ -19,13 +18,13 @@ pub mod persisting;
 pub mod util;
 
 use core::panic;
-use std::cmp::max;
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
-use std::fs::{self};
-use std::io::{BufRead, BufReader};
-use std::path::Path;
 use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    fs::{self},
+    io::{BufRead, BufReader},
+    path::Path,
     cell::RefCell,
     rc::Rc, process
 };
@@ -114,9 +113,11 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
                 },
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
-                    println!("{}", "WARNING: The first line of the file isn't a header and the option 'total_features' is not set. \
-                    Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
-                    Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n".yellow());
+                    // Bold, Yellow, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+                    println!("\x1b[1;38;5;226mWARNING: The first line of the file isn't a header and the option 'total_features' is not set. \
+                        Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
+                        Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n\x1b[0m"
+                    );
                     build_d4_ddnnf(lines, None)
                 },
             }
@@ -366,7 +367,8 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
                             TId::And => ddnnf_graph.remove_edge(n_edge).unwrap(),
                             TId::Or => (), // should never happen
                             _ => {
-                                println!("{}", "ERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting".red());
+                                // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting...");
                                 process::exit(1);
                             }
                         };
@@ -377,7 +379,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
                             TId::Or => ddnnf_graph.remove_edge(n_edge).unwrap(),
                             TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
                             _ => {
-                                println!("{}", "ERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can habe children".red());
+                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
                                 process::exit(1);
                             }
                         };

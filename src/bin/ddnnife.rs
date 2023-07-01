@@ -3,7 +3,6 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::{Parser, ArgGroup, Subcommand};
 
-use colored::Colorize;
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
 use ddnnf_lib::parser::build_ddnnf;
 use ddnnf_lib::parser::from_cnf::{get_all_clauses_cnf, remove_clause_cnf, add_clause_cnf};
@@ -454,9 +453,9 @@ fn main() {
                 
                     let benefit = diff_naive - diff_recompile;
                     if benefit.is_sign_positive() {
-                        println!("{} Recompile is {}s BETTER", "(+)".green(), benefit);
+                        println!("\x1b[1;38;5;46m(+)\x1b[0m Recompile is {}s BETTER", benefit);
                     } else {
-                        println!("{} Recompile is {}s WORSE", "(-)".red(), benefit);
+                        println!("\x1b[1;38;5;196m(-)\x1b[0m Recompile is {}s WORSE", benefit);
                     }
 
                     println!("Current total time naive method:     {total_naive:.5}, diff: {diff_naive:.10}");

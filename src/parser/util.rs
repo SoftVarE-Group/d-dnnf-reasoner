@@ -2,7 +2,6 @@
 
 use std::{fs::File, io::{BufReader, BufRead}, process};
 
-use colored::Colorize;
 use rug::{Integer, Complete};
 
 use crate::Node;
@@ -71,8 +70,9 @@ pub fn open_file_savely(path: &str) -> File {
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
-            eprintln!("{}", format!("ERROR: The following error code occured while trying to open the file \"{path}\":\n{err}\nAborting...").red());
-            process::exit(1)
+            // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+            eprintln!("\x1b[1;38;5;196mERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
+            process::exit(1);
         }
     }
 }
