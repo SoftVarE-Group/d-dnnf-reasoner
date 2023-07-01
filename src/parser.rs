@@ -22,8 +22,8 @@ use core::panic;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
-use std::fs;
-use std::io::{BufReader, BufRead};
+use std::fs::{self};
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::{
     cell::RefCell,
@@ -60,7 +60,7 @@ use self::util::open_file_savely;
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
+pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
     if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
             let file = open_file_savely(path);
@@ -73,7 +73,7 @@ pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
                         let ddnnf_file = ".intermediate.nnf";
                         compile_cnf(path, ddnnf_file);
                         path = ddnnf_file;
-                        omitted_features = Some(features as u32);
+                        total_features = Some(features as u32);
                         
                         break
                     },
@@ -91,14 +91,14 @@ pub fn build_ddnnf(mut path: &str, mut omitted_features: Option<u32>) -> Ddnnf {
 
     if path == ".intermediate.nnf" { fs::remove_file(path).unwrap(); }
 
-    distribute_building(lines, omitted_features)
+    distribute_building(lines, total_features)
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.
-/// Either the first line is a header and therefore the c2d format or omitted_features
+/// Either the first line is a header and therefore the c2d format or total_features
 /// is supplied and its the d4 format.
 #[inline]
-pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) -> Ddnnf {
+pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> Ddnnf {
     use C2DToken::*;
     
     match lex_line_c2d(lines[0].trim()) {
@@ -107,14 +107,14 @@ pub fn distribute_building(lines: Vec<String>, omitted_features: Option<u32>) ->
         },
         Ok(_) | Err(_) => {
             // tried to parse the c2d standard, but failes
-            match omitted_features {
+            match total_features {
                 Some(o) => {
                     // we try to parse the d4 standard
                     build_d4_ddnnf(lines, Some(o))
                 },
                 None => {
-                    // unknown standard or combination -> we assume d4 and choose omitted_features
-                    println!("{}", "WARNING: The first line of the file isn't a header and the option 'omitted_features' is not set. \
+                    // unknown standard or combination -> we assume d4 and choose total_features
+                    println!("{}", "WARNING: The first line of the file isn't a header and the option 'total_features' is not set. \
                     Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
                     Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n".yellow());
                     build_d4_ddnnf(lines, None)
@@ -177,12 +177,12 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnnf {
+fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf {
     let mut ddnnf_graph = StableGraph::<TId, ()>::new();
 
-    let mut omitted_features = omitted_features_opt.unwrap_or(0);
+    let mut total_features = total_features_opt.unwrap_or(0);
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
-        Rc::new(RefCell::new(vec![false; max(100_000, omitted_features as usize)]));
+        Rc::new(RefCell::new(vec![false; max(100_000, total_features as usize)]));
 
     let mut indices: Vec<NodeIndex> = Vec::new();
 
@@ -252,7 +252,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
             Edge { from, to, features } => {
                 for f in &features {
                     literal_occurences.borrow_mut()[f.unsigned_abs() as usize] = true;
-                    omitted_features = max(omitted_features, f.unsigned_abs());
+                    total_features = max(total_features, f.unsigned_abs());
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
@@ -271,7 +271,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     }
 
     let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
-        Rc::new(RefCell::new(vec![None; (omitted_features + 1) as usize]));
+        Rc::new(RefCell::new(vec![None; (total_features + 1) as usize]));
 
     let add_literal_node = 
         |ddnnf_graph: &mut StableGraph<TId,()>, f_u32: u32, attach: NodeIndex| {
@@ -312,12 +312,12 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
         }
     };
 
-    // add a new root which hold the unmentioned variables within the omitted_features range
+    // add a new root which hold the unmentioned variables within the total_features range
     let root = ddnnf_graph.add_node(TId::And);
     ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
 
     // add literals that are not mentioned in the ddnnf to the new root node
-    for i in 1..=omitted_features {
+    for i in 1..=total_features {
         if !literal_occurences.borrow()[i as usize] {
             add_literal_node(&mut ddnnf_graph, i, root);
         }
@@ -430,7 +430,7 @@ fn build_d4_ddnnf(lines: Vec<String>, omitted_features_opt: Option<u32>) -> Ddnn
     }
 
     let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, literals_nx.borrow().clone());
-    Ddnnf::new(intermediate_graph, omitted_features)
+    Ddnnf::new(intermediate_graph, total_features)
 }
 
 // Computes the difference between the children of a Node

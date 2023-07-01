@@ -36,10 +36,6 @@ valcom
 *-mermaid.md
 *.svg
 
-# docker
-dockerfile
-.dockerignore
-
 # vsc
 .idea
 .vscode/

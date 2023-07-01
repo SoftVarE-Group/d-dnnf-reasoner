@@ -7,7 +7,6 @@ use std::process::Command; // Run programs
 #[test]
 fn compiles_cnf_to_d_dnnf() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("ddnnife")?;
-
     cmd.arg("tests/data/auto1.cnf");
 
     // count is correct

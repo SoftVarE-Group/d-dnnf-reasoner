@@ -14,8 +14,6 @@ use rand_distr::num_traits::Signed;
 use std::fs::File;
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
 use std::path::{Path};
-use std::sync::mpsc::{self, Receiver};
-use std::thread::{self};
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
@@ -44,7 +42,7 @@ struct Cli {
     file_path: Option<String>,
 
     /// Allows to load the ddnnf via stdin.
-    /// Either 'omitted_features' has to be set or the file must start with a header of the form 'nnf n v e',
+    /// Either 'total_features' has to be set or the file must start with a header of the form 'nnf n v e',
     /// where v is the number of nodes, e is the number of edges,
     /// and n is the number of variables over which the d-dnnf is defined.
     /// Like the c2d and the d4 format specifies, each line must be defided by a new line.
@@ -56,10 +54,10 @@ struct Cli {
     #[clap(subcommand)]
     operation: Option<Operation>,
 
-    /// The number of omitted features.
+    /// The number of total features.
     /// This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.
     #[arg(short, long, verbatim_doc_comment)]
-    omitted_features: Option<u32>,
+    total_features: Option<u32>,
 
     /// Save the smooth ddnnf in the c2d format. Default output file is '{FILE_NAME}-saved.nnf'.
     /// Alternatively, you can choose a name. The .nnf ending is added automatically.
@@ -129,7 +127,12 @@ enum Operation {
     },
 
     /// Starts ddnnife in stream mode.
-    Stream,
+    Stream {
+        /// Specify how many threads should be used.
+        /// Possible values are between 1 and 32.
+        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 1, verbatim_doc_comment)]
+        jobs: u16,
+    },
     /// Evaluates multiple queries of the stream format from a file.
     StreamQueries{
         /// Path to a file that may contain multiple queries.
@@ -242,10 +245,10 @@ fn main() {
             if read_line.is_empty() { break; }
             input.push(read_line);
         }
-        ddnnf = dparser::distribute_building(input, cli.omitted_features);
+        ddnnf = dparser::distribute_building(input, cli.total_features);
     } else {
         let ddnnf_path = &cli.file_path.clone().unwrap();
-        ddnnf = dparser::build_ddnnf(ddnnf_path, cli.omitted_features)
+        ddnnf = dparser::build_ddnnf(ddnnf_path, cli.total_features)
     }
 
     // file path without last extension
@@ -262,12 +265,12 @@ fn main() {
 
 
     // print additional output, iff we are not in the stream mode
-    match &cli.operation {
-        Some(Operation::Stream) => (),
+    match &cli.operation.clone() {
+        Some(Operation::Stream { .. }) => (),
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
             println!(
-                "Ddnnf overall count: {:#?}\nElapsed time for parsing and overall count in seconds: {:.3}s. \
+                "Ddnnf overall count: {:#?}\nElapsed time for parsing, and overall count in seconds: {:.3}s. \
                 (This includes compiling to dDNNF if needed)",
                 ddnnf.rc(),
                 elapsed_time
@@ -285,6 +288,7 @@ fn main() {
         match operation {
             CountFeatures { jobs, .. } |
             CountQueries { jobs, .. } |
+            Stream { jobs } |
             Sat { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             },
@@ -398,22 +402,8 @@ fn main() {
                 println!("\nComputed stream queries and saved the results in {output_file_path}.");
             },
             // switch in the stream mode
-            Stream => {
-                let stdin_channel = spawn_stdin_channel();
-        
-                loop {
-                    match stdin_channel.recv() {
-                        Ok(buffer) => {
-                            let response = ddnnf.handle_stream_msg(&buffer);
-                            if response.as_str() == "exit" { println!("End by 'exit' command"); break; }
-                            println!("{response}");
-                        },
-                        Err(_) => {
-                            println!("End by closing input channel");
-                            break;
-                        },
-                    }
-                }
+            Stream { .. } => {
+                ddnnf.init_stream();
             },
             // writes the anomalies of the d-DNNF to file
             // anomalies are: core, dead, false-optional features and atomic sets
@@ -506,17 +496,4 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
         elapsed_time,
         elapsed_time / parse_queries_file(queries_file.as_str()).len() as f64
     );
-}
-
-// spawns a new thread that listens on stdin and delivers its request to the stream message handling
-fn spawn_stdin_channel() -> Receiver<String> {
-    let (tx, rx) = mpsc::channel::<String>();
-    thread::spawn(move || {
-        let stdin = io::stdin();
-        let lines = stdin.lock().lines();
-        for line in lines {
-            tx.send(line.unwrap()).unwrap()
-        }
-    });
-    rx
 }
