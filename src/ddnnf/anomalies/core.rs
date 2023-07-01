@@ -1,4 +1,4 @@
-use rustc_hash::FxHashSet;
+use std::collections::HashSet;
 
 use crate::{Ddnnf};
 
@@ -11,7 +11,7 @@ impl Ddnnf {
             .filter(|f| {
                 self.literals.get(f).is_some() && self.literals.get(&-f).is_none()
             })
-            .collect::<FxHashSet<i32>>()
+            .collect::<HashSet<i32>>()
     }
 
     /// Checks if removing the feature assigment from the query does not change the query

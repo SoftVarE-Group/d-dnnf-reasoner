@@ -16,6 +16,7 @@ pub mod util;
 
 use core::panic;
 use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::{File, self};
 use std::io::{BufRead, BufReader};
@@ -26,7 +27,6 @@ use std::{
 };
 
 use rug::{Integer, Complete};
-use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ddnnf::{Ddnnf, node::Node, node::NodeType};
 
@@ -130,7 +130,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
 
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
     let mut true_nodes = Vec::new();
 
     // opens the file with a BufReader and
@@ -197,10 +197,10 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let nx_literals: Rc<RefCell<FxHashMap<NodeIndex, i32>>> =
-        Rc::new(RefCell::new(FxHashMap::default()));
-    let literals_nx: Rc<RefCell<FxHashMap<i32, NodeIndex>>> =
-        Rc::new(RefCell::new(FxHashMap::default()));
+    let nx_literals: Rc<RefCell<HashMap<NodeIndex, i32>>> =
+        Rc::new(RefCell::new(HashMap::new()));
+    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
+        Rc::new(RefCell::new(HashMap::new()));
 
     let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, ()>,
                                literals: Vec<i32>|
@@ -322,7 +322,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     let balance_or_children =
         |ddnnf_graph: &mut StableGraph<TId, ()>,
          from: NodeIndex,
-         children: Vec<(NodeIndex, FxHashSet<u32>)>| {
+         children: Vec<(NodeIndex, HashSet<u32>)>| {
         for child in children {
             let and_node = ddnnf_graph.add_node(TId::And);
 
@@ -439,7 +439,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut safe: FxHashMap<NodeIndex, FxHashSet<u32>> = FxHashMap::default();
+    let mut safe: HashMap<NodeIndex, HashSet<u32>> = HashMap::new();
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
@@ -459,10 +459,10 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
     dfs = DfsPostOrder::new(&ddnnf_graph, root);
-    let mut nd_to_usize: FxHashMap<NodeIndex, usize> = FxHashMap::default();
+    let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
     let mut true_nodes = Vec::new();
     let nx_lit = nx_literals.borrow();
 
@@ -520,10 +520,10 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
 // determine the differences in literal-nodes occuring in the child nodes
 fn get_literal_diff(
     di_graph: &StableGraph<TId, ()>,
-    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
-    nx_literals: &FxHashMap<NodeIndex, i32>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
     or_node: NodeIndex,
-) -> Vec<(NodeIndex, FxHashSet<u32>)> {
+) -> Vec<(NodeIndex, HashSet<u32>)> {
     let mut inter_res = Vec::new();
     let neighbors = di_graph.neighbors_directed(or_node, Outgoing);
 
@@ -532,9 +532,9 @@ fn get_literal_diff(
             .push((neighbor, get_literals(di_graph, safe, nx_literals, neighbor)));
     }
 
-    let mut res: Vec<(NodeIndex, FxHashSet<u32>)> = Vec::new();
+    let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
     for i in 0..inter_res.len() {
-        let mut val: FxHashSet<u32> = FxHashSet::default();
+        let mut val: HashSet<u32> = HashSet::new();
         for (j, i_res) in inter_res.iter().enumerate() {
             if i != j {
                 val.extend(&i_res.1);
@@ -551,16 +551,16 @@ fn get_literal_diff(
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
     di_graph: &StableGraph<TId, ()>,
-    safe: &mut FxHashMap<NodeIndex, FxHashSet<u32>>,
-    nx_literals: &FxHashMap<NodeIndex, i32>,
+    safe: &mut HashMap<NodeIndex, HashSet<u32>>,
+    nx_literals: &HashMap<NodeIndex, i32>,
     or_child: NodeIndex,
-) -> FxHashSet<u32> {
+) -> HashSet<u32> {
     let lookup = safe.get(&or_child);
     if let Some(x) = lookup {
         return x.clone();
     }
 
-    let mut res = FxHashSet::default();
+    let mut res = HashSet::new();
     use c2d_lexer::TokenIdentifier::*;
     match di_graph[or_child] {
         And | Or => {
