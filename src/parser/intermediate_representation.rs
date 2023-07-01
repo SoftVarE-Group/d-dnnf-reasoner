@@ -302,7 +302,7 @@ impl IntermediateGraph {
     }
 
     pub fn add_clause(&mut self, clause: &[i32]) -> bool {
-        if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
+        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         const INTER_CNF: &str = "intermediate.cnf"; const INTER_NNF: &str = "intermediate.nnf";
         let (replace, _) = match self.closest_unsplitable_and(&clause) {
             Some(and_node) => and_node,
@@ -385,6 +385,7 @@ impl IntermediateGraph {
             },
             // add unit clause for a feature that does not exist yet by adding node + edge
             None => {
+                println!("built it");
                 let new_lit = if feature.is_positive() {
                     self.graph.add_node(TId::PositiveLiteral)
                 } else {
@@ -403,7 +404,7 @@ mod test {
 
     use serial_test::serial;
 
-    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf};
+    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md};
 
     #[test]
     fn closest_unsplittable_and() {
@@ -414,17 +415,26 @@ mod test {
             vec![42], vec![-5], vec![-8]
         ];
         let output = vec![
-            vec![], vec![-5, 4], vec![-4, 5], vec![-5, -4, -3, 4, 5],
-            vec![-41, 42], vec![-5, -4, -3, 3, 4, 5], vec![-9, -8, -7, 7, 8, 9]
+            None, Some(vec![-5, 4]), Some(vec![-4, 5]), Some(vec![-5, -4, -3, 4, 5]),
+            Some(vec![-41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 9])
         ];
 
         for (index, inp) in input.iter().enumerate() {
-            let mut literals_as_vec = HashSet::<_>::from_iter(
-                (ddnnf.inter_graph.closest_unsplitable_and(inp)).unwrap().1.iter().copied())
-                .into_iter()
-                .collect::<Vec<i32>>();
-            literals_as_vec.sort();
-            assert_eq!(output[index], literals_as_vec);
+            match ddnnf.inter_graph.closest_unsplitable_and(inp) {
+                Some((_replace_and_node, literals)) => {
+                    let mut literals_as_vec = HashSet::<_>::from_iter(
+                        literals.iter().copied())
+                        .into_iter()
+                        .collect::<Vec<i32>>();
+
+                    literals_as_vec.sort();
+                    println!("inp: {inp:?}, output: {literals_as_vec:?}");
+                    assert_eq!(output[index].clone().unwrap(), literals_as_vec);
+                },
+                None => {
+                    assert!(output[index].is_none());
+                }
+            }
         }
     }
 
@@ -488,16 +498,16 @@ mod test {
             let ddnnf = build_ddnnf(path, Some(features));
             let cnf = ddnnf.inter_graph.transform_to_cnf_distributive(ddnnf.inter_graph.root, None);
             let cnf_flat = cnf.join("");
-            let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
+            let mut cnf_file = File::create("tests/data/.redone.cnf").unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-            compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
-            let ddnnf_redone = build_ddnnf("tests/data/redone.nnf", Some(features));
+            compile_cnf("tests/data/.redone.cnf", "tests/data/.redone.nnf");
+            let ddnnf_redone = build_ddnnf("tests/data/.redone.nnf", Some(features));
 
             assert_eq!(ddnnf.rc(), ddnnf_redone.rc());
 
-            fs::remove_file("tests/data/redone.cnf").unwrap();
-            fs::remove_file("tests/data/redone.nnf").unwrap();
+            fs::remove_file("tests/data/.redone.cnf").unwrap();
+            fs::remove_file("tests/data/.redone.nnf").unwrap();
         }
     }
 
@@ -527,5 +537,36 @@ mod test {
 
             assert_eq!(expected_results, results_after_addition);
         }
+    }
+
+    #[test]
+    fn adding_unit_clause() {
+        // small example, missing the "1 0" unit clause
+        const CNF_PATH: &str = "tests/data/.small_missing_unit.cnf";
+        let cnf_flat = "p cnf 4 2\n2 3 0\n-2 -3 0\n";
+        let mut cnf_file = File::create(CNF_PATH).unwrap();
+        cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
+
+        let mut ddnnf_sb = build_ddnnf("tests/data/small_ex_c2d.nnf", Some(4));
+        let mut ddnnf_missing_clause1 = build_ddnnf(CNF_PATH, None);
+        let mut ddnnf_missing_clause2 = ddnnf_missing_clause1.clone();
+
+        ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
+        ddnnf_missing_clause2.inter_graph.add_clause(&vec![1]); // indirectly via adding a clause
+        ddnnf_missing_clause1.rebuild();
+        ddnnf_missing_clause2.rebuild();
+
+        write_as_mermaid_md(&mut ddnnf_missing_clause1, &vec![], "this.md").unwrap();
+        write_as_mermaid_md(&mut ddnnf_missing_clause2, &vec![], "that.md").unwrap();
+        // check whether the dDNNFs contain the same configurations
+        assert_eq!(
+            ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
+            ddnnf_missing_clause1.enumerate(&mut vec![], 1_000).unwrap()
+        );
+
+        assert_eq!(
+            ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
+            ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap()
+        );
     }
 }
