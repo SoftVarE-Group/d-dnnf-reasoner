@@ -10,6 +10,7 @@ use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use itertools::Itertools;
 use rand_distr::num_traits::Signed;
 
+use std::cmp;
 use std::fs::File;
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
 use std::path::{Path};
@@ -430,15 +431,21 @@ fn main() {
                 let cnf_s = cli.file_path.unwrap();
                 let cnf = cnf_s.as_str();
                 let mut start;
+                let mut skips = 0;
 
-                let clauses = get_all_clauses_cnf(cnf);
-                for clause in clauses.into_iter() {
-                    println!("Clause: {clause:?}");
+                let mut clauses = get_all_clauses_cnf(cnf);
+                use rand::prelude::SliceRandom; clauses.shuffle(&mut rand::thread_rng());
+                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
+                for (index, clause) in clauses.into_iter().enumerate() {
+                    if index == total_clauses { break; }
+                    println!("{index}/{total_clauses} clause: {clause:?}");
                     remove_clause_cnf(cnf, &clause, None);
                     let mut inter_ddnnf = build_ddnnf(cnf, Some(ddnnf.number_of_variables));
                     
                     start = Instant::now();
                     if !inter_ddnnf.inter_graph.add_clause(&clause) {
+                        skips += 1;
+                        add_clause_cnf(cnf, &clause);
                         continue;
                     }
                     inter_ddnnf.inter_graph.rebuild(None);
@@ -464,6 +471,7 @@ fn main() {
 
                 println!("Total time naive method:     {total_naive}");
                 println!("Total time recompile method: {total_recompile}");
+                println!("skiped {skips} out of {} clauses, because the closest AND node is the root.", total_clauses);
             },
         }
     }
