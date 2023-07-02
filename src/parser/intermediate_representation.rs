@@ -36,7 +36,7 @@ impl IntermediateGraph {
 
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
     /// list of nodes which we use for counting operations and other types of queries.
-    pub fn rebuild(&self, alt_root: Option<NodeIndex>) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
+    pub fn rebuild(&mut self, alt_root: Option<NodeIndex>) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
         // always make sure that there are no cycles
         debug_assert!(!is_cyclic_directed(&self.graph));
 
@@ -180,13 +180,60 @@ impl IntermediateGraph {
         cached_and
     }
 
+    // Change the structure by splitting one AND node into two.
+    // In the following, we focus on the new AND' instead of AND, resulting
+    // in a smaller portion of the dDNNF, we have to travers
+    // Example (with c1 and c2 as the relevant_children):
+    //
+    //           AND                        AND
+    //      ______|______      =>    _______|_______
+    //     /   /  |  \   \          |      |   \    \
+    //    c1  c2 c3  ... cn        AND'   c3   ...  cn
+    //                            /   \
+    //                           c1   c2
+    //
+    fn divide_and(&mut self, initial_start: NodeIndex, clause: &[i32]) -> NodeIndex {
+        if clause.is_empty() { return initial_start; }
+        
+        // Find those children that are relevant to the provided clause.
+        // Those all contain at least one of the literals of the clause.
+        let mut relevant_children = Vec::new();
+        let mut contains_at_least_one_irrelevant = false;
+        let mut children = self.graph.neighbors_directed(initial_start, Outgoing).detach();
+        while let Some(child) = children.next_node(&self.graph) {
+            let lits = self.literal_children.get(&child).unwrap();
+            if clause.iter().any(|f| lits.contains(f)) {
+                relevant_children.push(child);
+            } else {
+                contains_at_least_one_irrelevant = true;
+            }
+        }
+
+        // If there is no irrelevant child, it makes no sense to divide the AND node.
+        if !contains_at_least_one_irrelevant {
+            return initial_start;
+        }
+
+        // Create the new AND node and adjust the edges.
+        let new_and = self.graph.add_node(TId::And);
+        for child in relevant_children {
+            if let Some(edge) = self.graph.find_edge(initial_start, child) {
+                self.graph.remove_edge(edge);
+            }
+            self.graph.add_edge(new_and, child, ());
+        }
+
+        new_and
+    }
+
     /// From a starting point in the dDNNF, we transform that subgraph into the CNF format,
     /// using Tseitin's transformation.
     /// Besides the CNF itself, the return type also gives a map to map the literals to their
     /// new corresponding number. That is necessary because the CNF format does not allow gaps in their
     /// variables. All the new literal indices have a lower index than the following Tseitin variables.
-    pub fn transform_to_cnf_tseitin(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> (Vec<String>, HashMap<i32, i32>) {
-        let (nodes, _, _) = self.rebuild(Some(starting_point));
+    pub fn transform_to_cnf_tseitin(&mut self, starting_point: NodeIndex, clause: &[i32]) -> (Vec<String>, NodeIndex, HashMap<i32, i32>) {
+        let adjusted_starting_point = self.divide_and(starting_point, clause);
+        let (nodes, _, _) = self.rebuild(Some(adjusted_starting_point));
 
         let mut re_index_mapping: HashMap<i32, i32> = HashMap::new();
         let mut cnf = vec![String::from("p cnf ")];
@@ -245,17 +292,19 @@ impl IntermediateGraph {
         cnf.push(format!("{} 0\n", clause_var[nodes.len() - 1]));
 
         // add the new clause to the CNF
-        if clause.is_some() {
+        if !clause.is_empty() {
             cnf.push(format!("{} 0\n", format_vec(
-                clause.unwrap().iter()
+                clause.iter()
                     .map(|f| {
                         // mapping must contain feature because we searched for the fitting AND node earlier
-                        let re_index = re_index_mapping.get(&(f.unsigned_abs() as i32));
-                        if re_index.is_none() {
-                            println!("reindex_mapping failed for {f}: {re_index_mapping:?}")
+                        match re_index_mapping.get(&(f.unsigned_abs() as i32)) {
+                            Some(&re_index) => if f.is_positive() { re_index as i32 } else { -(re_index as  i32) },
+                            None => {
+                                re_index_mapping.insert(f.unsigned_abs() as i32, lit_counter);
+                                lit_counter += 1;
+                                if f.is_positive() { (lit_counter - 1) as i32 } else { -((lit_counter - 1) as  i32) }
+                            },
                         }
-                        let re_index_u = *re_index.unwrap();
-                        if f.is_positive() { re_index_u as i32 } else { -(re_index_u as  i32) }
                     })
             )));
         }
@@ -270,11 +319,11 @@ impl IntermediateGraph {
             re_index_mapping.insert(value, key);
         }
 
-        (cnf, re_index_mapping)
+        (cnf, adjusted_starting_point, re_index_mapping)
     }
 
     /// Experimental distributive translation method to get from dDNNF to CNF and back
-    pub fn transform_to_cnf_distributive(&self, starting_point: NodeIndex, clause: Option<&[i32]>) -> Vec<String> {
+    pub fn transform_to_cnf_distributive(&mut self, starting_point: NodeIndex, clause: &[i32]) -> Vec<String> {
         let (nodes, _, _) = self.rebuild(Some(starting_point));
         let mut clauses: Vec<Vec<Vec<i32>>> = Vec::new();
         let mut literals = HashSet::new();
@@ -341,7 +390,7 @@ impl IntermediateGraph {
         for clause in clauses.last().unwrap() {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
-        if clause.is_some() { cnf.push(format!("{} 0\n", format_vec(clause.unwrap().iter()))); }
+        if !clause.is_empty() { cnf.push(format!("{} 0\n", format_vec(clause.iter()))); }
         cnf
     }
 
@@ -357,8 +406,9 @@ impl IntermediateGraph {
 
         //println!("elapsed time: finding AND: {}", _start.elapsed().as_secs_f64());
         _start = Instant::now();
-        let (cnf, re_indices) = self.transform_to_cnf_tseitin(replace, Some(clause));
-        if cnf.len() > 20_000 { return false; }
+        let (cnf, adjusted_replace, re_indices) = self.transform_to_cnf_tseitin(replace, clause);
+        println!("Tseitin CNF clauses: {}", cnf.len());
+        if cnf.len() > 10_000 { return false; }
         //println!("elapsed time: tseitin: {}", _start.elapsed().as_secs_f64());
 
         _start = Instant::now();
@@ -373,20 +423,45 @@ impl IntermediateGraph {
         let sup_ddnnf = build_ddnnf(INTER_NNF, Some(last_lit_number));
         //println!("elapsed time: ddnnf subgraph: {}", _start.elapsed().as_secs_f64());
 
+        // Remove all edges of the old graph. We keep the nodes.
+        // Most are useless but some are used in other parts of the graph. Hence, we keep them
+        let mut dfs = DfsPostOrder::new(&self.graph, adjusted_replace);
+        while let Some(nx) = dfs.next(&self.graph) {
+            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+            while let Some(edge_to_child) = children.next_edge(&self.graph) {
+                self.graph.remove_edge(edge_to_child);
+            }
+        }
+
         // add the new subgraph as unconnected additional graph
         let sub = sup_ddnnf.inter_graph;
         let mut dfs = DfsPostOrder::new(&sub.graph, sub.root);
         let mut cache = HashMap::new();
+        println!("{:?}", re_indices);
         while let Some(nx) = dfs.next(&sub.graph) {
             let new_nx = match sub.graph[nx] {
                 TId::Literal { feature } => {
                     let re_lit = re_indices.get(&(feature.unsigned_abs() as i32));
                     if re_lit.is_some() {
                         let signed_lit = re_lit.unwrap() * feature.signum();
-                        *self.literals_nx.get(&signed_lit).unwrap()
+                        match self.literals_nx.get(&signed_lit) {
+                            Some(&lit) => {
+                                println!("fount ex lit: {feature}, {signed_lit:?}");
+                                lit
+                            },
+                            // Feature was core/dead in the starting dDNNF -> no occurence but also not tseitin
+                            None => {
+                                println!("missed core: {feature}, {signed_lit:?}");
+                                let new_lit_nx = self.graph.add_node(TId::Literal { feature: signed_lit });
+                                self.literals_nx.insert(signed_lit, new_lit_nx);
+                                new_lit_nx
+                            },
+                        }
                     } else { // tseitin
-                        let new_lit_nx = self.graph.add_node(sub.graph[nx]);
+                        println!("tseitin: {feature:?}");
                         let offset_lit = if feature.is_positive() { feature + 1_000_000 } else { feature - 1_000_000 };
+                        let new_lit = TId::Literal { feature: offset_lit };
+                        let new_lit_nx = self.graph.add_node(new_lit);
                         self.literals_nx.insert(offset_lit, new_lit_nx);
                         new_lit_nx
                     }
@@ -403,7 +478,7 @@ impl IntermediateGraph {
 
         // remove the reference to the starting node with the new subgraph
         let new_sub_root = *cache.get(&sub.root).unwrap();
-        let mut parents = self.graph.neighbors_directed(replace, Incoming).detach();
+        let mut parents = self.graph.neighbors_directed(adjusted_replace, Incoming).detach();
         while let Some((parent_edge, parent_node)) = parents.next(&self.graph) {
             self.graph.remove_edge(parent_edge);
             self.graph.add_edge(parent_node, new_sub_root, ());
@@ -441,6 +516,7 @@ mod test {
     use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md};
 
     #[test]
+    #[serial]
     fn closest_unsplittable_and() {
         let mut ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
@@ -474,6 +550,8 @@ mod test {
     #[test]
     #[serial]
     fn from_ddnnf_to_cnf() {
+        const CNF_REDONE: &str = "tests/data/.redone.cnf"; const DDNNF_REDONE: &str = "tests/data/.redone.nnf";
+
         let ddnnf_file_paths = vec![
             ("tests/data/small_ex_c2d.nnf", 4),
             ("tests/data/small_ex_d4.nnf", 4),
@@ -484,13 +562,13 @@ mod test {
             let mut ddnnf = build_ddnnf(path, Some(features));
             let mut complete_configs_direct = ddnnf.enumerate(&mut vec![], 1_000_000).unwrap();
             
-            let (cnf, reverse_indexing) = ddnnf.inter_graph.transform_to_cnf_tseitin(ddnnf.inter_graph.root, None);
+            let (cnf, _, reverse_indexing) = ddnnf.inter_graph.transform_to_cnf_tseitin(ddnnf.inter_graph.root, &[]);
             let cnf_flat = cnf.join("");
-            let mut cnf_file = File::create("tests/data/redone.cnf").unwrap();
+            let mut cnf_file = File::create(CNF_REDONE).unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-            compile_cnf("tests/data/redone.cnf", "tests/data/redone.nnf");
-            let mut ddnnf_redone = build_ddnnf("tests/data/redone.nnf", Some(features));
+            compile_cnf(CNF_REDONE, DDNNF_REDONE);
+            let mut ddnnf_redone = build_ddnnf(DDNNF_REDONE, Some(features));
             let mut complete_configs_recompilation = ddnnf_redone.enumerate(&mut vec![], 1_000_000).unwrap();
 
             assert_eq!(complete_configs_direct.len(), complete_configs_recompilation.len());
@@ -513,14 +591,16 @@ mod test {
             complete_configs_recompilation.sort();
             assert_eq!(complete_configs_direct, complete_configs_recompilation);
 
-            fs::remove_file("tests/data/redone.cnf").unwrap();
-            fs::remove_file("tests/data/redone.nnf").unwrap();
+            fs::remove_file(CNF_REDONE).unwrap();
+            fs::remove_file(DDNNF_REDONE).unwrap();
         }
     }
 
     #[test]
     #[serial]
     fn from_ddnnf_to_cnf_distributive() {
+        const CNF_REDONE: &str = "tests/data/.redone_d.cnf"; const DDNNF_REDONE: &str = "tests/data/.redone_d.nnf";
+
         let ddnnf_file_paths = vec![
             ("tests/data/small_ex_c2d.nnf", 4),
             ("tests/data/small_ex_d4.nnf", 4),
@@ -528,19 +608,19 @@ mod test {
         ];
 
         for (path, features) in ddnnf_file_paths {
-            let ddnnf = build_ddnnf(path, Some(features));
-            let cnf = ddnnf.inter_graph.transform_to_cnf_distributive(ddnnf.inter_graph.root, None);
+            let mut ddnnf = build_ddnnf(path, Some(features));
+            let cnf = ddnnf.inter_graph.transform_to_cnf_distributive(ddnnf.inter_graph.root, &[]);
             let cnf_flat = cnf.join("");
-            let mut cnf_file = File::create("tests/data/.redone.cnf").unwrap();
+            let mut cnf_file = File::create(CNF_REDONE).unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-            compile_cnf("tests/data/.redone.cnf", "tests/data/.redone.nnf");
-            let ddnnf_redone = build_ddnnf("tests/data/.redone.nnf", Some(features));
+            compile_cnf(CNF_REDONE, DDNNF_REDONE);
+            let ddnnf_redone = build_ddnnf(DDNNF_REDONE, Some(features));
 
             assert_eq!(ddnnf.rc(), ddnnf_redone.rc());
 
-            fs::remove_file("tests/data/.redone.cnf").unwrap();
-            fs::remove_file("tests/data/.redone.nnf").unwrap();
+            fs::remove_file(CNF_REDONE).unwrap();
+            fs::remove_file(DDNNF_REDONE).unwrap();
         }
     }
 
@@ -573,6 +653,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn adding_unit_clause() {
         // small example, missing the "1 0" unit clause
         const CNF_PATH: &str = "tests/data/.small_missing_unit.cnf";
@@ -591,6 +672,7 @@ mod test {
 
         write_as_mermaid_md(&mut ddnnf_missing_clause1, &vec![], "this.md").unwrap();
         write_as_mermaid_md(&mut ddnnf_missing_clause2, &vec![], "that.md").unwrap();
+
         // check whether the dDNNFs contain the same configurations
         assert_eq!(
             ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
@@ -601,5 +683,7 @@ mod test {
             ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
             ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap()
         );
+
+        fs::remove_file(CNF_PATH).unwrap();
     }
 }
