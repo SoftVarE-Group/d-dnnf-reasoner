@@ -51,7 +51,7 @@ impl Default for Ddnnf {
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
     pub fn new(
-        inter_graph: IntermediateGraph,
+        mut inter_graph: IntermediateGraph,
         number_of_variables: u32,
     ) -> Ddnnf {
         let dfs_ig = inter_graph.rebuild(None);

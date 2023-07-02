@@ -1,10 +1,12 @@
 extern crate ddnnf_lib;
 
 use assert_cmd::prelude::*; // Add methods on commands
-use predicates::prelude::*; // Used for writing assertions
+use predicates::prelude::*;
+use serial_test::serial; // Used for writing assertions
 use std::process::Command; // Run programs
 
 #[test]
+#[serial]
 fn compiles_cnf_to_d_dnnf() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("ddnnife")?;
     cmd.arg("tests/data/auto1.cnf");

@@ -258,11 +258,13 @@ mod test {
     use std::{collections::HashSet};
 
     use rand::thread_rng;
+    use serial_test::serial;
 
     use super::*;
     use crate::parser::build_ddnnf;
 
     #[test]
+    #[serial]
     fn enumeration_small_ddnnf() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
@@ -313,6 +315,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn enumeration_big_ddnnf() {
         let mut auto1: Ddnnf =
             build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
@@ -333,6 +336,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn enumeration_step_by_step() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));  
@@ -376,6 +380,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn enumeration_is_not_possible() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
@@ -392,6 +397,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn sampling_validity() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
@@ -413,6 +419,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn sampling_seeding() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
@@ -448,6 +455,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn sampling_is_not_possible() {
         let mut vp9: Ddnnf =
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42));

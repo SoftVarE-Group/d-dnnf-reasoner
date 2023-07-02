@@ -4,10 +4,12 @@ use ddnnf_lib::ddnnf::Ddnnf;
 use ddnnf_lib::parser::{self, persisting::write_ddnnf};
 
 use file_diff::diff_files;
+use serial_test::serial;
 use std::fs;
 use std::fs::File;
 
 #[test]
+#[serial]
 fn card_of_features_normal_and_reloaded_test() {
     // default way to compute card of features with a d-DNNF in d4 standard
     let d4_out = "./tests/data/auto1_d4_fs.csv";

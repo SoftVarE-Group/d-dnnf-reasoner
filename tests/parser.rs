@@ -4,8 +4,10 @@ use ddnnf_lib::ddnnf::{Ddnnf, node::NodeType::*};
 use ddnnf_lib::parser;
 
 use rug::Integer;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn ddnnf_parsing_test() {
     let ddnnf_d4: Ddnnf =
         parser::build_ddnnf("./tests/data/small_ex_d4.nnf", Some(4));
