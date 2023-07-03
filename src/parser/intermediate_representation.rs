@@ -18,16 +18,17 @@ use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 pub struct IntermediateGraph {
     graph: StableGraph::<TId, ()>,
     pub root: NodeIndex,
+    number_of_variables: u32,
     literals_nx: HashMap<i32, NodeIndex>,
     literal_children: HashMap<NodeIndex, HashSet<i32>>
 }
 
 impl IntermediateGraph {
     /// Creates a new IntermediateGraph 
-    pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, literals_nx: HashMap<i32, NodeIndex>) -> IntermediateGraph {
+    pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, number_of_variables: u32, literals_nx: HashMap<i32, NodeIndex>) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
-            graph, root, literals_nx,
+            graph, root, number_of_variables, literals_nx,
             literal_children: HashMap::new()
         };
         inter_graph.literal_children = get_literal_diffs(&inter_graph.graph, inter_graph.root);
@@ -222,6 +223,7 @@ impl IntermediateGraph {
             }
             self.graph.add_edge(new_and, child, ());
         }
+        self.graph.add_edge(initial_start, new_and, ());
 
         new_and
     }
@@ -234,6 +236,12 @@ impl IntermediateGraph {
     pub fn transform_to_cnf_tseitin(&mut self, starting_point: NodeIndex, clause: &[i32]) -> (Vec<String>, NodeIndex, HashMap<i32, i32>) {
         let adjusted_starting_point = self.divide_and(starting_point, clause);
         let (nodes, _, _) = self.rebuild(Some(adjusted_starting_point));
+
+        let initial_node_count = self.rebuild(None).0.len();
+        print!(
+            "Replacing {}/{} nodes. That are {:.3}%; ",
+            nodes.len(), initial_node_count, (nodes.len() as f64 / initial_node_count as f64) * 100.0
+        );
 
         let mut re_index_mapping: HashMap<i32, i32> = HashMap::new();
         let mut cnf = vec![String::from("p cnf ")];
@@ -395,14 +403,14 @@ impl IntermediateGraph {
     }
 
     pub fn add_clause(&mut self, clause: &[i32]) -> bool {
-        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
+        if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         let mut _start = Instant::now();
         const INTER_CNF: &str = "intermediate.cnf"; const INTER_NNF: &str = "intermediate.nnf";
         let (replace, _) = match self.closest_unsplitable_and(&clause) {
             Some(and_node) => and_node,
             None => { return false; }
         };
-        if replace == self.root { return false; }
+        //if replace == self.root { return false; }
 
         //println!("elapsed time: finding AND: {}", _start.elapsed().as_secs_f64());
         _start = Instant::now();
@@ -437,7 +445,7 @@ impl IntermediateGraph {
         let sub = sup_ddnnf.inter_graph;
         let mut dfs = DfsPostOrder::new(&sub.graph, sub.root);
         let mut cache = HashMap::new();
-        println!("{:?}", re_indices);
+
         while let Some(nx) = dfs.next(&sub.graph) {
             let new_nx = match sub.graph[nx] {
                 TId::Literal { feature } => {
@@ -446,19 +454,16 @@ impl IntermediateGraph {
                         let signed_lit = re_lit.unwrap() * feature.signum();
                         match self.literals_nx.get(&signed_lit) {
                             Some(&lit) => {
-                                println!("fount ex lit: {feature}, {signed_lit:?}");
                                 lit
                             },
                             // Feature was core/dead in the starting dDNNF -> no occurence but also not tseitin
                             None => {
-                                println!("missed core: {feature}, {signed_lit:?}");
                                 let new_lit_nx = self.graph.add_node(TId::Literal { feature: signed_lit });
                                 self.literals_nx.insert(signed_lit, new_lit_nx);
                                 new_lit_nx
                             },
                         }
                     } else { // tseitin
-                        println!("tseitin: {feature:?}");
                         let offset_lit = if feature.is_positive() { feature + 1_000_000 } else { feature - 1_000_000 };
                         let new_lit = TId::Literal { feature: offset_lit };
                         let new_lit_nx = self.graph.add_node(new_lit);
@@ -490,19 +495,38 @@ impl IntermediateGraph {
         true
     }
 
-    /// Adds the necessary reference to extend a dDNNF by a unit clause
-    fn _add_unit_clause(&mut self, feature: i32) {
-        match self.literals_nx.get(&feature) {
-            // add unit clause to an existing literal by adding an edge from root to literal
-            Some(node) => {
-                self.graph.add_edge(self.root, *node, ());
-            },
-            // add unit clause for a feature that does not exist yet by adding node + edge
-            None => {
-                let new_lit = self.graph.add_node(TId::Literal { feature });
-                self.graph.add_edge(self.root, new_lit, ());
-                self.literals_nx.insert(feature, new_lit);
-            },
+    /// Adds the necessary reference / removes them to extend a dDNNF by a unit clause
+    fn add_unit_clause(&mut self, feature: i32) {
+        if feature.unsigned_abs() <= self.number_of_variables {
+            // it's an old feature
+            match self.literals_nx.get(&-feature) {
+                // Add a unit clause by removing the existence of its contradiction
+                Some(&node) => {
+                    self.graph.remove_node(node);
+                },
+                // If its contradiction does not exist, we don't have to do anything
+                None => (),
+            }
+        } else {
+            // one / multiple new features depending on feature number
+            // Example: If the current #variables = 42 and the new feature number is 50,
+            // we have to add all the features from 43 to 49 (including) as optional features (or triangle at root)
+            while self.number_of_variables != feature.unsigned_abs() {
+                self.number_of_variables += 1;
+                
+                let new_or = self.graph.add_node(TId::Or);
+                self.graph.add_edge(self.root, new_or, ());
+                
+                let new_positive_lit = self.graph.add_node(TId::Literal { feature: self.number_of_variables as i32 });
+                let new_negative_lit = self.graph.add_node(TId::Literal { feature: -(self.number_of_variables as i32) });
+                self.graph.add_edge(new_or, new_positive_lit, ());
+                self.graph.add_edge(new_or, new_negative_lit, ());
+            }
+            
+            // Add the actual new feature
+            let new_feature = self.graph.add_node(TId::Literal { feature });
+            self.graph.add_edge(self.root, new_feature, ());
+            self.number_of_variables = feature.unsigned_abs();
         }
     }
 }
@@ -513,7 +537,7 @@ mod test {
 
     use serial_test::serial;
 
-    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md};
+    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf};
 
     #[test]
     #[serial]
@@ -665,24 +689,24 @@ mod test {
         let mut ddnnf_missing_clause1 = build_ddnnf(CNF_PATH, None);
         let mut ddnnf_missing_clause2 = ddnnf_missing_clause1.clone();
 
-        ddnnf_missing_clause1.inter_graph._add_unit_clause(1); // add the unit clause directly
+        ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
         ddnnf_missing_clause2.inter_graph.add_clause(&vec![1]); // indirectly via adding a clause
         ddnnf_missing_clause1.rebuild();
         ddnnf_missing_clause2.rebuild();
 
-        write_as_mermaid_md(&mut ddnnf_missing_clause1, &vec![], "this.md").unwrap();
-        write_as_mermaid_md(&mut ddnnf_missing_clause2, &vec![], "that.md").unwrap();
+        // We have to sort the results because the inner structure does not have to be identical
+        let mut sb_enumeration = ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap();
+        sb_enumeration.sort();
+
+        let mut ms1_enumeration = ddnnf_missing_clause1.enumerate(&mut vec![], 1_000).unwrap();
+        ms1_enumeration.sort();
+
+        let mut ms2_enumeration = ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap();
+        ms2_enumeration.sort();
 
         // check whether the dDNNFs contain the same configurations
-        assert_eq!(
-            ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
-            ddnnf_missing_clause1.enumerate(&mut vec![], 1_000).unwrap()
-        );
-
-        assert_eq!(
-            ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap(),
-            ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap()
-        );
+        assert_eq!(sb_enumeration, ms1_enumeration);
+        assert_eq!(sb_enumeration, ms2_enumeration);
 
         fs::remove_file(CNF_PATH).unwrap();
     }

@@ -434,8 +434,8 @@ fn main() {
                 let mut skips = 0;
 
                 let mut clauses = get_all_clauses_cnf(cnf);
-                use rand::prelude::SliceRandom; clauses.shuffle(&mut rand::thread_rng());
-                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
+                //use rand::prelude::SliceRandom; clauses.shuffle(&mut rand::thread_rng());
+                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 19);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses { break; }
                     println!("{index}/{total_clauses} clause: {clause:?}");

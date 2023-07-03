@@ -152,6 +152,7 @@ mod test {
     use crate::parser::build_ddnnf;
 
     #[test]
+    #[serial]
     fn features_opposing_indexes() {
         let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
         
@@ -160,6 +161,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn rebuild_ddnnf() {
         let mut ddnnfs = Vec::new();
         ddnnfs.push(build_ddnnf("tests/data/auto1_c2d.nnf", None));

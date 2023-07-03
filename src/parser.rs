@@ -170,7 +170,12 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         );
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, node_indices[node_indices.len() - 1], literals_nx);
+    let intermediate_graph = IntermediateGraph::new(
+        ddnnf_graph,
+        node_indices[node_indices.len() - 1],
+        variables,
+        literals_nx
+    );
     Ddnnf::new(intermediate_graph, variables)
 }
 
@@ -431,7 +436,12 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         }
     }
 
-    let intermediate_graph = IntermediateGraph::new(ddnnf_graph, root, literals_nx.borrow().clone());
+    let intermediate_graph = IntermediateGraph::new(
+        ddnnf_graph,
+        root,
+        total_features,
+        literals_nx.borrow().clone()
+    );
     Ddnnf::new(intermediate_graph, total_features)
 }
 
