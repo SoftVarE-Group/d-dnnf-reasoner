@@ -8,6 +8,7 @@ use ddnnf_lib::parser::build_ddnnf;
 use ddnnf_lib::parser::from_cnf::{get_all_clauses_cnf, remove_clause_cnf, add_clause_cnf};
 use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use itertools::Itertools;
+use rand::rngs::StdRng;
 use rand_distr::num_traits::Signed;
 
 use std::cmp;
@@ -434,8 +435,9 @@ fn main() {
                 let mut skips = 0;
 
                 let mut clauses = get_all_clauses_cnf(cnf);
-                //use rand::prelude::SliceRandom; clauses.shuffle(&mut rand::thread_rng());
-                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 19);
+                use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(40);
+                use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
+                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses { break; }
                     println!("{index}/{total_clauses} clause: {clause:?}");
@@ -443,12 +445,11 @@ fn main() {
                     let mut inter_ddnnf = build_ddnnf(cnf, Some(ddnnf.number_of_variables));
                     
                     start = Instant::now();
-                    if !inter_ddnnf.inter_graph.add_clause(&clause) {
+                    if !inter_ddnnf.apply_changes(&vec![&clause]) {
                         skips += 1;
                         add_clause_cnf(cnf, &clause);
                         continue;
                     }
-                    inter_ddnnf.inter_graph.rebuild(None);
                     diff_recompile = start.elapsed().as_secs_f64();
                     total_recompile += diff_recompile;
                     
@@ -471,7 +472,7 @@ fn main() {
 
                 println!("Total time naive method:     {total_naive}");
                 println!("Total time recompile method: {total_recompile}");
-                println!("skiped {skips} out of {} clauses, because the closest AND node is the root.", total_clauses);
+                println!("skiped {skips} out of {} clauses, because the CNF was to big.", total_clauses);
             },
         }
     }

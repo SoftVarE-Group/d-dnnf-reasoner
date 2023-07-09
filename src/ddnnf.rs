@@ -87,12 +87,17 @@ impl Ddnnf {
     /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
     /// The clauses are disjuncted.
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4) 
-    pub fn apply_changes(&mut self, clauses: &Vec<&[i32]>) {
+    pub fn apply_changes(&mut self, clauses: &Vec<&[i32]>) -> bool {
         for clause in clauses {
-            self.inter_graph.add_clause(clause);
+            let reduced_query = self.reduce_query(clause);
+            if reduced_query.is_empty() { return true; }
+            if !self.inter_graph.add_clause(&reduced_query) {
+                return false;
+            }
         }
         
         self.rebuild();
+        true
     }
 
     /// Returns the current count of the root node in the ddnnf

@@ -170,11 +170,14 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         );
     }
 
+    let root = node_indices[node_indices.len() - 1];
+    let literal_diffs = get_literal_diffs(&ddnnf_graph, root);
     let intermediate_graph = IntermediateGraph::new(
         ddnnf_graph,
-        node_indices[node_indices.len() - 1],
+        root,
         variables,
-        literals_nx
+        literals_nx,
+        literal_diffs
     );
     Ddnnf::new(intermediate_graph, variables)
 }
@@ -412,7 +415,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let literal_diff: HashMap<NodeIndex, HashSet<i32>>
+    let mut literal_diff: HashMap<NodeIndex, HashSet<i32>>
         = get_literal_diffs(&ddnnf_graph, root);
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
@@ -436,11 +439,13 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         }
     }
 
+    extend_literal_diffs(&ddnnf_graph, &mut literal_diff, root);
     let intermediate_graph = IntermediateGraph::new(
         ddnnf_graph,
         root,
         total_features,
-        literals_nx.borrow().clone()
+        literals_nx.borrow().clone(),
+        literal_diff
     );
     Ddnnf::new(intermediate_graph, total_features)
 }
@@ -474,6 +479,20 @@ pub fn get_literal_diffs(
         get_literals(di_graph, &mut safe, nx);
     }
     safe
+}
+
+/// Computes the combined literals used in its children
+pub fn extend_literal_diffs(
+    di_graph: &StableGraph<TId, ()>,
+    current_safe: &mut HashMap<NodeIndex, HashSet<i32>>,
+    root: NodeIndex
+) {
+    let mut dfs = DfsPostOrder::new(di_graph, root);
+    while let Some(nx) = dfs.next(di_graph) {
+        if !current_safe.contains_key(&nx) {
+            get_literals(di_graph, current_safe, nx);
+        }
+    }
 }
 
 // determine what literal-nodes the current node is or which occur in its children

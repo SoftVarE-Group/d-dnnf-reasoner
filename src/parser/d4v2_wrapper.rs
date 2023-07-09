@@ -1,6 +1,5 @@
 use std::{
     process::{Command, self},
-    fs
 };
 
 #[cfg(windows)] const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
@@ -20,17 +19,16 @@ pub(crate) fn compile_cnf(path_in: &str, path_out: &str) {
     }
 
     // persist the binary data to a callable file
-    std::fs::write(EXECUTABLE_PATH, D4V2)
-        .expect("failed to write file");
-    set_permissions();
+    if !std::path::Path::new(EXECUTABLE_PATH).exists() {
+        std::fs::write(EXECUTABLE_PATH, D4V2)
+            .expect("failed to write file");
+        set_permissions();
+    }
 
     // execute the command to compile a dDNNF from a CNF file
     Command::new(String::from("./") + EXECUTABLE_PATH)
         .args(["-i", path_in, "-m", "ddnnf-compiler", "--dump-ddnnf", path_out])
         .output().unwrap();
-    
-    // Remove it again, after the call. This operation is very cheap!
-    fs::remove_file(EXECUTABLE_PATH).unwrap();
 }
 
 // When writing the stored bytes of the binary to a file, 
