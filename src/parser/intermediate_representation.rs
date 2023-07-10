@@ -1,10 +1,10 @@
 use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::Instant, path::Path, cmp::max, panic};
 
-use itertools::{Itertools};
+use itertools::Itertools;
 use petgraph::{
     stable_graph::{StableGraph, NodeIndex},
-    visit::{DfsPostOrder},
-    algo::{is_cyclic_directed},
+    visit::DfsPostOrder,
+    algo::is_cyclic_directed,
     Direction::{Incoming, Outgoing}
 };
 
@@ -183,121 +183,6 @@ impl IntermediateGraph {
         cached_and
     }
 
-    /*
-    /// For a given clause we search for the AND node that contains all literals of that clause
-    /// and therefore all other clauses that contain those literals and that has as little children
-    /// as possible.
-    /// If we can't find any suitable literal (for instance the clause contains a new literal)
-    /// or the best AND node is the root node, we return new solution because our best option is to recompile
-    /// the whole CNF.
-    pub fn closest_unsplitable_ands(&mut self, clause: &[i32]) -> Option<Vec<(NodeIndex, HashSet<i32>)>> {
-        if clause.is_empty() { return None }
-
-        let mut sets = Vec::new();
-
-        for literal in clause {
-            for literal_pair in [literal, &-literal] {
-                match self.literals_nx.get(literal_pair) {
-                    // A literal node can contain multiple parents. We need to make sure that each direct
-                    // parent gets its own set to ensure including all connections towards the literal within
-                    // out target AND node.
-                    Some(lit) => {
-                        let mut literal_parents = 
-                        self.graph.neighbors_directed(*lit, Incoming).detach();
-                    
-                        while let Some(parent) = literal_parents.next_node(&self.graph) {
-                            let mut set = HashSet::new();
-                            self.first_mark(&mut set, parent);
-                            sets.push(set);
-                        }
-                    },
-                    // Feature might be core or dead to this point.
-                    // Hence, we can't find a matching literal and we don't have to replace anything.
-                    None => (),
-                }
-            }
-        }
-
-
-
-        None
-        
-        for literal in clause {
-            for literal_pair in [literal, &-literal] {
-                match self.literals_nx.get(literal_pair) {
-                    // A literal node can contain multiple parents. We need to make sure that each direct
-                    // parent gets its own set to ensure including all connections towards the literal within
-                    // out target AND node.
-                    Some(lit) => {
-                        let mut literal_parents = 
-                        self.graph.neighbors_directed(*lit, Incoming).detach();
-                    
-                        while let Some(parent) = literal_parents.next_node(&self.graph) {
-                            let mut set = HashSet::new();
-                            self.first_mark(&mut set, parent);
-                            sets.push(set);
-                        }
-                    },
-                    // Feature might be core or dead to this point.
-                    // Hence, we can't find a matching literal and we don't have to replace anything.
-                    None => (),
-                }
-            }
-        }
-
-        // TODO Handle complete new clauses
-        if sets.is_empty() { return None; }
-
-        // Get the intersection of all sets
-        let mut common_binaries: Box<dyn Iterator<Item = NodeIndex>> =
-        Box::new(sets.pop().into_iter().flatten());
-        
-        for current_set in sets.clone() {
-            common_binaries = Box::new(common_binaries.filter(move |it| current_set.contains(it)));
-        }
-
-        // Find the AND node in that intersection set that contains the least amount of literals in its children.
-        // This directly gives us the AND node with the minimum amount of nodes we have to convert to CNF and back.
-        let mut best_single_and: Option<(_, &HashSet<i32>)> = None;
-        for node in common_binaries.collect::<Vec<_>>() {
-            match self.graph[node] {
-                And => {
-                    let diffs = self.literal_children.get(&node).unwrap();
-                    best_single_and = match best_single_and {
-                        Some((old_node, old_diffs)) => {
-                            if old_diffs.len() < diffs.len() {
-                                Some((old_node, old_diffs))
-                            } else {
-                                Some((node, diffs))
-                            }
-                        },
-                        None => Some((node, diffs)),
-                    }
-                },
-                _ => ()
-            }
-        }
-
-        None
-        
-    }*/
-
-    #[inline]
-    fn get_first_and_encounter(&mut self, current: NodeIndex) -> NodeIndex {
-        use crate::c2d_lexer::TokenIdentifier::*;
-
-        return match self.graph[current] {
-            And => current,
-            _ => {
-                let mut parents = self.graph.neighbors_directed(current, Incoming).detach();
-                while let Some(parent) = parents.next_node(&self.graph) {
-                    return self.get_first_and_encounter(parent);
-                }
-                panic!("dDNNF does not contain a root AND node!");
-            },
-        }
-    }
-
     /// For a given clause we search for the AND node that contains all literals of that clause
     /// and therefore all other clauses that contain those literals and that has as little children
     /// as possible.
@@ -338,11 +223,123 @@ impl IntermediateGraph {
         and_nodes.sort_by_key(|(nx, _)| nx.index());
         and_nodes.dedup_by_key(|(node_index, _)| *node_index);
 
-        //println!("AND nodes before: {:?}", and_nodes);
-
         let mut and_nodes_c = and_nodes.clone();
         and_nodes_c.retain(|(_, set)| {
             !and_nodes.iter().any(|(_, other_set)| set.is_subset(other_set) && set != other_set)
+        });
+
+        Some(and_nodes_c)
+    }
+
+    #[inline]
+    fn get_first_and_encounter(&mut self, current: NodeIndex) -> NodeIndex {
+        use crate::c2d_lexer::TokenIdentifier::*;
+
+        return match self.graph[current] {
+            And => current,
+            _ => {
+                let mut parents = self.graph.neighbors_directed(current, Incoming).detach();
+                while let Some(parent) = parents.next_node(&self.graph) {
+                    return self.get_first_and_encounter(parent);
+                }
+                panic!("dDNNF does not contain a root AND node!");
+            },
+        }
+    }
+
+    /// For a given clause we search for the AND node that contains all literals of that clause
+    /// and therefore all other clauses that contain those literals and that has as little children
+    /// as possible.
+    /// If we can't find any suitable literal (for instance the clause contains a new literal)
+    /// or the best AND node is the root node, we return new solution because our best option is to recompile
+    /// the whole CNF.
+    pub fn closest_unsplitable_ands2(&mut self, clause: &[i32]) -> Option<Vec<(NodeIndex, HashSet<i32>)>> {
+        use crate::c2d_lexer::TokenIdentifier::*;
+
+        if clause.is_empty() { return None }
+
+        let mut sets = Vec::new();
+
+        for literal in clause {
+            for literal_pair in [literal, &-literal] {
+                match self.literals_nx.get(literal_pair) {
+                    // A literal node can contain multiple parents. We need to make sure that each direct
+                    // parent gets its own set to ensure including all connections towards the literal within
+                    // out target AND node.
+                    Some(lit) => {
+                        let mut literal_parents = 
+                        self.graph.neighbors_directed(*lit, Incoming).detach();
+                    
+                        while let Some(parent) = literal_parents.next_node(&self.graph) {
+                            let mut set = HashSet::new();
+                            self.first_mark(&mut set, parent);
+                            sets.push(set);
+                        }
+                    },
+                    // Feature might be core or dead to this point.
+                    // Hence, we can't find a matching literal and we don't have to replace anything.
+                    None => (),
+                }
+            }
+        }
+
+        // TODO Handle complete new clauses
+        if sets.is_empty() { return None; }
+
+        const CHUNKS: f64 = 1.0;
+
+        // Split the vector into three equal-sized chunks
+        let chunks = sets.chunks((sets.len() as f64 / CHUNKS).ceil() as usize);
+        // Collect the chunks into a vector of vectors
+        let result: Vec<Vec<_>> = chunks.map(|chunk| chunk.to_vec()).collect();
+    
+        let mut cached_ands = Vec::new();
+
+        for mut chunk in result {
+            // Get the intersection of all sets
+            let mut common_binaries: Box<dyn Iterator<Item = NodeIndex>> =
+            Box::new(chunk.pop().into_iter().flatten());
+            
+            for current_set in chunk {
+                common_binaries = Box::new(common_binaries.filter(move |it| current_set.contains(it)));
+            }
+
+            // Find the AND node in that intersection set that contains the least amount of literals in its children.
+            // This directly gives us the AND node with the minimum amount of nodes we have to convert to CNF and back.
+            let mut cached_and: Option<(_, &HashSet<i32>)> = None;
+            for node in common_binaries.collect::<Vec<_>>() {
+                match self.graph[node] {
+                    And => {
+                        let diffs = self.literal_children.get(&node).unwrap();
+                        cached_and = match cached_and {
+                            Some((old_node, old_diffs)) => {
+                                if old_diffs.len() < diffs.len() {
+                                    Some((old_node, old_diffs))
+                                } else {
+                                    Some((node, diffs))
+                                }
+                            },
+                            None => Some((node, diffs)),
+                        }
+                    },
+                    _ => ()
+                }
+            }
+            match cached_and {
+                Some((nx, lits)) => cached_ands.push((nx, lits.clone())),
+                None => (),
+            }
+        }
+
+        if cached_ands.is_empty() { return None; }
+
+        // Remove duplicates based on NodeIndex
+        cached_ands.sort_by_key(|(nx, _)| nx.index());
+        cached_ands.dedup_by_key(|(node_index, _)| *node_index);
+
+        let mut and_nodes_c = cached_ands.clone();
+        and_nodes_c.retain(|(_, set)| {
+            !cached_ands.iter().any(|(_, other_set)| set.is_subset(other_set) && set != other_set)
         });
 
         Some(and_nodes_c)
@@ -603,7 +600,7 @@ impl IntermediateGraph {
         if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         let mut _start = Instant::now();
         const INTER_CNF: &str = ".intermediate.cnf"; const INTER_NNF: &str = ".intermediate.nnf";
-        let replace_multiple = match self.closest_unsplitable_ands(&clause) {
+        let replace_multiple = match self.closest_unsplitable_ands2(&clause) {
             Some(and_node) => and_node,
             None => { return false; }
         };
