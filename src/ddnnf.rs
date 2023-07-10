@@ -7,11 +7,11 @@ pub mod anomalies;
 
 use std::{collections::{HashMap, HashSet}, cmp::max};
 
-use rug::{Integer};
+use rug::Integer;
 
 use crate::parser::intermediate_representation::IntermediateGraph;
 
-use self::node::{Node};
+use self::node::Node;
 
 #[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations

@@ -8,7 +8,7 @@ use petgraph::{
     Direction::{Incoming, Outgoing}
 };
 
-use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs}};
+use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::get_all_clauses_cnf}};
 
 use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 
@@ -21,17 +21,23 @@ pub struct IntermediateGraph {
     number_of_variables: u32,
     tseitin_offset: i32,
     literals_nx: HashMap<i32, NodeIndex>,
-    literal_children: HashMap<NodeIndex, HashSet<i32>>
+    literal_children: HashMap<NodeIndex, HashSet<i32>>,
+    cnf_clauses: Vec<Vec<i32>>
 }
 
 impl IntermediateGraph {
     /// Creates a new IntermediateGraph 
     pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, number_of_variables: u32,
-               literals_nx: HashMap<i32, NodeIndex>, literal_children: HashMap<NodeIndex, HashSet<i32>>) -> IntermediateGraph {
+               literals_nx: HashMap<i32, NodeIndex>, literal_children: HashMap<NodeIndex, HashSet<i32>>,
+               cnf_path: Option<&str>) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         IntermediateGraph {
             graph, root, tseitin_offset: 1_000_000, number_of_variables,
-            literals_nx, literal_children
+            literals_nx, literal_children,
+            cnf_clauses: match cnf_path {
+                Some(path) => get_all_clauses_cnf(path),
+                None => Vec::new()
+            }
         }
     }
 
@@ -596,6 +602,47 @@ impl IntermediateGraph {
         (cnf, adjusted_starting_point)
     }
 
+    // Experimental method to use the initial CNF for recompiling
+    pub fn transform_to_cnf_from_starting_cnf(&mut self, clause: &[i32]) -> Vec<String> {
+        if self.cnf_clauses.is_empty() { return Vec::new(); }
+
+        let mut filtered_clauses: Vec<Vec<i32>> = if clause.is_empty() {
+            self.cnf_clauses.clone()
+        } else {
+            self.cnf_clauses
+                .clone()
+                .into_iter()
+                .filter(|initial_clause| 
+                    initial_clause.iter().all(|elem| clause.contains(elem)))
+                .collect_vec()
+        };
+
+        let mut index = 1_u32;
+        let mut re_index: HashMap<u32,u32> = HashMap::new();
+
+        for clause in filtered_clauses.iter_mut() {
+            for elem in clause {
+                let elem_signum = elem.signum();
+                match re_index.get(&elem.unsigned_abs()) {
+                    Some(val) => { *elem = *val as i32 * elem_signum; },
+                    None => {
+                        *elem = index as i32 * elem_signum;
+                        re_index.insert(elem.unsigned_abs(), index);
+                        index += 1;
+                    },
+                }
+            }
+        }
+
+        let mut cnf = vec![format!("p cnf {} {}\n", index - 1, filtered_clauses.len())];
+        for clause in filtered_clauses {
+            cnf.push(format!("{} 0\n", format_vec(clause.iter())));
+        }
+        if !clause.is_empty() { cnf.push(format!("{} 0\n", format_vec(clause.iter()))); }
+
+        cnf
+    }
+
     pub fn add_clause(&mut self, clause: &[i32]) -> bool {
         if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         let mut _start = Instant::now();
@@ -851,6 +898,33 @@ mod test {
         for (path, features) in ddnnf_file_paths {
             let mut ddnnf = build_ddnnf(path, Some(features));
             let (cnf, _) = ddnnf.inter_graph.transform_to_cnf_distributive(ddnnf.inter_graph.root, &[]);
+            let cnf_flat = cnf.join("");
+            let mut cnf_file = File::create(CNF_REDONE).unwrap();
+            cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
+
+            compile_cnf(CNF_REDONE, DDNNF_REDONE);
+            let ddnnf_redone = build_ddnnf(DDNNF_REDONE, Some(features));
+
+            assert_eq!(ddnnf.rc(), ddnnf_redone.rc());
+
+            fs::remove_file(CNF_REDONE).unwrap();
+            fs::remove_file(DDNNF_REDONE).unwrap();
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn transform_to_cnf_from_starting_cnf() {
+        const CNF_REDONE: &str = "tests/data/.redone_c2c.cnf"; const DDNNF_REDONE: &str = "tests/data/.redone_c2c.nnf";
+
+        let ddnnf_file_paths = vec![
+            ("tests/data/small_ex.cnf", 4),
+            ("tests/data/vp9.cnf", 42),
+        ];
+
+        for (path, features) in ddnnf_file_paths {
+            let mut ddnnf = build_ddnnf(path, Some(features));
+            let cnf = ddnnf.inter_graph.transform_to_cnf_from_starting_cnf(&[]);
             let cnf_flat = cnf.join("");
             let mut cnf_file = File::create(CNF_REDONE).unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();

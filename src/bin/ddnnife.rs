@@ -14,7 +14,7 @@ use rand_distr::num_traits::Signed;
 use std::cmp;
 use std::fs::File;
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
-use std::path::{Path};
+use std::path::Path;
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
@@ -246,7 +246,7 @@ fn main() {
             if read_line.is_empty() { break; }
             input.push(read_line);
         }
-        ddnnf = dparser::distribute_building(input, cli.total_features);
+        ddnnf = dparser::distribute_building(input, cli.total_features, None);
     } else {
         let ddnnf_path = &cli.file_path.clone().unwrap();
         ddnnf = dparser::build_ddnnf(ddnnf_path, cli.total_features)

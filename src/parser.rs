@@ -29,7 +29,7 @@ use std::{
     rc::Rc, process
 };
 
-use crate::ddnnf::{Ddnnf};
+use crate::ddnnf::Ddnnf;
 
 use petgraph::{
     stable_graph::StableGraph,
@@ -60,6 +60,7 @@ use self::util::open_file_savely;
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
+    let mut cnf_path = None;
     if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
             let file = open_file_savely(path);
@@ -71,6 +72,7 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
                     CNFToken::Header { features, clauses: _ } => {
                         let ddnnf_file = ".intermediate.nnf";
                         compile_cnf(path, ddnnf_file);
+                        cnf_path = Some(path);
                         path = ddnnf_file;
                         total_features = Some(features as u32);
                         
@@ -90,14 +92,14 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
 
     if path == ".intermediate.nnf" { fs::remove_file(path).unwrap(); }
 
-    distribute_building(lines, total_features)
+    distribute_building(lines, total_features, cnf_path)
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.
 /// Either the first line is a header and therefore the c2d format or total_features
 /// is supplied and its the d4 format.
 #[inline]
-pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> Ddnnf {
+pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>, cnf_path: Option<&str>) -> Ddnnf {
     use C2DToken::*;
     
     match lex_line_c2d(lines[0].trim()) {
@@ -109,7 +111,7 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
             match total_features {
                 Some(o) => {
                     // we try to parse the d4 standard
-                    build_d4_ddnnf(lines, Some(o))
+                    build_d4_ddnnf(lines, Some(o), cnf_path)
                 },
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
@@ -118,7 +120,7 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
                         Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
                         Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n\x1b[0m"
                     );
-                    build_d4_ddnnf(lines, None)
+                    build_d4_ddnnf(lines, None, cnf_path)
                 },
             }
         },
@@ -177,7 +179,8 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         root,
         variables,
         literals_nx,
-        literal_diffs
+        literal_diffs,
+        None
     );
     Ddnnf::new(intermediate_graph, variables)
 }
@@ -186,7 +189,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf {
+fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>, cnf_path: Option<&str>) -> Ddnnf {
     let mut ddnnf_graph = StableGraph::<TId, ()>::new();
 
     let mut total_features = total_features_opt.unwrap_or(0);
@@ -445,7 +448,8 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         root,
         total_features,
         literals_nx.borrow().clone(),
-        literal_diff
+        literal_diff,
+        cnf_path
     );
     Ddnnf::new(intermediate_graph, total_features)
 }
