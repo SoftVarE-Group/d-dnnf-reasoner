@@ -1,13 +1,13 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::io::BufRead;
-use std::iter::{FromIterator};
+use std::iter::FromIterator;
 use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::sync::mpsc::{TryRecvError, Receiver, self};
 use std::{thread, io};
-use std::{path::Path};
+use std::path::Path;
 
 use itertools::Itertools;
 use nom::IResult;
@@ -55,6 +55,10 @@ impl Ddnnf {
                                 break;
                             }
                         }       
+                    } else {
+                        // If there isn't any more work left, we can stop the busy waiting
+                        // and sleep til unparked again by the main thread.
+                        std::thread::park();
                     }
                 }
             });
@@ -115,6 +119,11 @@ impl Ddnnf {
                     if err == TryRecvError::Disconnected { break; }
                 },
             }
+
+            // Wake up all worker if there is work left todo
+            if remaining_answers > 0 {
+                threads.iter().for_each(|worker| worker.thread().unpark());
+            }
         }
 
         // After all tasks are distributed, we wait for the remaining results and print them.
@@ -138,6 +147,7 @@ impl Ddnnf {
 
         // join threads
         for handle in threads {
+            handle.thread().unpark(); // unpark once more to terminate threads
             handle.join().unwrap();
         }
     }
