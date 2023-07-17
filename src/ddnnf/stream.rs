@@ -1,13 +1,13 @@
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::io::BufRead;
-use std::iter::{FromIterator};
+use std::iter::FromIterator;
 use std::process::exit;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicBool};
 use std::sync::mpsc::{TryRecvError, Receiver, self};
 use std::{thread, io};
-use std::{path::Path};
+use std::path::Path;
 
 use itertools::Itertools;
 use nom::IResult;

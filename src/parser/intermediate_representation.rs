@@ -3,7 +3,7 @@ use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::In
 use itertools::Itertools;
 use petgraph::{
     stable_graph::{StableGraph, NodeIndex},
-    visit::DfsPostOrder,
+    visit::{DfsPostOrder, Dfs},
     algo::is_cyclic_directed,
     Direction::{Incoming, Outgoing}
 };
@@ -16,7 +16,7 @@ use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 /// for that because deleting or removing nodes would mess up the indices. 
 #[derive(Clone, Debug, Default)]
 pub struct IntermediateGraph {
-    graph: StableGraph::<TId, ()>,
+    graph: StableGraph::<TId, Option<Vec<i32>>>,
     pub root: NodeIndex,
     number_of_variables: u32,
     tseitin_offset: i32,
@@ -27,18 +27,20 @@ pub struct IntermediateGraph {
 
 impl IntermediateGraph {
     /// Creates a new IntermediateGraph 
-    pub fn new(graph: StableGraph::<TId, ()>, root: NodeIndex, number_of_variables: u32,
+    pub fn new(graph: StableGraph::<TId, Option<Vec<i32>>>, root: NodeIndex, number_of_variables: u32,
                literals_nx: HashMap<i32, NodeIndex>, literal_children: HashMap<NodeIndex, HashSet<i32>>,
                cnf_path: Option<&str>) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
-        IntermediateGraph {
+        let mut inter_graph = IntermediateGraph {
             graph, root, tseitin_offset: 1_000_000, number_of_variables,
             literals_nx, literal_children,
             cnf_clauses: match cnf_path {
                 Some(path) => get_all_clauses_cnf(path),
                 None => Vec::new()
             }
-        }
+        };
+        inter_graph.add_decision_nodes_fu();
+        inter_graph
     }
 
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
@@ -292,7 +294,7 @@ impl IntermediateGraph {
         // TODO Handle complete new clauses
         if sets.is_empty() { return None; }
 
-        const CHUNKS: f64 = 1.0;
+        const CHUNKS: f64 = 1_000_000.0;
 
         // Split the vector into three equal-sized chunks
         let chunks = sets.chunks((sets.len() as f64 / CHUNKS).ceil() as usize);
@@ -392,11 +394,11 @@ impl IntermediateGraph {
             if let Some(edge) = self.graph.find_edge(initial_start, child) {
                 self.graph.remove_edge(edge);
             }
-            self.graph.add_edge(new_and, child, ());
+            self.graph.add_edge(new_and, child, None);
 
             new_and_lits.extend(self.literal_children.get(&child).unwrap());
         }
-        self.graph.add_edge(initial_start, new_and, ());
+        self.graph.add_edge(initial_start, new_and, None);
 
         // Add child literals of new_and to mapping
         self.literal_children.insert(new_and, new_and_lits);
@@ -736,7 +738,7 @@ impl IntermediateGraph {
 
                 let mut children = sub.graph.neighbors_directed(nx, Outgoing).detach();
                 while let Some(child) = children.next_node(&sub.graph) {
-                    self.graph.add_edge(new_nx, *cache.get(&child).unwrap(), ());
+                    self.graph.add_edge(new_nx, *cache.get(&child).unwrap(), None);
                 }
             }
             self.tseitin_offset += max_tseitin_value + 1;
@@ -746,7 +748,7 @@ impl IntermediateGraph {
             let mut parents = self.graph.neighbors_directed(adjusted_replace, Incoming).detach();
             while let Some((parent_edge, parent_node)) = parents.next(&self.graph) {
                 self.graph.remove_edge(parent_edge);
-                self.graph.add_edge(parent_node, new_sub_root, ());
+                self.graph.add_edge(parent_node, new_sub_root, None);
             }
 
             // add the literal_children of the newly created ddnnf
@@ -757,6 +759,54 @@ impl IntermediateGraph {
             if Path::new(INTER_NNF).exists() { fs::remove_file(INTER_NNF).unwrap(); }
         }
         true
+    }
+
+    fn add_decision_nodes_fu(&mut self) {
+        let mut dfs = Dfs::new(&self.graph, self.root);
+        while let Some(nx) = dfs.next(&self.graph) {
+            if self.graph[nx] != TId::Or { continue; }
+            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+            
+            let literals_parent = self.literal_children.get(&nx).unwrap();
+            let mut literals_children = Vec::new();
+            let mut deciding_intersection: HashSet<u32> = literals_parent.iter().map(|l| l.unsigned_abs()).collect();
+            while let Some((edge, child)) = children.next(&self.graph) {
+                let literals_child = self.literal_children.get(&child).unwrap();
+                
+                let diff = literals_parent
+                    .difference(literals_child)
+                    .map(|literal| -literal)
+                    .collect_vec();
+                
+                let unsigned_diff: HashSet<u32> = diff.iter().map(|l| l.unsigned_abs()).collect();
+                deciding_intersection.retain(|&x| unsigned_diff.contains(&x));
+                literals_children.push((diff, edge));
+            }
+
+            for (mut diff, edge) in literals_children {
+                diff.retain(|literal| deciding_intersection.contains(&literal.unsigned_abs()));
+                self.graph[edge] = match &self.graph[edge] {
+                    Some(existing_diff) => {
+                        diff.extend(existing_diff.iter());
+                        Some(diff)
+                    },
+                    None => Some(diff),
+                }
+            }
+
+            /*
+             * Debug printing decision nodes
+             */
+            if true {
+                println!("Literals parent: {:?}", literals_parent);
+                let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+                while let Some((edge, child)) = children.next(&self.graph) {
+                    println!("Literals child: {:?}", self.literal_children.get(&child).unwrap());
+                    println!("Edges: {:?}", self.graph[edge]);
+                }
+                println!("-----------------------------");
+            }
+        }
     }
 
     /// Adds the necessary reference / removes them to extend a dDNNF by a unit clause
@@ -779,19 +829,65 @@ impl IntermediateGraph {
                 self.number_of_variables += 1;
                 
                 let new_or = self.graph.add_node(TId::Or);
-                self.graph.add_edge(self.root, new_or, ());
+                self.graph.add_edge(self.root, new_or, None);
                 
                 let new_positive_lit = self.graph.add_node(TId::Literal { feature: self.number_of_variables as i32 });
                 let new_negative_lit = self.graph.add_node(TId::Literal { feature: -(self.number_of_variables as i32) });
-                self.graph.add_edge(new_or, new_positive_lit, ());
-                self.graph.add_edge(new_or, new_negative_lit, ());
+                self.graph.add_edge(new_or, new_positive_lit, None);
+                self.graph.add_edge(new_or, new_negative_lit, None);
             }
             
             // Add the actual new feature
             let new_feature = self.graph.add_node(TId::Literal { feature });
-            self.graph.add_edge(self.root, new_feature, ());
+            self.graph.add_edge(self.root, new_feature, None);
             self.number_of_variables = feature.unsigned_abs();
         }
+    }
+
+    /// Adds the necessary reference / removes them to extend a dDNNF by a unit clause
+    fn reduce_clause(&mut self, clause: &[i32]) {
+        let mut nx_remaining_clause = HashMap::new();
+        // the root node always still contains the whole clause
+        nx_remaining_clause.insert(self.root, clause.iter().collect_vec());
+        
+        let mut dfs = Dfs::new(&self.graph, self.root);
+        while let Some(nx) = dfs.next(&self.graph) {
+            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+            while let Some((edge, child)) = children.next(&self.graph) {
+                let remaining_clause = nx_remaining_clause.get(&nx).unwrap().clone();
+                if remaining_clause.is_empty() { nx_remaining_clause.insert(child, vec![]); continue; }
+                if nx_remaining_clause.contains_key(&child) { continue; }
+                
+                match &self.graph[edge] {
+                    Some(decisions) => {
+                        if decisions.iter().any(|literal| remaining_clause.contains(&literal)) {
+                            nx_remaining_clause.insert(child, vec![])
+                        } else {
+                            let removed_impossible_assignments = remaining_clause
+                                .into_iter()
+                                .filter(|&literal| decisions.contains(&-literal))
+                                .collect_vec();
+                            nx_remaining_clause.insert(
+                                child,
+                                removed_impossible_assignments
+                            )
+                        }
+                    },
+                    None => nx_remaining_clause.insert(child, remaining_clause),
+                };
+            }
+        }
+
+        print!("clause: {:?} with ", clause);
+        for literal_repr in clause {
+            for literal in [literal_repr, &-literal_repr] {
+                match self.literals_nx.get(literal) {
+                    Some(nx) => print!(" {:?}", nx_remaining_clause.get(&nx).unwrap()),
+                    None => print!(" []"),
+                }
+            }
+        }
+        println!();
     }
 }
 
@@ -799,9 +895,10 @@ impl IntermediateGraph {
 mod test {
     use std::{collections::HashSet, fs::{File, self}, io::Write};
 
+    use petgraph::{visit::DfsPostOrder, Direction::Outgoing};
     use serial_test::serial;
 
-    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md};
+    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}};
 
     #[test]
     #[serial]
@@ -1003,5 +1100,63 @@ mod test {
         assert_eq!(sb_enumeration, ms2_enumeration);
 
         fs::remove_file(CNF_PATH).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn decision_edges() {
+        let ddnnf_file_paths = vec![
+            //("tests/data/small_ex_c2d.nnf", 4),
+            //("tests/data/small_ex_d4.nnf", 4),
+            ("tests/data/VP9_d4.nnf", 42),
+            //("tests/data/auto1_d4.nnf", 2513)
+        ];
+
+        for (path, features) in ddnnf_file_paths {
+            let ddnnf = build_ddnnf(path, Some(features));
+            let ig = ddnnf.inter_graph;
+            let mut dfs = DfsPostOrder::new(&ig.graph, ig.root);
+            while let Some(nx) = dfs.next(&ig.graph) {
+                let mut children = ig.graph.neighbors_directed(nx, Outgoing).detach();
+                while let Some((edge, _node)) = children.next(&ig.graph) {
+                    match &ig.graph[edge] {
+                        Some(dec) => println!("{:?}: {:?}", ig.graph[nx], dec),
+                        None => (),
+                    }
+                }
+            }
+            println!("---------");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn reduce_clause() {
+        let ddnnf_file_paths = vec![
+            //("tests/data/small_ex_c2d.nnf", 4),
+            //("tests/data/small_ex_d4.nnf", 4),
+            ("tests/data/vp9.cnf", 42),
+            //("tests/data/auto1.cnf", 2513),
+            //("tests/data/auto1_d4.nnf", 2513)
+        ];
+
+        for (path, features) in ddnnf_file_paths {
+            let all_clauses = get_all_clauses_cnf(path);
+            let clauses = vec![all_clauses.last().unwrap()];
+            for (index, clause) in clauses.into_iter().enumerate() {
+                println!("{index} ");
+                print!("w/ -> ");
+                let mut ddnnf_w = build_ddnnf(path, Some(features));
+                ddnnf_w.inter_graph.reduce_clause(&clause);
+                write_as_mermaid_md(&mut ddnnf_w, &[], "with.md").unwrap();
+
+                remove_clause_cnf(path, &clause, None);
+                print!("w/o -> ");
+                let mut ddnnf_wo = build_ddnnf(path, Some(features));
+                ddnnf_wo.inter_graph.reduce_clause(&clause);
+                write_as_mermaid_md(&mut ddnnf_wo, &[], "without.md").unwrap();
+                add_clause_cnf(path, &clause);
+            }
+        }
     }
 }
