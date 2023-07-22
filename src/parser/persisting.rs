@@ -2,6 +2,7 @@
 
 use std::{io::{LineWriter, Write}, fs::File};
 
+use petgraph::stable_graph::NodeIndex;
 use rug::Assign;
 
 use crate::{Ddnnf, Node, NodeType};
@@ -53,7 +54,8 @@ fn deconstruct_children(mut str: String, children: &Vec<usize>) -> String {
 /// and saves it into the provided file name.
 /// 
 /// We als add a legend that describes the mermaidified nodes
-pub fn write_as_mermaid_md(ddnnf: &mut Ddnnf, features: &[i32], path_out: &str) -> std::io::Result<()> { 
+pub fn write_as_mermaid_md(ddnnf: &Ddnnf, features: &[i32], path_out: &str, alternative_start: Option<(NodeIndex, i32)>) -> std::io::Result<()> { 
+    let mut ddnnf = ddnnf.clone(); // work on clone because we might manipulate it
     for node in ddnnf.nodes.iter_mut() {
         node.temp.assign(&node.count);
     }
@@ -80,7 +82,14 @@ pub fn write_as_mermaid_md(ddnnf: &mut Ddnnf, features: &[i32], path_out: &str) 
         classDef marked stroke:#d90000, stroke-width:4px\n\n");
     lw.write_all(config.as_bytes()).unwrap();
     let marking = ddnnf.get_marked_nodes_clone(features);
-    lw.write_all(mermaidify_nodes(ddnnf, &marking).as_bytes())?;
+    match alternative_start {
+        Some((start, depth)) => {
+            ddnnf.inter_graph = ddnnf.inter_graph.get_partial_graph_til_depth(start, depth);
+            ddnnf.rebuild();
+        },
+        None => (),
+    };
+    lw.write_all(mermaidify_nodes(&mut ddnnf, &marking).as_bytes())?;
     lw.write_all(b"```").unwrap();
 
     Ok(())
@@ -93,12 +102,13 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
     for (position, node) in ddnnf.nodes.iter().enumerate().rev() {
         result = format!("{}{}", result, match &node.ntype {
             NodeType::And { children } | NodeType::Or { children } => {
-                let mut mm_node = format!("\t\t{}{} --> ", mermaidify_type(ddnnf, position), marking_insert(marking, position));
+                let mut mm_node = format!("\t\t{}{}", mermaidify_type(ddnnf, position), marking_insert(marking, position));
 
                 let mut children_series = children.clone();
                 children_series.sort_unstable(); // sort by index -> we force printing the dfs
 
                 if !children_series.is_empty() {
+                    mm_node.push_str(" --> ");
                     for (i, &child) in children_series.iter().enumerate() {
                         if ddnnf.nodes[child].ntype == NodeType::True {
                             continue;
@@ -110,6 +120,8 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
                             mm_node.push_str(";\n");
                         }
                     }
+                } else {
+                    mm_node.push_str(";\n");
                 }
                 mm_node
             },
@@ -154,5 +166,19 @@ fn marking_insert(marking: &[usize], position: usize) -> &str {
         ":::marked"
     } else {
         ""
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::parser::build_ddnnf;
+
+    #[test]
+    fn partial_mermaid() {
+        let mut ddnnf = build_ddnnf("tests/data/vp9.cnf", Some(42));
+        let root =  ddnnf.inter_graph.root;
+        write_as_mermaid_md(&mut ddnnf, &[], "whole.md", None).unwrap();
+        write_as_mermaid_md(&mut ddnnf, &[], "partial_root.md", Some((root, 5))).unwrap();
     }
 }

@@ -423,7 +423,7 @@ fn main() {
                 println!("\nComputed the core / dead features and saved the results in {output_file_path}.");
             },
             Mermaid { custom_output_file: _, assumptions } => {
-                write_as_mermaid_md(&mut ddnnf, assumptions, &output_file_path).unwrap();
+                write_as_mermaid_md(&mut ddnnf, assumptions, &output_file_path, None).unwrap();
                 println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {output_file_path}.");
             },
             Bench => {
@@ -437,7 +437,7 @@ fn main() {
                 let mut clauses = get_all_clauses_cnf(cnf);
                 use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(40);
                 use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
-                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
+                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 19);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses { break; }
                     println!("{index}/{total_clauses} clause: {clause:?}");
@@ -482,6 +482,10 @@ fn main() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
         write_ddnnf(&ddnnf, &path).unwrap();
         println!("\nThe smooth d-DNNF was written into the c2d format in {path}.");
+    }
+
+    if cli.heuristics {
+        ddnnf.print_all_heuristics();
     }
 }
 

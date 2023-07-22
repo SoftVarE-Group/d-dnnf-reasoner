@@ -1,6 +1,6 @@
 //! A node is part of the dDNNF and describes either an AND, OR, or Literal node.
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Represents all types of Nodes with its different parts
 pub struct Node {
     pub(crate) marker: bool,
@@ -14,7 +14,7 @@ pub struct Node {
     pub ntype: NodeType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// The Type of the Node declares how we handle the computation for the different types of cardinalities
 pub enum NodeType {
     /// The cardinality of an And node is always the product of its childs

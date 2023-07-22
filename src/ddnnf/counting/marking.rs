@@ -1,6 +1,6 @@
 use rug::{Integer, Assign, Complete};
 
-use super::super::node::{NodeType::*};
+use super::super::node::NodeType::*;
 use crate::Ddnnf;
 
 impl Ddnnf {
