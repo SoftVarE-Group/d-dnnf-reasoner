@@ -91,7 +91,7 @@ impl Ddnnf {
         for clause in clauses {
             let reduced_query = self.reduce_query(clause);
             if reduced_query.is_empty() { return true; }
-            if !self.inter_graph.add_clause(&reduced_query) {
+            if !self.inter_graph.add_clause_alt(reduced_query) {
                 return false;
             }
         }

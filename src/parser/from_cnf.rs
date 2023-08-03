@@ -5,7 +5,7 @@ use std::{io::{BufReader, BufRead, Write}, fs::File, cmp::max};
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::{complete::char},
+    character::complete::char,
     combinator::{map, value},
     sequence::preceded,
     IResult,

@@ -63,6 +63,9 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                     })
                 })
                 .collect::<Vec<i32>>();
+            //let fs = ws_numbers[2..ws_numbers.len()].to_vec();
+            //println!("fs: {:?}, line: {line}", fs);
+            //assert!(fs.iter().all(|&f| f != 0));
             Edge {
                 from: ws_numbers[0],
                 to: ws_numbers[1],

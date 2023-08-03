@@ -51,5 +51,7 @@ d4v2.bin
 # binary for dDNNF to CNF transformation
 d2c
 
-# Ignore .cnf files in the root folder
+# Ignore .cnf and .md files in the root folder
 /*.cnf
+/*.md
+!README.md

@@ -1,6 +1,4 @@
-use std::{
-    process::{Command, self},
-};
+use std::process::{Command, self};
 
 #[cfg(windows)] const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
 #[cfg(unix)] const D4V2: &[u8] = include_bytes!("../bin/d4v2.bin");
@@ -51,7 +49,7 @@ fn set_permissions() {
     {
         use std::fs::OpenOptions;
         use std::os::windows::fs::OpenOptionsExt;
-        use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL};
+        use winapi::um::winnt::FILE_ATTRIBUTE_NORMAL;
 
         let mut options = OpenOptions::new();
         options.write(true)

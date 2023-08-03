@@ -1,14 +1,14 @@
-use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::Instant, path::Path, cmp::max, panic};
+use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::Instant, path::Path, cmp::{max, Reverse}, panic};
 
 use itertools::Itertools;
 use petgraph::{
     stable_graph::{StableGraph, NodeIndex},
-    visit::{DfsPostOrder, Dfs},
+    visit::{DfsPostOrder, Dfs, Bfs, NodeIndexable},
     algo::is_cyclic_directed,
     Direction::{Incoming, Outgoing}
 };
 
-use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::get_all_clauses_cnf}};
+use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::get_all_clauses_cnf, persisting::write_as_mermaid_md}, Ddnnf};
 
 use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 
@@ -26,6 +26,7 @@ pub struct IntermediateGraph {
 }
 
 const CHUNKS: f64 = 1.0;
+const DEBUG: bool = false;
 
 impl IntermediateGraph {
     /// Creates a new IntermediateGraph 
@@ -111,6 +112,84 @@ impl IntermediateGraph {
         (parsed_nodes, literals, true_nodes)
     }
 
+    pub fn closest_unsplitable_and_bridge(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
+        if clause.is_empty() { return None }
+
+        let mut and_bridges = Vec::new();
+        bridges(&self.graph)
+            .into_iter()
+            .for_each(|(_from, to)|
+                match self.graph[to] {
+                    TId::And => {
+                        let diffs = self.literal_children.get(&to).unwrap();
+                        // we only consider and nodes that include all literals of the clause
+                        if clause.iter().all(|e| diffs.contains(e) && diffs.contains(&-e)) {
+                            and_bridges.push(to)
+                        }
+                    }
+                    _ => ()
+                }
+            );
+
+        let mut closest_and = (self.root, self.literal_children.get(&self.root).unwrap());
+        for and_bridge in and_bridges {
+            let lits = self.literal_children.get(&and_bridge).unwrap();
+            if closest_and.1.len() > lits.len() {
+                closest_and = (and_bridge, lits);
+            }
+        }
+
+        Some((closest_and.0, closest_and.1.clone()))
+    }
+
+    pub fn closest_unsplitable_and0(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
+        use crate::c2d_lexer::TokenIdentifier::*;
+
+        if clause.is_empty() { return None }
+
+        let mut cached_ands: Vec<(NodeIndex<u32>, &HashSet<i32>)> = Vec::new();
+        let mut bfs = Bfs::new(&self.graph, self.root);
+        while let Some(nx) = bfs.next(&self.graph) {
+            match self.graph[nx] {
+                And => {
+                    let diffs = self.literal_children.get(&nx).unwrap();
+                    // we only consider and nodes that include all literals of the clause
+                    if clause.iter().all(|e| diffs.contains(e) && diffs.contains(&-e)) {
+                        cached_ands.push((nx, diffs));
+                    }
+                },
+                _ => (), // we are only interested in AND nodes
+            }
+        }
+        
+        // sort by descending length, aka from closest to farthest from root
+        cached_ands.sort_unstable_by_key(|and| Reverse(and.1.len()));
+        let mut try_and = 
+            if !cached_ands.is_empty() {
+                cached_ands[0]
+            } else {
+                return Some((self.root, self.literal_children.get(&self.root).unwrap().clone()));
+            };
+
+        if DEBUG {
+            println!("cached ands: {:?}", cached_ands);
+        }
+
+        // TODO FIX ME
+        for i in 0..cached_ands.len() {
+            if cached_ands[i+1..].iter()
+                .all(|(_nx, and)| and.is_subset(cached_ands[i].1)) {
+                try_and = cached_ands[i];
+            } else {
+                break;
+            }
+        }
+        if DEBUG { 
+            println!("Bridge AND: {:?}", Some((try_and.0, try_and.1.clone())));
+        }
+        Some((try_and.0, try_and.1.clone()))
+    }
+
     #[inline]
     fn first_mark(&mut self, set: &mut HashSet<NodeIndex>, current: NodeIndex) {
         if set.contains(&current) { return; }
@@ -148,7 +227,7 @@ impl IntermediateGraph {
                         while let Some(parent) = literal_parents.next_node(&self.graph) {
                             let mut set = HashSet::new();
                             self.first_mark(&mut set, parent);
-                            println!("{:?}", set.len());
+                            //println!("{:?}", set.len());
                             sets.push(set);
                         }
                     },
@@ -156,9 +235,9 @@ impl IntermediateGraph {
                     // Hence, we can't find a matching literal and we don't have to replace anything.
                     None => (),
                 }
-                println!("----------sign swap----------");
+                //println!("----------sign swap----------");
             }
-            println!("----------next literal----------");
+            //println!("----------next literal----------");
         }
 
         // TODO Handle complete new clauses
@@ -181,7 +260,7 @@ impl IntermediateGraph {
                     let diffs = self.literal_children.get(&node).unwrap();
                     cached_and = match cached_and {
                         Some((old_node, old_diffs)) => {
-                            println!("cached_and old: {:?}-{:?}, new: {:?}-{:?}", old_node, old_diffs.len(), node, diffs.len());
+                            //println!("cached_and old: {:?} {:?}, new: {:?} {:?}", old_node, old_diffs.len(), node, diffs.len());
                             if old_diffs.len() < diffs.len() {
                                 Some((old_node, old_diffs))
                             } else {
@@ -194,7 +273,7 @@ impl IntermediateGraph {
                 _ => ()
             }
         }
-        println!("cached_and result: {:?}", cached_and.unwrap().1.len());
+        //println!("cached_and result: {:?}", cached_and.unwrap().1.len());
         cached_and
     }
 
@@ -688,44 +767,134 @@ impl IntermediateGraph {
     }
 
     // Experimental method to use the initial CNF for recompiling
-    pub fn transform_to_cnf_from_starting_cnf(&mut self, clause: &[i32]) -> Vec<String> {
-        if self.cnf_clauses.is_empty() { return Vec::new(); }
+    pub fn transform_to_cnf_from_starting_cnf(&mut self, clause: Vec<i32>) -> (Vec<String>, NodeIndex, HashMap<u32, u32>) {
+        if self.cnf_clauses.is_empty() { return (Vec::new(), self.root, HashMap::new()); }
 
-        let mut filtered_clauses: Vec<Vec<i32>> = if clause.is_empty() {
+        // 1) Find the closest and node and the decisions to that point
+        let (closest_and, relevant_literals) = match self.closest_unsplitable_and_bridge(&clause) {
+            Some((nx, lits)) => (nx, lits.clone()),
+            None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
+        };
+
+        //closest_and = self.divide_and(closest_and, &clause);
+
+        let mut accumlated_decisions = self.get_decisions_target_nx(closest_and);
+        // Add unit clauses. Those decisions are implicit in the dDNNF.
+        // Hence, we have to search for them
+        self.cnf_clauses.iter().for_each(
+            |clause| if clause.len() == 1 { accumlated_decisions.push(clause[0]) });
+
+        if DEBUG {
+            println!("lits count: {} lits: {:?}", relevant_literals.len(), relevant_literals);
+        }
+
+        // 2) Filter for clauses that contain at least one of the relevant literals
+        //    aka the literals that are children of the closest AND node
+        let mut clauses_containg_relevant_literals: Vec<Vec<i32>> = if clause.is_empty() {
             self.cnf_clauses.clone()
         } else {
             self.cnf_clauses
                 .clone()
                 .into_iter()
                 .filter(|initial_clause| 
-                    initial_clause.iter().all(|elem| clause.contains(elem)))
+                    initial_clause.iter()
+                        .any(|elem| relevant_literals.contains(elem)
+                            || relevant_literals.contains(&-elem)))
                 .collect_vec()
         };
+        clauses_containg_relevant_literals.push(clause);
 
+        if DEBUG {
+            let mut removed_clauses = self.cnf_clauses.clone();
+            removed_clauses.retain(|clause| !clauses_containg_relevant_literals.contains(clause));
+            println!("removed clauses: {:?}", removed_clauses);
+        }
+
+        // 2.5 add each feature as optional to account for features that become optional
+        //     due to the newly added clause.
+        let mut variables = HashSet::new();
+        for var in relevant_literals.iter() {
+            variables.insert(var.unsigned_abs());
+        }
+
+        // 3) Apply the summed up decions to the remaining clauses
+        let mut reduced_clauses = Vec::new();
+        for mut clause in clauses_containg_relevant_literals {
+            if clause.iter().any(|variable| accumlated_decisions.contains(variable)) {
+                continue; // clause is already satisfied in other parts of the dDNNF
+            } else {
+                // remove variable assignments that aren't valid anymore
+                clause.retain(|variable| !accumlated_decisions.contains(&-variable));
+                if !clause.is_empty() { reduced_clauses.push(clause); }
+            }
+        }
+
+        // Continue 2.5
+        let mut red_variables = HashSet::new();
+        for clause in reduced_clauses.iter() {
+            for variable in clause {
+                red_variables.insert(variable.unsigned_abs());
+            }
+        }
+
+        if DEBUG {
+            println!("Potential optional features: {:?}", variables.symmetric_difference(&red_variables).cloned());
+        }
+
+        for variable in variables.difference(&red_variables).cloned() {
+            let v_i32 = &(variable as i32);
+            if !accumlated_decisions.contains(v_i32)
+            && !accumlated_decisions.contains(&-v_i32)
+            && (relevant_literals.contains(v_i32) || relevant_literals.contains(&-v_i32)) {
+                reduced_clauses.push(vec![variable as i32, -(variable as i32)]);
+            }
+
+            if accumlated_decisions.contains(v_i32) {
+                reduced_clauses.push(vec![*v_i32]);
+            } else if accumlated_decisions.contains(&-v_i32) {
+                    reduced_clauses.push(vec![-v_i32]);
+            }
+        }
+
+        if DEBUG {
+            println!("decisions: {:?}", accumlated_decisions);
+            println!("reduced clause: {:?}", reduced_clauses);
+        }
+
+        // 4) Adjust indices of the literals
+        //    (to avoid unwanted gaps in the CNF which would be interpreted as optional features)
         let mut index = 1_u32;
         let mut re_index: HashMap<u32,u32> = HashMap::new();
-
-        for clause in filtered_clauses.iter_mut() {
+        for clause in reduced_clauses.iter_mut() {
             for elem in clause {
                 let elem_signum = elem.signum();
-                match re_index.get(&elem.unsigned_abs()) {
+                match re_index.get(&(elem.unsigned_abs())) {
                     Some(val) => { *elem = *val as i32 * elem_signum; },
                     None => {
-                        *elem = index as i32 * elem_signum;
                         re_index.insert(elem.unsigned_abs(), index);
+                        *elem = index as i32 * elem_signum;
                         index += 1;
                     },
                 }
             }
         }
 
-        let mut cnf = vec![format!("p cnf {} {}\n", index - 1, filtered_clauses.len())];
-        for clause in filtered_clauses {
+        if DEBUG { println!("reindex: {:?}", re_index); }
+
+        // write the meta information of the header
+        let mut cnf = vec![format!("p cnf {} {}\n", index - 1, reduced_clauses.len() + 1)];
+        
+        for clause in reduced_clauses {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
-        if !clause.is_empty() { cnf.push(format!("{} 0\n", format_vec(clause.iter()))); }
 
-        cnf
+        // Swaps key with value in the key value pairs
+        let pairs: Vec<(u32, u32)> = re_index.drain().collect();
+        for (key, value) in pairs {
+            re_index.insert(value, key);
+        }
+
+        (cnf, closest_and, re_index)
     }
 
     pub fn add_clause(&mut self, clause: &[i32]) -> bool {
@@ -844,43 +1013,206 @@ impl IntermediateGraph {
         true
     }
 
+    pub fn add_clause_alt(&mut self, clause: Vec<i32>) -> bool {
+        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
+        let mut _start = Instant::now();
+        const INTER_CNF: &str = ".sub.cnf"; const INTER_NNF: &str = ".sub.nnf";
+
+        //println!("elapsed time: finding AND: {}", _start.elapsed().as_secs_f64());
+        _start = Instant::now();
+        let (cnf, adjusted_replace, re_indices) = self.transform_to_cnf_from_starting_cnf(clause);
+        println!("Replace CNF clauses: {}", cnf.len());
+        if cnf.len() > 20_000 { return false; }
+        if cnf.is_empty() { println!("CLAUSE WAS REDUNDANT!!! :D"); return true; }
+        //println!("elapsed time: tseitin: {}", _start.elapsed().as_secs_f64());
+
+        _start = Instant::now();
+        // persist CNF
+        let cnf_flat = cnf.join("");
+        let mut cnf_file = File::create(INTER_CNF).unwrap();
+        cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
+
+        // transform the CNF to dDNNF and load it
+        compile_cnf(INTER_CNF, INTER_NNF);
+        let last_lit_number = *re_indices.keys().max().unwrap();
+        if !Path::new(INTER_NNF).exists() {
+            println!("There is no INTER.nnf file...");
+            let contents = fs::read_to_string(INTER_CNF)
+            .expect("Should have been able to read the file");
+    
+            println!("With text:\n{contents}");
+            return false;
+        }
+
+        if DEBUG {
+            let mut ddnnf_remove = Ddnnf::default();
+            ddnnf_remove.inter_graph = self.clone(); ddnnf_remove.rebuild();
+            write_as_mermaid_md(&ddnnf_remove, &[], "removed_sub.md", Some((adjusted_replace, 1_000))).unwrap();
+        }
+
+        // Remove all edges of the old graph. We keep the nodes.
+        // Most are useless but some are used in other parts of the graph. Hence, we keep them
+        // TODO Knoten die wiederverwendet werden benötigen noch die Kanten zu ihren Kindern!!!
+        /*let mut dfs = DfsPostOrder::new(&self.graph, adjusted_replace);
+        while let Some(nx) = dfs.next(&self.graph) {
+            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+            while let Some(edge_to_child) = children.next_edge(&self.graph) {
+                self.graph.remove_edge(edge_to_child);
+            }
+        }*/
+
+        let mut parents = self.graph.neighbors_directed(adjusted_replace, Outgoing).detach();
+        while let Some(parent_edge) = parents.next_edge(&self.graph) {
+            self.graph.remove_edge(parent_edge);
+        }
+
+        if DEBUG {
+            let mut ddnnf_after_remove = Ddnnf::default();
+            ddnnf_after_remove.inter_graph = self.clone(); ddnnf_after_remove.rebuild();
+            write_as_mermaid_md(&ddnnf_after_remove, &[], "after_rm.md", None).unwrap();
+        }
+
+        // If the new subgraph is unsatisfiable, we don't have to add anything
+        if fs::read_to_string(INTER_NNF).unwrap() == "f 1 0\n" {
+            println!("Unsatisfiable!");
+            return false;
+        }
+
+        let mut sup = build_ddnnf(INTER_NNF, Some(last_lit_number));
+
+        if DEBUG {
+            sup.rebuild();
+            write_as_mermaid_md(&sup, &[], "sub_before_re.md", None).unwrap();
+        }
+
+        // add the new subgraph as additional graph (unconnected to self)
+        let mut dfs = DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
+        while let Some(nx) = dfs.next(&sup.inter_graph.graph) {
+            match sup.inter_graph.graph[nx] {
+                TId::Literal { feature } => {
+                    let re_lit = *re_indices.get(&(feature.unsigned_abs())).unwrap() as i32;
+                    sup.inter_graph.graph[nx] = TId::Literal { feature: re_lit * feature.signum() };
+                },
+                _ => (),
+            }
+        }
+
+        if DEBUG {
+            sup.rebuild();
+            write_as_mermaid_md(&sup, &[], "sub.md", None).unwrap();
+        }
+
+        let mut dfs = DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
+        let mut cache = HashMap::new();
+        while let Some(nx) = dfs.next(&sup.inter_graph.graph) {
+            let new_nx = match sup.inter_graph.graph[nx] {
+                // reindex the literal nodes and attach them to already existing nodes
+                TId::Literal { feature } => {
+                    match self.literals_nx.get(&feature) {
+                        Some(nx) => *nx,
+                        None => self.graph.add_node(TId::Literal { feature }),
+                    }
+                }
+                // everything else can just be added
+                _ => self.graph.add_node(sup.inter_graph.graph[nx]),
+            };
+            cache.insert(nx, new_nx);
+
+            let mut children = sup.inter_graph.graph.neighbors_directed(nx, Outgoing).detach();
+            while let Some((child_ex, child_nx)) = children.next(&sup.inter_graph.graph) {
+                self.graph.add_edge(new_nx, *cache.get(&child_nx).unwrap(), sup.inter_graph.graph[child_ex].clone());
+            }
+        }
+
+        if DEBUG {
+            let mut ddnnf_after_add = Ddnnf::default();
+            ddnnf_after_add.inter_graph = self.clone(); ddnnf_after_add.rebuild();
+            write_as_mermaid_md(&ddnnf_after_add, &[], "after_adding.md", None).unwrap();
+        }
+
+        // replace the reference to the starting node with the new subgraph
+        let new_sub_root = *cache.get(&sup.inter_graph.root).unwrap();
+        self.graph.add_edge(adjusted_replace, new_sub_root, None);
+
+        // add the literal_children of the newly created ddnnf
+        extend_literal_diffs(&self.graph, &mut self.literal_children, new_sub_root);
+
+        if DEBUG {
+            let mut ddnnf_at_end = Ddnnf::default();
+            ddnnf_at_end.inter_graph = self.clone(); ddnnf_at_end.rebuild();   
+            write_as_mermaid_md(&ddnnf_at_end, &[], "at_end.md", None).unwrap();
+        }
+
+        // clean up temp files
+        //if Path::new(INTER_CNF).exists() { fs::remove_file(INTER_CNF).unwrap(); }
+        //if Path::new(INTER_NNF).exists() { fs::remove_file(INTER_NNF).unwrap(); }
+
+        true
+    }
+
     fn add_decision_nodes_fu(&mut self) {
         let mut dfs = Dfs::new(&self.graph, self.root);
         while let Some(nx) = dfs.next(&self.graph) {
-            if self.graph[nx] != TId::Or { continue; }
             let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
             
-            let literals_parent = self.literal_children.get(&nx).unwrap();
-            let mut literals_children = Vec::new();
-            let mut deciding_intersection: HashSet<u32> = literals_parent.iter().map(|l| l.unsigned_abs()).collect();
-            while let Some((edge, child)) = children.next(&self.graph) {
-                let literals_child = self.literal_children.get(&child).unwrap();
-                
-                let diff = literals_parent
-                    .difference(literals_child)
-                    .map(|literal| -literal)
-                    .collect_vec();
-                
-                let unsigned_diff: HashSet<u32> = diff.iter().map(|l| l.unsigned_abs()).collect();
-                deciding_intersection.retain(|&x| unsigned_diff.contains(&x));
-                literals_children.push((diff, edge));
-            }
+            match self.graph[nx] {
+                TId::Or => {
+                    let literals_parent = self.literal_children.get(&nx).unwrap();
+                    let mut literals_children = Vec::new();
+                    let mut deciding_intersection: HashSet<u32> = literals_parent.iter().map(|l| l.unsigned_abs()).collect();
+                    while let Some((edge, child)) = children.next(&self.graph) {
+                        let literals_child = self.literal_children.get(&child).unwrap();
+                        
+                        let diff = literals_parent
+                            .difference(literals_child)
+                            .map(|literal| -literal)
+                            .collect_vec();
+                        
+                        let unsigned_diff: HashSet<u32> = diff.iter().map(|l| l.unsigned_abs()).collect();
+                        deciding_intersection.retain(|&x| unsigned_diff.contains(&x));
+                        literals_children.push((diff, edge));
+                    }
+        
+                    for (mut diff, edge) in literals_children {
+                        diff.retain(|literal| deciding_intersection.contains(&literal.unsigned_abs()));
+                        self.graph[edge] = match &self.graph[edge] {
+                            Some(existing_diff) => {
+                                diff.extend(existing_diff.iter());
+                                Some(diff)
+                            },
+                            None => Some(diff),
+                        }
+                    }
+                },
+                TId::And => {
+                    let mut literal_children = Vec::new();
+                    let mut non_literal_ex = Vec::new();
+                    while let Some((edge, child)) = children.next(&self.graph) {
+                        match self.graph[child] {
+                            TId::Literal { feature } => literal_children.push(feature),
+                            _ => non_literal_ex.push(edge)
+                        }
+                    }
 
-            for (mut diff, edge) in literals_children {
-                diff.retain(|literal| deciding_intersection.contains(&literal.unsigned_abs()));
-                self.graph[edge] = match &self.graph[edge] {
-                    Some(existing_diff) => {
-                        diff.extend(existing_diff.iter());
-                        Some(diff)
-                    },
-                    None => Some(diff),
-                }
-            }
+                    for edge in non_literal_ex {
+                        let new_decisions = match &self.graph[edge] {
+                            Some(dec) => {
+                                let mut ndec = dec.clone();
+                                ndec.extend(literal_children.iter());
+                                Some(ndec)
+                            },
+                            None => Some(literal_children.clone()),
+                        };
 
+                        self.graph[edge] = new_decisions;
+                    }
+                },
+                _ => (),
+            }
             /*
              * Debug printing decision nodes
              */
-            if false {
+            /*if false {
                 println!("Literals parent: {:?}", literals_parent);
                 let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
                 while let Some((edge, child)) = children.next(&self.graph) {
@@ -888,7 +1220,7 @@ impl IntermediateGraph {
                     println!("Edges: {:?}", self.graph[edge]);
                 }
                 println!("-----------------------------");
-            }
+            }*/
         }
     }
 
@@ -962,41 +1294,28 @@ impl IntermediateGraph {
         nx_remaining_clause
     }
 
-    fn annotate_decisions_target_nx(&self, target: NodeIndex, clause: &[i32]) -> Vec<i32> {
-        let mut nx_remaining_clause = HashMap::new();
-        // the root node always still contains the whole clause
-        nx_remaining_clause.insert(self.root, Vec::from(clause));
+    fn get_decisions_target_nx(&self, target: NodeIndex) -> Vec<i32> {
+        let mut nx_decisions = HashMap::new();
+        // the root node can't have any decision yet
+        nx_decisions.insert(self.root, Vec::new());
 
         let mut dfs = Dfs::new(&self.graph, self.root);
         while let Some(nx) = dfs.next(&self.graph) {
-            if nx == target { break; }
             let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
             while let Some((edge, child)) = children.next(&self.graph) {
-                let remaining_clause = nx_remaining_clause.get(&nx).unwrap().clone();
-                
-                if remaining_clause.is_empty() { nx_remaining_clause.insert(child, vec![]); continue; }
-                if nx_remaining_clause.contains_key(&child) { continue; }
-                
-                match &self.graph[edge] {
-                    Some(decisions) => {
-                        if decisions.iter().any(|literal| remaining_clause.contains(&literal)) {
-                            nx_remaining_clause.insert(child, vec![])
-                        } else {
-                            let removed_impossible_assignments = remaining_clause
-                                .into_iter()
-                                .filter(|&literal| !decisions.contains(&-literal))
-                                .collect_vec();
-                            nx_remaining_clause.insert(
-                                child,
-                                removed_impossible_assignments
-                            )
-                        }
-                    },
-                    None => nx_remaining_clause.insert(child, remaining_clause),
-                };
+                let mut current_decisions: Vec<i32> = nx_decisions.get(&nx).unwrap().clone();
+                //println!("current before: {:?}", current_decisions);
+                let edge_decisions = self.graph[edge].clone().unwrap_or(Vec::new());
+                current_decisions.extend(edge_decisions.iter());
+                //println!("current after: {:?}", current_decisions);
+                nx_decisions.insert(child, current_decisions);
             }
         }
-        nx_remaining_clause.get(&target).unwrap().clone()
+
+        match nx_decisions.get(&target) {
+            Some(decision) => decision.clone(),
+            None => Vec::new()
+        }
     }
 
     /// Adds the necessary reference / removes them to extend a dDNNF by a unit clause
@@ -1081,6 +1400,64 @@ impl IntermediateGraph {
     }
 }
 
+pub(crate) fn bridges<V,E>(graph: &StableGraph::<V, E>) -> Vec<(NodeIndex, NodeIndex)> {
+    let mut bridges = Vec::new();
+    let mut visited = vec![false; graph.node_bound()];
+    let mut tin = vec![0usize; graph.node_bound()];
+    let mut fup = vec![0usize; graph.node_bound()];
+    let mut timer = 0usize;
+
+    for start in 0..graph.node_bound() {
+        if !visited[start] {
+            bridges_dfs_helper(
+                graph,
+                start,
+                graph.node_bound() + 1,
+                &mut bridges,
+                &mut visited,
+                &mut timer,
+                &mut tin,
+                &mut fup,
+            );
+        }
+    }
+
+    bridges
+}
+
+fn bridges_dfs_helper<V,E>(
+    graph: &StableGraph::<V,E>,
+    v: usize,
+    p: usize,
+    bridges: &mut Vec<(NodeIndex, NodeIndex)>,
+    visited: &mut Vec<bool>,
+    timer: &mut usize,
+    tin: &mut Vec<usize>,
+    fup: &mut Vec<usize>,
+) {
+    visited[v] = true;
+    *timer += 1;
+    tin[v] = *timer;
+    fup[v] = *timer;
+
+    let neighbours = graph.neighbors_directed(graph.from_index(v), Incoming);
+    for n in neighbours.chain(graph.neighbors_directed(graph.from_index(v), Outgoing)) {
+        let to = graph.to_index(n);
+        if to == p {
+            continue;
+        }
+        if visited[to] {
+            fup[v] = fup[v].min(tin[to]);
+        } else {
+            bridges_dfs_helper(graph, to, v, bridges, visited, timer, tin, fup);
+            fup[v] = fup[v].min(fup[to]);
+            if fup[to] > tin[v] {
+                bridges.push((graph.from_index(v), graph.from_index(to)));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::{collections::HashSet, fs::{File, self}, io::Write};
@@ -1105,7 +1482,7 @@ mod test {
         ];
 
         for (index, inp) in input.iter().enumerate() {
-            match ddnnf.inter_graph.closest_unsplitable_and(inp) {
+            match ddnnf.inter_graph.closest_unsplitable_and0(inp) {
                 Some((_replace_and_node, literals)) => {
                     let mut literals_as_vec = HashSet::<_>::from_iter(
                         literals.iter().copied())
@@ -1211,7 +1588,7 @@ mod test {
 
         for (path, features) in ddnnf_file_paths {
             let mut ddnnf = build_ddnnf(path, Some(features));
-            let cnf = ddnnf.inter_graph.transform_to_cnf_from_starting_cnf(&[]);
+            let (cnf, _, _) = ddnnf.inter_graph.transform_to_cnf_from_starting_cnf(vec![]);
             let cnf_flat = cnf.join("");
             let mut cnf_file = File::create(CNF_REDONE).unwrap();
             cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
@@ -1223,6 +1600,53 @@ mod test {
 
             fs::remove_file(CNF_REDONE).unwrap();
             fs::remove_file(DDNNF_REDONE).unwrap();
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn transform_to_cnf_from_starting_cnf_clauses() {
+        let ddnnf_file_paths = vec![
+            //("tests/data/small_ex.cnf", 4),
+            "vp9_c.cnf",
+            //"X264_c.cnf",
+            //"7z_c.cnf",
+            //"axtls214_c.cnf",
+            //"bdb_c.cnf",
+            //"polly_c.cnf",
+            //"jhipster_c.cnf"
+            //"copy.cnf"
+            //"auto1_c.cnf",
+            //"toybox_c.cnf"
+        ];
+
+        for path in ddnnf_file_paths {
+            let clauses = get_all_clauses_cnf(path);
+            //clauses.push(vec![37,-37]); clauses.push(vec![38,-38]); clauses.push(vec![39,-39]);
+            for clause in clauses.into_iter() {
+                println!("-------------------------------------------------------------");
+                println!("Current clause: {:?}", clause);
+                
+                remove_clause_cnf(path, &clause, None);
+                let mut ddnnf_wo = build_ddnnf(path, None);
+                write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap();
+                ddnnf_wo.inter_graph.add_clause_alt(clause.clone());
+                ddnnf_wo.rebuild();
+                write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap();
+
+                add_clause_cnf(path, &clause);
+                let mut ddnnf_w = build_ddnnf(path, None);
+                write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
+
+
+                assert_eq!(ddnnf_wo.rc(), ddnnf_w.rc());
+                for feature in 0_i32..ddnnf_w.number_of_variables as i32 {
+                    assert_eq!(
+                        ddnnf_wo.execute_query(&[feature]),
+                        ddnnf_w.execute_query(&[feature])
+                    );
+                }
+            }
         }
     }
 

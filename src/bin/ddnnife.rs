@@ -435,9 +435,9 @@ fn main() {
                 let mut skips = 0;
 
                 let mut clauses = get_all_clauses_cnf(cnf);
-                use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(40);
+                use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                 use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
-                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 19);
+                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses { break; }
                     println!("{index}/{total_clauses} clause: {clause:?}");
