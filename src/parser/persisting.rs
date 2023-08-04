@@ -176,7 +176,7 @@ mod test {
 
     #[test]
     fn partial_mermaid() {
-        let mut ddnnf = build_ddnnf("tests/data/vp9.cnf", Some(42));
+        let mut ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
         let root =  ddnnf.inter_graph.root;
         write_as_mermaid_md(&mut ddnnf, &[], "whole.md", None).unwrap();
         write_as_mermaid_md(&mut ddnnf, &[], "partial_root.md", Some((root, 5))).unwrap();

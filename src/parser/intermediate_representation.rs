@@ -8,7 +8,7 @@ use petgraph::{
     Direction::{Incoming, Outgoing}
 };
 
-use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::get_all_clauses_cnf, persisting::write_as_mermaid_md}, Ddnnf};
+use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::{get_all_clauses_cnf, simplify_clauses}, persisting::write_as_mermaid_md}, Ddnnf};
 
 use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf};
 
@@ -43,6 +43,7 @@ impl IntermediateGraph {
             }
         };
         inter_graph.add_decision_nodes_fu();
+        simplify_clauses(&mut inter_graph.cnf_clauses);
         inter_graph
     }
 
@@ -132,14 +133,16 @@ impl IntermediateGraph {
             );
 
         let mut closest_and = (self.root, self.literal_children.get(&self.root).unwrap());
-        for and_bridge in and_bridges {
+        for and_bridge in and_bridges.iter() {
             let lits = self.literal_children.get(&and_bridge).unwrap();
             if closest_and.1.len() > lits.len() {
-                closest_and = (and_bridge, lits);
-            }
+                closest_and = (*and_bridge, lits);
+            } 
         }
 
-        Some((closest_and.0, closest_and.1.clone()))
+        let devided_and = self.divide_bridge_and(closest_and.0, &and_bridges, clause);
+
+        Some((devided_and, self.literal_children.get(&devided_and).unwrap().clone()))
     }
 
     pub fn closest_unsplitable_and0(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
@@ -517,6 +520,66 @@ impl IntermediateGraph {
 
     // Change the structure by splitting one AND node into two.
     // In the following, we focus on the new AND' instead of AND, resulting
+    // in a smaller portion of the dDNNF, we have to travers.
+    //
+    // We can exclude all children fulfill:
+    //      1) don't contain any of the variables of the clause
+    //      2) the edge beteen the AND an its child is a bridge
+    //
+    //
+    // Example (with c1 and c2 as the relevant_children):
+    //
+    //           AND                        AND
+    //      ______|______      =>    _______|_______
+    //     /   /  |  \   \          |      |   \    \
+    //    c1  c2 c3  ... cn        AND'   c3   ...  cn
+    //                            /   \
+    //                           c1   c2
+    //
+    fn divide_bridge_and(&mut self, initial_start: NodeIndex, bridges: &[NodeIndex], clause: &[i32]) -> NodeIndex {
+        if clause.is_empty() { return initial_start; }
+        
+        // Find those children that are relevant to the provided clause.
+        // Those all contain at least one of the literals of the clause.
+        let mut relevant_children = Vec::new();
+        let mut contains_at_least_one_irrelevant = false;
+        let mut children = self.graph.neighbors_directed(initial_start, Outgoing).detach();
+        while let Some(child) = children.next_node(&self.graph) {
+            let lits = self.literal_children.get(&child).unwrap();
+            if clause.iter().any(|f| lits.contains(f) || lits.contains(&-f))
+                || bridges.contains(&child) {
+                relevant_children.push(child);
+            } else {
+                contains_at_least_one_irrelevant = true;
+            }
+        }
+
+        // If there is no irrelevant child, it makes no sense to divide the AND node.
+        if !contains_at_least_one_irrelevant {
+            return initial_start;
+        }
+
+        // Create the new AND node and adjust the edges.
+        let new_and = self.graph.add_node(TId::And);
+        let mut new_and_lits = HashSet::new();
+        for child in relevant_children {
+            if let Some(edge) = self.graph.find_edge(initial_start, child) {
+                self.graph.remove_edge(edge);
+            }
+            self.graph.add_edge(new_and, child, None);
+
+            new_and_lits.extend(self.literal_children.get(&child).unwrap());
+        }
+        self.graph.add_edge(initial_start, new_and, None);
+
+        // Add child literals of new_and to mapping
+        self.literal_children.insert(new_and, new_and_lits);
+
+        new_and
+    }
+
+    // Change the structure by splitting one AND node into two.
+    // In the following, we focus on the new AND' instead of AND, resulting
     // in a smaller portion of the dDNNF, we have to travers
     // Example (with c1 and c2 as the relevant_children):
     //
@@ -776,8 +839,6 @@ impl IntermediateGraph {
             None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
         };
 
-        //closest_and = self.divide_and(closest_and, &clause);
-
         let mut accumlated_decisions = self.get_decisions_target_nx(closest_and);
         // Add unit clauses. Those decisions are implicit in the dDNNF.
         // Hence, we have to search for them
@@ -1014,7 +1075,7 @@ impl IntermediateGraph {
     }
 
     pub fn add_clause_alt(&mut self, clause: Vec<i32>) -> bool {
-        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
+        if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
         let mut _start = Instant::now();
         const INTER_CNF: &str = ".sub.cnf"; const INTER_NNF: &str = ".sub.nnf";
 
@@ -1224,14 +1285,30 @@ impl IntermediateGraph {
         }
     }
 
-    /// Adds the necessary reference / removes them to extend a dDNNF by a unit clause
+    /// Adds the necessary reference / removes it to extend a dDNNF by a unit clause
     fn add_unit_clause(&mut self, feature: i32) {
         if feature.unsigned_abs() <= self.number_of_variables {
             // it's an old feature
             match self.literals_nx.get(&-feature) {
                 // Add a unit clause by removing the existence of its contradiction
+                // Removing it is the same as replacing it by a FALSE node.
+                // We resolve the FALSE node immidiatly.
                 Some(&node) => {
-                    self.graph.remove_node(node);
+                    let mut need_to_be_removed = vec![node];
+                    
+                    while !need_to_be_removed.is_empty() {
+                        let mut remove_in_next_step = Vec::new();
+                        for node in need_to_be_removed {
+                            let mut children = self.graph.neighbors_directed(node, Incoming).detach();
+                            while let Some(parent) = children.next_node(&self.graph) {
+                                if self.graph[parent] == TId::And {
+                                    remove_in_next_step.push(parent);
+                                }
+                            }
+                            self.graph.remove_node(node);
+                        }
+                        need_to_be_removed = remove_in_next_step;
+                    }
                 },
                 // If its contradiction does not exist, we don't have to do anything
                 None => (),
@@ -1583,7 +1660,7 @@ mod test {
 
         let ddnnf_file_paths = vec![
             ("tests/data/small_ex.cnf", 4),
-            ("tests/data/vp9.cnf", 42),
+            ("tests/data/VP9.cnf", 42),
         ];
 
         for (path, features) in ddnnf_file_paths {
@@ -1606,21 +1683,17 @@ mod test {
     #[test]
     #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses() {
+        const COPY_PATH: &str = "tests/data/transform_from_starting_cnf_copy.cnf";
         let ddnnf_file_paths = vec![
-            //("tests/data/small_ex.cnf", 4),
-            "vp9_c.cnf",
+            //"vp9_c.cnf",
             //"X264_c.cnf",
-            //"7z_c.cnf",
-            //"axtls214_c.cnf",
-            //"bdb_c.cnf",
-            //"polly_c.cnf",
-            //"jhipster_c.cnf"
-            //"copy.cnf"
-            //"auto1_c.cnf",
-            //"toybox_c.cnf"
+            "tests/data/VP9.cnf",
+            "tests/data/X264.cnf"
         ];
 
         for path in ddnnf_file_paths {
+            fs::copy(path, COPY_PATH).unwrap();
+
             let clauses = get_all_clauses_cnf(path);
             //clauses.push(vec![37,-37]); clauses.push(vec![38,-38]); clauses.push(vec![39,-39]);
             for clause in clauses.into_iter() {
@@ -1647,6 +1720,8 @@ mod test {
                     );
                 }
             }
+
+            fs::remove_file(COPY_PATH).unwrap();
         }
     }
 
@@ -1654,7 +1729,7 @@ mod test {
     #[serial]
     fn incremental_adding_clause() {
         let ddnnf_file_paths = vec![
-            ("tests/data/VP9_w.dimacs", "tests/data/VP9_wo_-4-5.dimacs", 42, vec![-4, -5])
+            ("tests/data/VP9.cnf", "tests/data/VP9_wo_-4-5.cnf", 42, vec![-4, -5])
         ];
 
         for (path_w_clause, path_wo_clause, features, clause) in ddnnf_file_paths {
@@ -1749,7 +1824,7 @@ mod test {
         let ddnnf_file_paths = vec![
             //("tests/data/small_ex_c2d.nnf", 4),
             //("tests/data/small_ex_d4.nnf", 4),
-            //("tests/data/vp9.cnf", 42),
+            //("tests/data/VP9.cnf", 42),
             //("tests/data/auto1.cnf", 2513),
             ("copy.cnf", 1360),
             //("tests/data/auto1_d4.nnf", 2513)

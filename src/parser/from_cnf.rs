@@ -1,6 +1,6 @@
 //! A lexer that categorizes a CNF into its coresponding tokens.
 
-use std::{io::{BufReader, BufRead, Write}, fs::File, cmp::max};
+use std::{io::{BufReader, BufRead, Write}, fs::File, cmp::max, collections::HashSet};
 
 use nom::{
     branch::alt,
@@ -154,6 +154,26 @@ pub fn get_all_clauses_cnf(path: &str) -> Vec<Vec<i32>> {
     clauses
 }
 
+/// Simplifys the clauses according to the following rules
+/// 1) If a variable occurs multiple times -> remove all occurences except one
+/// 2) If a variable occurs singed and unsinged (i.e. [a , b, -a]) -> remove whole clause
+pub fn simplify_clauses(clauses: &mut Vec<Vec<i32>>) {
+    let mut clause_set: Vec<HashSet<i32>> = Vec::with_capacity(clauses.len());
+    
+    // Remove duplicates as specified in 1)
+    for inner_vec in clauses.iter_mut() {
+        clause_set.push(inner_vec.drain(..).collect());
+    }
+
+    // Remove clauses that are always SAT as in 2)
+    clause_set.retain(|clause| clause.iter().all(|elem| !clause.contains(&-elem)));
+
+    clauses.clear(); // Clear the original clauses vector
+    for clause in clause_set.into_iter() {
+        clauses.push(clause.into_iter().collect());
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::fs::{self, read_to_string};
@@ -216,5 +236,27 @@ mod test {
         );
 
         fs::remove_file(INTER_CNF_PATH).unwrap();
+    }
+
+    #[test]
+    fn clause_simplfication() {
+        let mut clauses = vec![
+            vec![1, 2, 3],
+            vec![1, 2, 1, 1, 2, 3, 2, 2, 9, 1, 1, 1, 1, 3, 3, 1, 2],
+            vec![1, 1, 2, 2, 3, 2, 2, 2, 5, -1, 8, 9]
+        ];
+
+        simplify_clauses(&mut clauses);
+        for clause in clauses.iter_mut() {
+            clause.sort();
+        }
+
+        assert_eq!(
+            vec![
+                vec![1, 2, 3],
+                vec![1, 2, 3, 9],
+            ],
+            clauses
+        )
     }
 }
