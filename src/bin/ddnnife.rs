@@ -461,17 +461,17 @@ fn main() {
                 
                     let benefit = diff_naive - diff_recompile;
                     if benefit.is_sign_positive() {
-                        println!("\x1b[1;38;5;46m(+)\x1b[0m Recompile is {}s BETTER", benefit);
+                        println!("\x1b[1;38;5;46m(+)\x1b[0m SUB-Recompile is {}s BETTER", benefit);
                     } else {
-                        println!("\x1b[1;38;5;196m(-)\x1b[0m Recompile is {}s WORSE", benefit);
+                        println!("\x1b[1;38;5;196m(-)\x1b[0m SUB-Recompile is {}s WORSE", benefit);
                     }
 
                     println!("Current total time naive method:     {total_naive:.5}, diff: {diff_naive:.10}");
                     println!("Current total time recompile method: {total_recompile:.5}, diff: {diff_recompile:.10}");
                 }
 
-                println!("Total time naive method:     {total_naive}");
-                println!("Total time recompile method: {total_recompile}");
+                println!("Total time naive method:     {total_naive:.10}");
+                println!("Total time recompile method: {total_recompile:.10}");
                 println!("skiped {skips} out of {} clauses, because the CNF was to big.", total_clauses);
             },
         }

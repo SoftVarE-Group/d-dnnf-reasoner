@@ -9,7 +9,7 @@ use std::{collections::{HashMap, HashSet}, cmp::max};
 
 use rug::Integer;
 
-use crate::parser::intermediate_representation::IntermediateGraph;
+use crate::parser::{intermediate_representation::IntermediateGraph, from_cnf::reduce_clause};
 
 use self::node::Node;
 
@@ -91,8 +91,15 @@ impl Ddnnf {
         for clause in clauses {
             let reduced_query = self.reduce_query(clause);
             if reduced_query.is_empty() { return true; }
-            if !self.inter_graph.add_clause_alt(reduced_query) {
-                return false;
+
+            match reduce_clause(&reduced_query, &HashSet::new()) {
+                Some(clause) => {
+                    if clause.is_empty() { return true; }
+                    if !self.inter_graph.add_clause_alt(clause) {
+                        return false;
+                    }
+                },
+                None => panic!("dDNNF becomes UNSAT for clause: {:?}!", reduced_query),
             }
         }
         

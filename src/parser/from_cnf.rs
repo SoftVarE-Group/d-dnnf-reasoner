@@ -157,9 +157,9 @@ pub fn get_all_clauses_cnf(path: &str) -> Vec<Vec<i32>> {
 /// Simplifys the clauses according to the following rules
 /// 1) If a variable occurs multiple times -> remove all occurences except one
 /// 2) If a variable occurs singed and unsinged (i.e. [a , b, -a]) -> remove whole clause
-pub fn simplify_clauses(clauses: &mut Vec<Vec<i32>>) {
+pub fn simplify_clauses(mut clauses: Vec<Vec<i32>>) -> Vec<Vec<i32>> {
     let mut clause_set: Vec<HashSet<i32>> = Vec::with_capacity(clauses.len());
-    
+
     // Remove duplicates as specified in 1)
     for inner_vec in clauses.iter_mut() {
         clause_set.push(inner_vec.drain(..).collect());
@@ -168,10 +168,71 @@ pub fn simplify_clauses(clauses: &mut Vec<Vec<i32>>) {
     // Remove clauses that are always SAT as in 2)
     clause_set.retain(|clause| clause.iter().all(|elem| !clause.contains(&-elem)));
 
-    clauses.clear(); // Clear the original clauses vector
+    let mut decisions = HashSet::new();
+    clause_set.iter().for_each(|clause| 
+        if clause.len() == 1 {
+            decisions.insert(clause.clone().into_iter().collect::<Vec<_>>()[0]);
+        }
+    );
+
+    let mut simplified_clauses = Vec::with_capacity(clause_set.len());
     for clause in clause_set.into_iter() {
-        clauses.push(clause.into_iter().collect());
+        simplified_clauses.push(clause.into_iter().collect());
     }
+
+    (simplified_clauses, decisions) = apply_decisions(simplified_clauses, decisions);
+    decisions.into_iter().for_each(|decision| simplified_clauses.push(vec![decision]));
+
+    simplified_clauses
+}
+
+/// Repeatedly applys decisions. After the inital set of decisions is applied, clauses might
+/// be reduced to a point where they also become a decision, til there are no new decisions to be applied.
+pub fn apply_decisions(mut relevant_clauses: Vec<Vec<i32>>, mut accumlated_decisions: HashSet<i32>) -> (Vec<Vec<i32>>, HashSet<i32>) {
+    let mut decisions = accumlated_decisions.clone();
+    while !decisions.is_empty() {
+        let mut new_decisions = HashSet::new();
+        let mut reduced_clauses = Vec::new();
+
+        for mut clause in relevant_clauses {
+            // clause is not already satisfied in other parts of the dDNNF
+            if !clause.iter().any(|variable| decisions.contains(variable)) {
+                // remove variable assignments that aren't valid anymore
+                clause.retain(|variable| !decisions.contains(&-variable));
+                if !clause.is_empty() {
+                    if clause.len() == 1 {
+                        new_decisions.insert(clause[0]);
+                    }
+                    reduced_clauses.push(clause);
+                }
+            }
+        }
+
+        accumlated_decisions.extend(decisions);
+        relevant_clauses = reduced_clauses;
+        decisions = new_decisions;
+    }
+
+    (relevant_clauses, accumlated_decisions)
+}
+
+/// Performs the same simplifications as [simplify_clauses],
+/// but only on one clause.
+/// Returns None if the clause is UNSAT and Some(empty vector) if the clause is SAT.
+pub fn reduce_clause(clause: &[i32], decisions: &HashSet<i32>) -> Option<Vec<i32>> {
+    if clause.is_empty() { return Some(vec![]) }
+    let mut set_clause: HashSet<i32> = HashSet::new();
+    for elem in clause {
+        if set_clause.contains(&-elem) || decisions.contains(elem) {
+            return Some(vec![]);
+        } else if !decisions.contains(&-elem) {
+            set_clause.insert(*elem);
+        }
+    }
+
+    if set_clause.is_empty() { return None; }
+
+    Some(set_clause.into_iter().collect())
 }
 
 #[cfg(test)]
@@ -240,14 +301,14 @@ mod test {
 
     #[test]
     fn clause_simplfication() {
-        let mut clauses = vec![
+        let clauses = vec![
             vec![1, 2, 3],
             vec![1, 2, 1, 1, 2, 3, 2, 2, 9, 1, 1, 1, 1, 3, 3, 1, 2],
             vec![1, 1, 2, 2, 3, 2, 2, 2, 5, -1, 8, 9]
         ];
 
-        simplify_clauses(&mut clauses);
-        for clause in clauses.iter_mut() {
+        let mut simplified_clauses = simplify_clauses(clauses);
+        for clause in simplified_clauses.iter_mut() {
             clause.sort();
         }
 
@@ -256,7 +317,64 @@ mod test {
                 vec![1, 2, 3],
                 vec![1, 2, 3, 9],
             ],
-            clauses
+            simplified_clauses
         )
+    }
+
+    #[test]
+    fn clause_reduction() {
+        let contains_same_elements = |fst: Option<Vec<i32>>, snd: Option<Vec<i32>>| {
+            if fst.is_none() || snd.is_none() {
+                return fst == snd;
+            }
+
+            let fst = fst.unwrap(); let snd = snd.unwrap(); 
+            
+            fst.len() == snd.len()
+            && fst.iter().all(|elem| snd.contains(elem))
+            && snd.iter().all(|elem| fst.contains(elem))
+        };
+
+        assert!(contains_same_elements(
+            Some(vec![1, 2, 3]),
+            reduce_clause(&vec![1, 2, 3, 3, 3, 2], &HashSet::new())
+        ));
+
+        assert!(contains_same_elements(
+            Some(vec![]),
+            reduce_clause(&vec![], &vec![1, 2].into_iter().collect())
+        ));
+
+        assert!(contains_same_elements(
+            Some(vec![]),
+            reduce_clause(&vec![1, 2, 3], &vec![-1, 2].into_iter().collect())
+        ));
+
+        assert!(contains_same_elements(
+            Some(vec![3]),
+            reduce_clause(&vec![1, 2, 3], &vec![-1, -2].into_iter().collect())
+        ));
+
+        assert!(contains_same_elements(
+            None,
+            reduce_clause(&vec![1, 2, 3], &vec![-1, -2, -3].into_iter().collect())
+        ));
+    }
+
+    #[test]
+    fn clauses_apply_decisions() {
+        let mut clauses = vec![
+            vec![1, 2, 3],
+            vec![-2, 3],
+            vec![2],
+            vec![5, 3],
+            vec![-1, -2, -3, 4]
+        ];
+        let mut decisions = vec![1].into_iter().collect();
+
+        (clauses, decisions) = apply_decisions(clauses, decisions);
+
+        assert_eq!(vec![1, 2, 3, 4].into_iter().collect::<HashSet<_>>(), decisions);
+        assert_eq!(Vec::<Vec<i32>>::new(), clauses);
     }
 }
