@@ -1,10 +1,9 @@
 use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::Instant, path::Path, cmp::{max, Reverse}, panic};
 
-use graphalgs::connect::find_bridges;
 use itertools::Itertools;
 use petgraph::{
     stable_graph::{StableGraph, NodeIndex},
-    visit::{DfsPostOrder, Dfs, Bfs},
+    visit::{DfsPostOrder, Dfs, Bfs, NodeIndexable},
     algo::is_cyclic_directed,
     Direction::{Incoming, Outgoing}
 };
@@ -130,17 +129,17 @@ impl IntermediateGraph {
         let mut closest_node = (self.root, self.literal_children.get(&self.root).unwrap());
         
         let mut bridge_end_point = Vec::new();        
-        for (_from, to) in find_bridges(&self.graph) {
-            match self.graph[to] {
+        for bridge_endpoint in self.find_bridges() {
+            match self.graph[bridge_endpoint] {
                 TId::And | TId::Or => {
-                    let diffs = self.literal_children.get(&to).unwrap();
+                    let diffs = self.literal_children.get(&bridge_endpoint).unwrap();
                     // we only consider and nodes that include all literals of the clause
                     if clause.iter().all(|e| diffs.contains(e) && diffs.contains(&-e)) {
                         if closest_node.1.len() > diffs.len() {
-                            closest_node = (to, diffs);
+                            closest_node = (bridge_endpoint, diffs);
                         }
                     }
-                    bridge_end_point.push(to);
+                    bridge_end_point.push(bridge_endpoint);
                 }
                 _ => ()
             }
@@ -149,6 +148,116 @@ impl IntermediateGraph {
         let devided_and = self.divide_bridge(closest_node.0, &bridge_end_point, clause);
         Some((devided_and, self.literal_children.get(&devided_and).unwrap().clone()))
     }
+
+    pub fn _find_bridges_rec(&self) -> HashSet<NodeIndex> {
+        let mut bridges = HashSet::new();
+        let mut visited = vec![false; self.graph.node_count()];
+        let mut tin = vec![0usize; self.graph.node_count()];
+        let mut low = vec![0usize; self.graph.node_count()];
+        let mut timer = 0usize;
+    
+        self.dfs_helper(
+            self.graph.to_index(self.root),
+            self.graph.node_count() + 1,
+            &mut bridges,
+            &mut visited,
+            &mut timer,
+            &mut tin,
+            &mut low,
+        );
+        bridges
+    }
+    
+    #[allow(clippy::too_many_arguments)]
+    fn dfs_helper(
+        &self,
+        v: usize,
+        p: usize,
+        bridges: &mut HashSet<NodeIndex>,
+        visited: &mut Vec<bool>,
+        timer: &mut usize,
+        tin: &mut Vec<usize>,
+        low: &mut Vec<usize>,
+    ) {
+        visited[v] = true;
+        *timer += 1;
+        tin[v] = *timer;
+        low[v] = *timer;
+    
+        let neighbours_inc = self.graph.neighbors_directed(self.graph.from_index(v), Incoming);
+        let neighbours_out = self.graph.neighbors_directed(self.graph.from_index(v), Outgoing);
+
+        for n in neighbours_inc.chain(neighbours_out) {
+            let to = self.graph.to_index(n);
+            if to == p {
+                continue;
+            }
+            if visited[to] {
+                low[v] = low[v].min(tin[to]);
+            } else {
+                self.dfs_helper(to, v, bridges, visited, timer, tin, low);
+                low[v] = low[v].min(low[to]);
+                if low[to] > tin[v] {
+                    bridges.insert(self.graph.from_index(to));
+                }
+            }
+        }
+    }
+
+    // Evgeny: https://stackoverflow.com/questions/23179579/finding-bridges-in-graph-without-recursion
+    #[inline]
+    fn find_bridges(&self) -> HashSet<NodeIndex> {
+        let mut bridges = HashSet::new();
+        
+        // calculate neighbours beforehand, because we have to index them multiple times
+        let mut neighbours = Vec::with_capacity(self.graph.node_count());
+        for i in 0..self.graph.node_count() {
+            let neighbours_inc = self.graph.neighbors_directed(self.graph.from_index(i), Incoming);
+            let neighbours_out = self.graph.neighbors_directed(self.graph.from_index(i), Outgoing);
+            neighbours.push(neighbours_inc.chain(neighbours_out).map(|nx| self.graph.to_index(nx)).collect::<Vec<usize>>());
+        }
+
+        let mut visited = vec![false; self.graph.node_count()];
+        let mut tin = vec![0usize; self.graph.node_count()]; // time-in
+        let mut low = vec![0usize; self.graph.node_count()]; // f-up (minimum discovery time)
+        let mut timer = 0usize;
+        let mut stack: Vec<(usize, usize, usize)> = Vec::new(); // (node, parent) pairs
+    
+        stack.push((self.root.index(), self.graph.node_count() + 1, 0));
+
+        while let Some((v, parent, i)) = stack.pop() {
+            if i == 0 {
+                visited[v] = true;
+                timer += 1;
+                tin[v] = timer;
+                low[v] = timer;
+            }
+        
+            if i < neighbours[v].len() {
+                let to = neighbours[v][i];
+                stack.push((v, parent, i + 1));
+                if to != parent {
+                    if visited[to] {
+                        low[v] = low[v].min(tin[to]);
+                    } else {
+                        stack.push((to, v, 0));
+                    }
+                }
+            }
+            if i > 0 && i <= neighbours[v].len() {
+                let to = neighbours[v][i - 1];
+                if to != parent {
+                    low[v] = low[v].min(low[to]);
+                    if low[to] > tin[v] {
+                        bridges.insert(self.graph.from_index(to));
+                    }
+                }
+            }
+        }
+
+        bridges
+    }
+
 
     pub fn closest_unsplitable_and0(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
         use crate::c2d_lexer::TokenIdentifier::*;
@@ -1529,41 +1638,43 @@ impl IntermediateGraph {
 mod test {
     use std::{collections::HashSet, fs::{File, self}, io::Write};
 
-    use petgraph::{visit::DfsPostOrder, Direction::{Outgoing, Incoming}};
+    use petgraph::Direction::Incoming;
     use serial_test::serial;
 
-    use crate::parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}};
+    use crate::{parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}}, Ddnnf};
 
     #[test]
     #[serial]
     fn closest_unsplittable_and() {
-        let mut ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-
-        let input = vec![
+        let bridge_comparison = |mut ddnnf: Ddnnf, input: Vec<Vec<i32>>, output: Vec<Option<Vec<i32>>>| {
+            for (index, inp) in input.iter().enumerate() {
+                match ddnnf.inter_graph.closest_unsplitable_bridge(inp) {
+                    Some((_replace_and_node, literals)) => {
+                        let mut literals_as_vec = HashSet::<_>::from_iter(
+                            literals.iter().copied())
+                            .into_iter()
+                            .collect::<Vec<i32>>();
+    
+                        literals_as_vec.sort();
+                        assert_eq!(output[index].clone().unwrap(), literals_as_vec);
+                    },
+                    None => {
+                        assert!(output[index].is_none());
+                    }
+                }
+            }
+        };
+        
+        let ddnnf_vp9 = build_ddnnf("tests/data/VP9.cnf", Some(42));
+        let input_vp9 = vec![
             vec![], vec![4], vec![5], vec![4, 5],
             vec![42], vec![-5], vec![-8]
         ];
-        let output = vec![
-            None, Some(vec![-5, 4]), Some(vec![-4, 5]), Some(vec![-5, -4, -3, 4, 5]),
-            Some(vec![-41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 8, 9])
+        let output_vp9 = vec![
+            None, Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-5, -4, -3, 3, 4, 5]),
+            Some(vec![-42, -41, 41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 8, 9])
         ];
-
-        for (index, inp) in input.iter().enumerate() {
-            match ddnnf.inter_graph.closest_unsplitable_and0(inp) {
-                Some((_replace_and_node, literals)) => {
-                    let mut literals_as_vec = HashSet::<_>::from_iter(
-                        literals.iter().copied())
-                        .into_iter()
-                        .collect::<Vec<i32>>();
-
-                    literals_as_vec.sort();
-                    assert_eq!(output[index].clone().unwrap(), literals_as_vec);
-                },
-                None => {
-                    assert!(output[index].is_none());
-                }
-            }
-        }
+        bridge_comparison(ddnnf_vp9, input_vp9, output_vp9);
     }
 
     #[test]
@@ -1645,40 +1756,12 @@ mod test {
 
     #[test]
     #[serial]
-    fn transform_to_cnf_from_starting_cnf() {
-        const CNF_REDONE: &str = "tests/data/.redone_c2c.cnf"; const DDNNF_REDONE: &str = "tests/data/.redone_c2c.nnf";
-
-        let ddnnf_file_paths = vec![
-            ("tests/data/small_ex.cnf", 4),
-            ("tests/data/VP9.cnf", 42),
-        ];
-
-        for (path, features) in ddnnf_file_paths {
-            let mut ddnnf = build_ddnnf(path, Some(features));
-            let (cnf, _, _) = ddnnf.inter_graph.transform_to_cnf_from_starting_cnf(vec![]);
-            let cnf_flat = cnf.join("");
-            let mut cnf_file = File::create(CNF_REDONE).unwrap();
-            cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
-
-            compile_cnf(CNF_REDONE, DDNNF_REDONE);
-            let ddnnf_redone = build_ddnnf(DDNNF_REDONE, Some(features));
-
-            assert_eq!(ddnnf.rc(), ddnnf_redone.rc());
-
-            fs::remove_file(CNF_REDONE).unwrap();
-            fs::remove_file(DDNNF_REDONE).unwrap();
-        }
-    }
-
-    #[test]
-    #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses() {
-        const COPY_PATH: &str = "tests/data/transform_from_starting_cnf_copy.cnf";
+        const COPY_PATH: &str = "tests/data/.transform_from_starting_cnf_copy.cnf";
         let ddnnf_file_paths = vec![
-            //"vp9_c.cnf",
-            //"X264_c.cnf", 
             "tests/data/VP9.cnf",
-            "tests/data/X264.cnf"
+            "tests/data/X264.cnf",
+            "tests/data/HiPAcc.cnf"
         ];
 
         for path in ddnnf_file_paths {
@@ -1709,9 +1792,8 @@ mod test {
                     );
                 }
             }
-
-            fs::remove_file(COPY_PATH).unwrap();
         }
+        fs::remove_file(COPY_PATH).unwrap();
     }
 
     #[test]
@@ -1778,65 +1860,6 @@ mod test {
         assert_eq!(sb_enumeration, ms2_enumeration);
 
         fs::remove_file(CNF_PATH).unwrap();
-    }
-
-    #[test]
-    #[serial]
-    fn decision_edges() {
-        let ddnnf_file_paths = vec![
-            //("tests/data/small_ex_c2d.nnf", 4),
-            //("tests/data/small_ex_d4.nnf", 4),
-            ("copy.cnf", 1360),
-            //("tests/data/auto1_d4.nnf", 2513)
-        ];
-
-        for (path, features) in ddnnf_file_paths {
-            let ddnnf = build_ddnnf(path, Some(features));
-            let ig = ddnnf.inter_graph;
-            let mut dfs = DfsPostOrder::new(&ig.graph, ig.root);
-            while let Some(nx) = dfs.next(&ig.graph) {
-                let mut children = ig.graph.neighbors_directed(nx, Outgoing).detach();
-                while let Some((edge, _node)) = children.next(&ig.graph) {
-                    match &ig.graph[edge] {
-                        Some(dec) => println!("{:?}: {:?}", ig.graph[nx], dec),
-                        None => (),
-                    }
-                }
-            }
-            println!("---------");
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn reduce_clause() {
-        let ddnnf_file_paths = vec![
-            //("tests/data/small_ex_c2d.nnf", 4),
-            //("tests/data/small_ex_d4.nnf", 4),
-            //("tests/data/VP9.cnf", 42),
-            //("tests/data/auto1.cnf", 2513),
-            ("copy.cnf", 1360),
-            //("tests/data/auto1_d4.nnf", 2513)
-        ];
-
-        for (path, features) in ddnnf_file_paths {
-            let all_clauses = get_all_clauses_cnf(path);
-            let clauses = all_clauses[..10].to_vec();//vec![all_clauses.last().unwrap()];
-            for (index, clause) in clauses.into_iter().enumerate() {
-                println!("{index} ");
-                print!("w/ -> ");
-                let mut ddnnf_w = build_ddnnf(path, Some(features));
-                ddnnf_w.inter_graph.starting_points_from_reduce_clause(&clause);
-                write_as_mermaid_md(&mut ddnnf_w, &[], "with.md", None).unwrap();
-
-                remove_clause_cnf(path, &clause, None);
-                print!("w/o -> ");
-                let mut ddnnf_wo = build_ddnnf(path, Some(features));
-                ddnnf_wo.inter_graph.starting_points_from_reduce_clause(&clause);
-                write_as_mermaid_md(&mut ddnnf_wo, &[], "without.md", None).unwrap();
-                add_clause_cnf(path, &clause);
-            }
-        }
     }
 
     #[test]

@@ -171,10 +171,13 @@ fn marking_insert(marking: &[usize], position: usize) -> &str {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
+
     use super::*;
     use crate::parser::build_ddnnf;
 
     #[test]
+    #[serial]
     fn partial_mermaid() {
         let mut ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
         let root =  ddnnf.inter_graph.root;
