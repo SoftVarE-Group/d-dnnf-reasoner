@@ -208,22 +208,22 @@ impl IntermediateGraph {
     #[inline]
     fn find_bridges(&self) -> HashSet<NodeIndex> {
         let mut bridges = HashSet::new();
-        
+
         // calculate neighbours beforehand, because we have to index them multiple times
-        let mut neighbours = Vec::with_capacity(self.graph.node_count());
+        let mut neighbours = vec![Vec::new(); self.graph.node_bound()];
         for i in 0..self.graph.node_count() {
             let neighbours_inc = self.graph.neighbors_directed(self.graph.from_index(i), Incoming);
             let neighbours_out = self.graph.neighbors_directed(self.graph.from_index(i), Outgoing);
-            neighbours.push(neighbours_inc.chain(neighbours_out).map(|nx| self.graph.to_index(nx)).collect::<Vec<usize>>());
+            neighbours[i] = neighbours_inc.chain(neighbours_out).map(|nx| self.graph.to_index(nx)).collect::<Vec<usize>>();
         }
 
-        let mut visited = vec![false; self.graph.node_count()];
-        let mut tin = vec![0usize; self.graph.node_count()]; // time-in
-        let mut low = vec![0usize; self.graph.node_count()]; // f-up (minimum discovery time)
+        let mut visited = vec![false; self.graph.node_bound()];
+        let mut tin = vec![0usize; self.graph.node_bound()]; // time-in
+        let mut low = vec![0usize; self.graph.node_bound()]; // f-up (minimum discovery time)
         let mut timer = 0usize;
         let mut stack: Vec<(usize, usize, usize)> = Vec::new(); // (node, parent) pairs
     
-        stack.push((self.root.index(), self.graph.node_count() + 1, 0));
+        stack.push((self.root.index(), self.graph.node_bound() + 1, 0));
 
         while let Some((v, parent, i)) = stack.pop() {
             if i == 0 {
@@ -1639,6 +1639,7 @@ mod test {
     use std::{collections::HashSet, fs::{File, self}, io::Write};
 
     use petgraph::Direction::Incoming;
+    use rand::rngs::StdRng;
     use serial_test::serial;
 
     use crate::{parser::{build_ddnnf, d4v2_wrapper::compile_cnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}}, Ddnnf};
@@ -1754,10 +1755,45 @@ mod test {
         }
     }
 
+    fn check_for_cardinality_correctness(path: &str, break_point: usize) {
+        let copy_path_string = format!(".{}_copy.cnf", path.split("/").collect::<Vec<&str>>().last().unwrap());
+        let copy_path = &copy_path_string;
+        fs::copy(path, copy_path).unwrap();
+
+        let mut clauses = get_all_clauses_cnf(copy_path);
+        use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(42);
+        use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
+        for (index, clause) in clauses.into_iter().enumerate() {
+            if index >= break_point { break; }
+            println!("-------------------------------------------------------------");
+            println!("Current clause: {:?}", clause);
+            
+            remove_clause_cnf(copy_path, &clause, None);
+            let mut ddnnf_wo = build_ddnnf(copy_path, None);
+            //write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap();
+            ddnnf_wo.inter_graph.add_clause_alt(clause.clone());
+            ddnnf_wo.rebuild();
+            //write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap();
+
+            add_clause_cnf(copy_path, &clause);
+            let mut ddnnf_w = build_ddnnf(copy_path, None);
+            //write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
+
+            assert_eq!(ddnnf_wo.rc(), ddnnf_w.rc());
+            for feature in 0_i32..ddnnf_w.number_of_variables as i32 {
+                assert_eq!(
+                    ddnnf_wo.execute_query(&[feature]),
+                    ddnnf_w.execute_query(&[feature])
+                );
+            }
+        }
+        fs::remove_file(copy_path).unwrap();
+
+    }
+
     #[test]
     #[serial]
-    fn transform_to_cnf_from_starting_cnf_clauses() {
-        const COPY_PATH: &str = "tests/data/.transform_from_starting_cnf_copy.cnf";
+    fn transform_to_cnf_from_starting_cnf_clauses_small_models() {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",
             "tests/data/X264.cnf",
@@ -1765,35 +1801,34 @@ mod test {
         ];
 
         for path in ddnnf_file_paths {
-            fs::copy(path, COPY_PATH).unwrap();
-
-            let clauses = get_all_clauses_cnf(path);
-            for clause in clauses.into_iter() {
-                println!("-------------------------------------------------------------");
-                println!("Current clause: {:?}", clause);
-                
-                remove_clause_cnf(path, &clause, None);
-                let mut ddnnf_wo = build_ddnnf(path, None);
-                write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap();
-                ddnnf_wo.inter_graph.add_clause_alt(clause.clone());
-                ddnnf_wo.rebuild();
-                write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap();
-
-                add_clause_cnf(path, &clause);
-                let mut ddnnf_w = build_ddnnf(path, None);
-                write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
-
-
-                assert_eq!(ddnnf_wo.rc(), ddnnf_w.rc());
-                for feature in 0_i32..ddnnf_w.number_of_variables as i32 {
-                    assert_eq!(
-                        ddnnf_wo.execute_query(&[feature]),
-                        ddnnf_w.execute_query(&[feature])
-                    );
-                }
-            }
+            check_for_cardinality_correctness(path, usize::MAX);    
         }
-        fs::remove_file(COPY_PATH).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn transform_to_cnf_from_starting_cnf_clauses_medium_models() {
+        let ddnnf_file_paths = vec![
+            "tests/data/kc_axTLS.cnf",
+            "tests/data/toybox.cnf"
+        ];
+
+        for path in ddnnf_file_paths {
+            check_for_cardinality_correctness(path, 100);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn transform_to_cnf_from_starting_cnf_clauses_big_models() {
+        let ddnnf_file_paths = vec![
+            "tests/data/auto1.cnf",
+            "tests/data/auto2.cnf"
+        ];
+
+        for path in ddnnf_file_paths {
+            check_for_cardinality_correctness(path, 10);
+        }
     }
 
     #[test]

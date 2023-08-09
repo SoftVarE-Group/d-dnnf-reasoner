@@ -89,17 +89,15 @@ impl Ddnnf {
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4) 
     pub fn apply_changes(&mut self, clauses: &Vec<&[i32]>) -> bool {
         for clause in clauses {
-            let reduced_query = self.reduce_query(clause);
-            if reduced_query.is_empty() { return true; }
-
-            match reduce_clause(&reduced_query, &HashSet::new()) {
+            match reduce_clause(&clause, &HashSet::new()) {
                 Some(clause) => {
                     if clause.is_empty() { return true; }
-                    if !self.inter_graph.add_clause_alt(clause) {
+                    let reduced_w_cd = self.reduce_query(&clause);
+                    if !self.inter_graph.add_clause_alt(reduced_w_cd) {
                         return false;
                     }
                 },
-                None => panic!("dDNNF becomes UNSAT for clause: {:?}!", reduced_query),
+                None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
             }
         }
         
