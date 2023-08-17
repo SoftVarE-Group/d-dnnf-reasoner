@@ -8,11 +8,13 @@ use ddnnf_lib::parser::build_ddnnf;
 use ddnnf_lib::parser::from_cnf::{get_all_clauses_cnf, remove_clause_cnf, add_clause_cnf};
 use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use itertools::Itertools;
+use rand::Rng;
 use rand::rngs::StdRng;
 use rand_distr::num_traits::Signed;
+use statistical::{mean, median, standard_deviation};
 
-use std::cmp;
-use std::fs::File;
+use std::{cmp, fs};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Write, BufRead, BufWriter, BufReader};
 use std::path::Path;
 use std::time::Instant;
@@ -434,28 +436,69 @@ fn main() {
                 let mut start;
                 let mut skips = 0;
 
-                let mut clauses = get_all_clauses_cnf(cnf);
+                let file_raw = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .append(true)
+                    .open("bench_raw.csv")
+                    .unwrap();
+                let mut raw_wtr = csv::Writer::from_writer(file_raw);
+                let file_size = std::fs::metadata("bench_raw.csv").expect("file metadata not found").len();
+                if file_size == 0 {
+                    raw_wtr.write_record(&["model","base","optimized","benefit"]).unwrap();
+                }
+
+                let file_total = OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .append(true)
+                    .open("bench_total.csv")
+                    .unwrap();
+                let mut total_wtr = csv::Writer::from_writer(file_total);
+                let file_size = std::fs::metadata("bench_total.csv").expect("file metadata not found").len();
+                if file_size == 0 {
+                    total_wtr.write_record(
+                        &["model",
+                        "base_total","base_avg","base_med","base_stdev",
+                        "opt_total","opt_avg","opt_med","opt_stdev",
+                        "benefit_total","benefit_avg","benefit_med","benefit_stdev"]
+                    ).unwrap();
+                }
+                let mut base_raw = Vec::new();
+                let mut opt_raw = Vec::new();
+                let mut benefit_raw = Vec::new(); 
+
+                let mut rng = rand::thread_rng();
+                let random_string: String = (0..10)
+                    .map(|_| (rng.gen_range(b'a'..=b'z') as char))
+                    .collect();
+
+                let copy_path_string = format!(".{}_{}_copy.cnf", cnf.split("/").collect::<Vec<&str>>().last().unwrap(), random_string);
+                let copy_path = &copy_path_string;
+                fs::copy(cnf, copy_path).unwrap();
+
+                let mut clauses = get_all_clauses_cnf(copy_path);
                 use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                 use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
-                let total_clauses = cmp::min(get_all_clauses_cnf(cnf).len(), 99);
+                let total_clauses = cmp::min(get_all_clauses_cnf(copy_path).len(), 1_000_000);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses { break; }
                     println!("{index}/{total_clauses} clause: {clause:?}");
-                    remove_clause_cnf(cnf, &clause, None);
-                    let mut inter_ddnnf = build_ddnnf(cnf, Some(ddnnf.number_of_variables));
+                    remove_clause_cnf(copy_path, &clause, None);
+                    let mut inter_ddnnf = build_ddnnf(copy_path, Some(ddnnf.number_of_variables));
                     
                     start = Instant::now();
                     if !inter_ddnnf.apply_changes(&vec![&clause]) {
                         skips += 1;
-                        add_clause_cnf(cnf, &clause);
+                        add_clause_cnf(copy_path, &clause);
                         continue;
                     }
                     diff_recompile = start.elapsed().as_secs_f64();
                     total_recompile += diff_recompile;
                     
-                    add_clause_cnf(cnf, &clause);
+                    add_clause_cnf(copy_path, &clause);
                     start = Instant::now();
-                    build_ddnnf(cnf, Some(ddnnf.number_of_variables));
+                    let mut base_ddnnf = build_ddnnf(copy_path, Some(ddnnf.number_of_variables));
                     diff_naive = start.elapsed().as_secs_f64();
                     total_naive += diff_naive;
                 
@@ -465,14 +508,51 @@ fn main() {
                     } else {
                         println!("\x1b[1;38;5;196m(-)\x1b[0m SUB-Recompile is {}s WORSE", benefit);
                     }
+                    base_raw.push(diff_naive);
+                    opt_raw.push(diff_recompile);
+                    benefit_raw.push(benefit);
+
+                    raw_wtr.write_record(&[
+                        input_file_path.clone(),
+                        diff_naive.to_string(),
+                        diff_recompile.to_string(),
+                        benefit.to_string()
+                    ]).unwrap();
 
                     println!("Current total time naive method:     {total_naive:.5}, diff: {diff_naive:.10}");
                     println!("Current total time recompile method: {total_recompile:.5}, diff: {diff_recompile:.10}");
+
+                    assert_eq!(inter_ddnnf.rc(), base_ddnnf.rc());
+                    for feature in 0_i32..base_ddnnf.number_of_variables as i32 {
+                        assert_eq!(
+                            base_ddnnf.execute_query(&[feature]),
+                            inter_ddnnf.execute_query(&[feature])
+                        );
+                    }
                 }
 
                 println!("Total time naive method:     {total_naive:.10}");
                 println!("Total time recompile method: {total_recompile:.10}");
                 println!("skiped {skips} out of {} clauses, because the CNF was to big.", total_clauses);
+                
+                total_wtr.write_record(&[
+                    input_file_path.clone(),
+                    total_naive.to_string(),
+                    mean(&base_raw).to_string(),
+                    median(&base_raw).to_string(),
+                    standard_deviation(&base_raw, None).to_string(),
+                    total_recompile.to_string(),
+                    mean(&opt_raw).to_string(),
+                    median(&opt_raw).to_string(),
+                    standard_deviation(&opt_raw, None).to_string(),
+                    (total_naive - total_recompile).to_string(),
+                    mean(&benefit_raw).to_string(),
+                    median(&benefit_raw).to_string(),
+                    standard_deviation(&benefit_raw, None).to_string()
+                ]).unwrap();
+                raw_wtr.flush().unwrap(); total_wtr.flush().unwrap();
+
+                fs::remove_file(copy_path).unwrap();
             },
         }
     }

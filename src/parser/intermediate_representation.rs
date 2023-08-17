@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs::{File, self}, io::Write, time::Instant, path::Path, cmp::max, panic};
+use std::{collections::{HashMap, HashSet}, fs::File, io::Write, time::Instant, cmp::max, panic};
 
 use itertools::Itertools;
 use petgraph::{
@@ -10,7 +10,7 @@ use petgraph::{
 
 use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::{get_all_clauses_cnf, simplify_clauses}, persisting::write_as_mermaid_md}, Ddnnf};
 
-use super::{calc_and_count, calc_or_count, d4v2_wrapper::compile_cnf, from_cnf::{reduce_clause, apply_decisions}};
+use super::{calc_and_count, calc_or_count, from_cnf::{reduce_clause, apply_decisions}};
 
 /// The IntermediateGraph enables us to modify the dDNNF. The structure of a vector of nodes does not allow
 /// for that because deleting or removing nodes would mess up the indices. 
@@ -150,61 +150,6 @@ impl IntermediateGraph {
         Some((devided_and, self.literal_children.get(&devided_and).unwrap().clone()))
     }
 
-    pub fn _find_bridges_rec(&self) -> HashSet<NodeIndex> {
-        let mut bridges = HashSet::new();
-        let mut visited = vec![false; self.graph.node_count()];
-        let mut tin = vec![0usize; self.graph.node_count()];
-        let mut low = vec![0usize; self.graph.node_count()];
-        let mut timer = 0usize;
-    
-        self.dfs_helper(
-            self.graph.to_index(self.root),
-            self.graph.node_count() + 1,
-            &mut bridges,
-            &mut visited,
-            &mut timer,
-            &mut tin,
-            &mut low,
-        );
-        bridges
-    }
-    
-    #[allow(clippy::too_many_arguments)]
-    fn dfs_helper(
-        &self,
-        v: usize,
-        p: usize,
-        bridges: &mut HashSet<NodeIndex>,
-        visited: &mut Vec<bool>,
-        timer: &mut usize,
-        tin: &mut Vec<usize>,
-        low: &mut Vec<usize>,
-    ) {
-        visited[v] = true;
-        *timer += 1;
-        tin[v] = *timer;
-        low[v] = *timer;
-    
-        let neighbours_inc = self.graph.neighbors_directed(self.graph.from_index(v), Incoming);
-        let neighbours_out = self.graph.neighbors_directed(self.graph.from_index(v), Outgoing);
-
-        for n in neighbours_inc.chain(neighbours_out) {
-            let to = self.graph.to_index(n);
-            if to == p {
-                continue;
-            }
-            if visited[to] {
-                low[v] = low[v].min(tin[to]);
-            } else {
-                self.dfs_helper(to, v, bridges, visited, timer, tin, low);
-                low[v] = low[v].min(low[to]);
-                if low[to] > tin[v] {
-                    bridges.insert(self.graph.from_index(to));
-                }
-            }
-        }
-    }
-
     // Evgeny: https://stackoverflow.com/questions/23179579/finding-bridges-in-graph-without-recursion
     #[inline]
     fn find_bridges(&self) -> HashSet<NodeIndex> {
@@ -233,7 +178,7 @@ impl IntermediateGraph {
                 tin[v] = timer;
                 low[v] = timer;
             }
-        
+
             if i < neighbours[v].len() {
                 let to = neighbours[v][i];
                 stack.push((v, parent, i + 1));
@@ -321,6 +266,9 @@ impl IntermediateGraph {
 
     // Experimental method to use the initial CNF for recompiling
     pub fn transform_to_cnf_from_starting_cnf(&mut self, clause: Vec<i32>) -> (Vec<String>, NodeIndex, HashMap<u32, u32>) {
+        if DEBUG {
+            println!("starting 'transform_to_cnf_from_starting_cnf' with clause: {:?}", clause);
+        }
         if self.cnf_clauses.is_empty() { return (Vec::new(), NodeIndex::new(0), HashMap::new()); }
 
         // 1) Find the closest node and the decisions to that point
@@ -328,6 +276,10 @@ impl IntermediateGraph {
             Some((nx, lits)) => (nx, lits.clone()),
             None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
         };
+
+        if DEBUG {
+            println!("closest node: {:?}, and its relevant literals: {:?}", closest_node, relevant_literals);
+        }
 
         // Recompile the whole dDNNF if at least 80% are children of the closest_node we could replace
         if relevant_literals.len() as f32 / 2.0 > self.number_of_variables as f32 * 0.8 {
@@ -450,7 +402,7 @@ impl IntermediateGraph {
             }
         }
 
-        if DEBUG { println!("reindex: {:?}", re_index); }
+        //if DEBUG { println!("reindex: {:?}", re_index); }
 
         // write the meta information of the header
         let mut cnf = vec![format!("p cnf {} {}\n", index - 1, relevant_clauses.len() + 1)];
@@ -468,32 +420,45 @@ impl IntermediateGraph {
         (cnf, closest_node, re_index)
     }
 
-    pub fn add_clause_alt(&mut self, clause: Vec<i32>) -> bool {
-        if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
-        let mut _start = Instant::now();
-        const INTER_CNF: &str = ".sub.cnf"; const INTER_NNF: &str = ".sub.nnf";
+    fn recompile_everything(&mut self, clause: Vec<i32>) {
+        const INTER_CNF: &str = ".sub.cnf";
+        
+        let mut cnf = vec![format!("p cnf {} {}\n", self.number_of_variables, self.cnf_clauses.len() + 1)];
+        for clause in self.cnf_clauses.iter() {
+            cnf.push(format!("{} 0\n", format_vec(clause.iter())));
+        }
+        cnf.push(format!("{} 0\n", format_vec(clause.iter())));
 
-        //println!("elapsed time: finding AND: {}", _start.elapsed().as_secs_f64());
+        let cnf_flat = cnf.join("");
+        let mut cnf_file = File::create(INTER_CNF).unwrap();
+        cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
+
+        let sup = build_ddnnf(INTER_CNF, None);
+        self.move_inter_graph(sup.inter_graph);
+        self.rebuild(None);
+        println!("recompiled everything");
+    }
+
+    pub fn add_clause(&mut self, clause: Vec<i32>) -> bool {
+        if clause.is_empty() { return true; }
+        let clause_max_var = clause.iter().map(|f| f.unsigned_abs()).max().unwrap();
+        if self.number_of_variables < clause_max_var {
+            self.number_of_variables = clause_max_var;
+            self.recompile_everything(clause);
+            return true;
+        }
+        self.cnf_clauses.push(clause.clone());
+        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
+        
+        let mut _start = Instant::now();
+        const INTER_CNF: &str = ".sub.cnf";
+
         _start = Instant::now();
-        let (mut cnf, adjusted_replace, re_indices) = self.transform_to_cnf_from_starting_cnf(clause.clone());
+        let (cnf, adjusted_replace, re_indices) = self.transform_to_cnf_from_starting_cnf(clause.clone());
         
         if cnf.is_empty() {
             if adjusted_replace == self.root {
-                cnf = vec![format!("p cnf {} {}\n", self.number_of_variables, self.cnf_clauses.len() + 1)];
-                for clause in self.cnf_clauses.iter() {
-                    cnf.push(format!("{} 0\n", format_vec(clause.iter())));
-                }
-                cnf.push(format!("{} 0\n", format_vec(clause.iter())));
-
-                let cnf_flat = cnf.join("");
-                let mut cnf_file = File::create(INTER_CNF).unwrap();
-                cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
-
-                compile_cnf(INTER_CNF, INTER_NNF);
-                let sup = build_ddnnf(INTER_NNF, Some(self.number_of_variables));
-                self.move_inter_graph(sup.inter_graph);
-                self.rebuild(None);
-                println!("recompiled everything");
+                self.recompile_everything(clause);
             } else {
                 println!("clause was redundant :D");
             }
@@ -501,43 +466,17 @@ impl IntermediateGraph {
         }
         
         println!("Replace CNF clauses: {}", cnf.len());
-        //if cnf.len() > 20_000 { return false; }
-        //println!("elapsed time: tseitin: {}", _start.elapsed().as_secs_f64());
-
         _start = Instant::now();
         // persist CNF
         let cnf_flat = cnf.join("");
         let mut cnf_file = File::create(INTER_CNF).unwrap();
         cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-        // transform the CNF to dDNNF and load it
-        compile_cnf(INTER_CNF, INTER_NNF);
-        let last_lit_number = *re_indices.keys().max().unwrap();
-        if !Path::new(INTER_NNF).exists() {
-            println!("There is no INTER.nnf file...");
-            let contents = fs::read_to_string(INTER_CNF)
-            .expect("Should have been able to read the file");
-    
-            println!("With text:\n{contents}");
-            return false;
-        }
-
         if DEBUG {
             let mut ddnnf_remove = Ddnnf::default();
             ddnnf_remove.inter_graph = self.clone(); ddnnf_remove.rebuild();
             write_as_mermaid_md(&ddnnf_remove, &[], "removed_sub.md", Some((adjusted_replace, 1_000))).unwrap();
         }
-
-        // Remove all edges of the old graph. We keep the nodes.
-        // Most are useless but some are used in other parts of the graph. Hence, we keep them
-        // TODO Knoten die wiederverwendet werden benötigen noch die Kanten zu ihren Kindern!!!
-        /*let mut dfs = DfsPostOrder::new(&self.graph, adjusted_replace);
-        while let Some(nx) = dfs.next(&self.graph) {
-            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
-            while let Some(edge_to_child) = children.next_edge(&self.graph) {
-                self.graph.remove_edge(edge_to_child);
-            }
-        }*/
 
         let mut parents = self.graph.neighbors_directed(adjusted_replace, Outgoing).detach();
         while let Some(parent_edge) = parents.next_edge(&self.graph) {
@@ -550,13 +489,7 @@ impl IntermediateGraph {
             write_as_mermaid_md(&ddnnf_after_remove, &[], "after_rm.md", None).unwrap();
         }
 
-        // If the new subgraph is unsatisfiable, we don't have to add anything
-        if fs::read_to_string(INTER_NNF).unwrap() == "f 1 0\n" {
-            println!("Unsatisfiable!");
-            return false;
-        }
-
-        let mut sup = build_ddnnf(INTER_NNF, Some(last_lit_number));
+        let mut sup = build_ddnnf(INTER_CNF, None);
 
         if DEBUG {
             sup.rebuild();
@@ -687,23 +620,12 @@ impl IntermediateGraph {
                 },
                 _ => (),
             }
-            /*
-             * Debug printing decision nodes
-             */
-            /*if false {
-                println!("Literals parent: {:?}", literals_parent);
-                let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
-                while let Some((edge, child)) = children.next(&self.graph) {
-                    println!("Literals child: {:?}", self.literal_children.get(&child).unwrap());
-                    println!("Edges: {:?}", self.graph[edge]);
-                }
-                println!("-----------------------------");
-            }*/
         }
     }
 
     /// Adds the necessary reference / removes it to extend a dDNNF by a unit clause
     fn add_unit_clause(&mut self, feature: i32) {
+        println!("replaced {:?} by unit clause", feature);
         if feature.unsigned_abs() <= self.number_of_variables {
             // it's an old feature
             match self.literals_nx.get(&-feature) {
@@ -825,7 +747,7 @@ impl IntermediateGraph {
 mod test {
     use std::{collections::HashSet, fs::{File, self}, io::Write};
 
-    use rand::rngs::StdRng;
+    use rand::{rngs::StdRng, Rng};
     use serial_test::serial;
 
     use crate::{parser::{build_ddnnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}}, Ddnnf};
@@ -867,7 +789,12 @@ mod test {
     }
 
     fn check_for_cardinality_correctness(path: &str, break_point: usize) {
-        let copy_path_string = format!(".{}_copy.cnf", path.split("/").collect::<Vec<&str>>().last().unwrap());
+        let mut rng = rand::thread_rng();
+        let random_string: String = (0..10)
+            .map(|_| (rng.gen_range(b'a'..=b'z') as char))
+            .collect();
+
+        let copy_path_string = format!(".{}_{}_copy.cnf", path.split("/").collect::<Vec<&str>>().last().unwrap(), random_string);
         let copy_path = &copy_path_string;
         fs::copy(path, copy_path).unwrap();
 
@@ -884,7 +811,7 @@ mod test {
             remove_clause_cnf(copy_path, &clause, None);
             let mut ddnnf_wo = build_ddnnf(copy_path, None);
             if DEBUG { write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap(); }
-            ddnnf_wo.inter_graph.add_clause_alt(clause.clone());
+            ddnnf_wo.inter_graph.add_clause(clause.clone());
             ddnnf_wo.rebuild();
             if DEBUG { write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap(); }
 
@@ -901,7 +828,6 @@ mod test {
             }
         }
         fs::remove_file(copy_path).unwrap();
-
     }
 
     #[test]
@@ -961,7 +887,7 @@ mod test {
             
             let mut ddnnf_wo = build_ddnnf(path_wo_clause, Some(features));
             if DEBUG { write_as_mermaid_md(&mut ddnnf_wo, &[], "before.md", None).unwrap(); }
-            ddnnf_wo.inter_graph.add_clause_alt(clause);
+            ddnnf_wo.inter_graph.add_clause(clause);
             ddnnf_wo.rebuild();
             if DEBUG { write_as_mermaid_md(&mut ddnnf_wo, &[], "after.md", None).unwrap(); }
 
@@ -973,6 +899,24 @@ mod test {
             assert_eq!(expected_results.len(), results_after_addition.len());
             assert_eq!(expected_results, results_after_addition);
         }
+    }
+
+    #[test]
+    #[serial]
+    fn adding_new_features() {
+        let mut ddnnf = build_ddnnf("tests/data/small_ex.cnf", None);
+        assert_eq!(4, ddnnf.number_of_variables);
+        assert_eq!(4, ddnnf.rc());
+
+        ddnnf.inter_graph.add_clause(vec![6, -6]);
+        ddnnf.rebuild();
+        assert_eq!(6, ddnnf.number_of_variables);
+        assert_eq!(16, ddnnf.rc());
+
+        ddnnf.inter_graph.add_clause(vec![-5, -6]);
+        ddnnf.rebuild();
+        assert_eq!(6, ddnnf.number_of_variables);
+        assert_eq!(12, ddnnf.rc());
     }
 
     #[test]
@@ -989,7 +933,7 @@ mod test {
         let mut ddnnf_missing_clause2 = ddnnf_missing_clause1.clone();
 
         ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
-        ddnnf_missing_clause2.inter_graph.add_clause_alt(vec![1]); // indirectly via adding a clause
+        ddnnf_missing_clause2.inter_graph.add_clause(vec![1]); // indirectly via adding a clause
         ddnnf_missing_clause1.rebuild();
         ddnnf_missing_clause2.rebuild();
 

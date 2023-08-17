@@ -91,9 +91,8 @@ impl Ddnnf {
         for clause in clauses {
             match reduce_clause(&clause, &HashSet::new()) {
                 Some(clause) => {
-                    if clause.is_empty() { return true; }
-                    let reduced_w_cd = self.reduce_query(&clause);
-                    if !self.inter_graph.add_clause_alt(reduced_w_cd) {
+                    if clause.is_empty() { println!("clause is tautology"); return true; }
+                    if !self.inter_graph.add_clause(clause) {
                         return false;
                     }
                 },
