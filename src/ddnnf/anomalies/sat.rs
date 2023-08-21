@@ -29,14 +29,11 @@ impl Ddnnf {
         }
 
         for feature in features {
-            match self.literals.get(&-feature) {
-                Some(&index) => {
-                    self.propagate_mark(index, mark);
-                    // if the root is unsatisfiable after any of the literals in the query,
-                    // then the whole query must be unsatisfiable too. 
-                    if mark[root_index] { return false; }
-                },
-                None => (),
+            if let Some(&index) = self.literals.get(&-feature) {
+                self.propagate_mark(index, mark);
+                // if the root is unsatisfiable after any of the literals in the query,
+                // then the whole query must be unsatisfiable too. 
+                if mark[root_index] { return false; }
             }
         }
         
@@ -52,18 +49,12 @@ impl Ddnnf {
             return;
         }
 
-        match &self.nodes[index].ntype {
-            // And nodes are always unsatisfiable if any of its children is unsatisfiable
-            // (multiplying anything with zero equals always zero)
-            Or { children } => {
-                // An Or node is only unsatisfiable if all of its children are either marked
-                // or have an count of zero (that handle False nodes).
-                if !children.iter().all(|&c| mark[c] || self.nodes[c].count == 0) {
-                    return;
-                }
+        if let Or { children } = &self.nodes[index].ntype {
+            // An Or node is only unsatisfiable if all of its children are either marked
+            // or have an count of zero (that handle False nodes).
+            if !children.iter().all(|&c| mark[c] || self.nodes[c].count == 0) {
+                return;
             }
-            // Literals, True, and False nodes are trivial and handled at a higher level
-            _ => (),
         }
 
         mark[index] = true;

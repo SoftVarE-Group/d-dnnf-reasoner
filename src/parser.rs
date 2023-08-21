@@ -56,27 +56,24 @@ use petgraph::{
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
-    match Path::new(path).extension().and_then(OsStr::to_str) {
-        Some(extension) => {
-            if extension == "dimacs" || extension == "cnf" {
-                let file = open_file_savely(path);
-                let lines = BufReader::new(file).lines();
-                for line in lines {
-                    let line = line.expect("Unable to read line");
-                    match check_for_cnf_header(line.as_str()).unwrap().1 {
-                        CNFToken::Header { features, clauses: _ } => {
-                            let ddnnf_file = ".intermediate.nnf";
-                            compile_cnf(path, ddnnf_file);
-                            path = ddnnf_file;
-                            total_features = Some(features as u32);
-                            break
-                        },
-                        CNFToken::Comment | CNFToken::Clause => (),
-                    }
+    if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
+        if extension == "dimacs" || extension == "cnf" {
+            let file = open_file_savely(path);
+            let lines = BufReader::new(file).lines();
+            for line in lines {
+                let line = line.expect("Unable to read line");
+                match check_for_cnf_header(line.as_str()).unwrap().1 {
+                    CNFToken::Header { features, clauses: _ } => {
+                        let ddnnf_file = ".intermediate.nnf";
+                        compile_cnf(path, ddnnf_file);
+                        path = ddnnf_file;
+                        total_features = Some(features as u32);
+                        break
+                    },
+                    CNFToken::Comment | CNFToken::Clause => (),
                 }
             }
-        },
-        None => (),
+        }
     }
     
     let file = open_file_savely(path);
@@ -356,21 +353,13 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         let mut current_vec = Vec::new();
         let mut current = start;
         loop {
-            match ddnnf_graph[current] {
-                TId::And => {
-                    // remove the AND node and all parent nodes that are also AND nodes
-                    let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
-                    loop {
-                        match parents.next_node(&ddnnf_graph) {
-                            Some(parent) => {
-                                current_vec.push(parent);
-                            },
-                            None => break,
-                        }
-                    }
-                    ddnnf_graph.remove_node(current);
-                },
-                _ => (),
+            if ddnnf_graph[current] == TId::And {
+                // remove the AND node and all parent nodes that are also AND nodes
+                let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
+                while let Some(parent) = parents.next_node(ddnnf_graph) {
+                    current_vec.push(parent);
+                }
+                ddnnf_graph.remove_node(current);
             }
 
             match current_vec.pop() {
@@ -572,7 +561,7 @@ fn get_literals(
             safe.insert(or_child, res.clone());
         }
         PositiveLiteral | NegativeLiteral => {
-            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs() as u32);
+            res.insert(nx_literals.get(&or_child).unwrap().unsigned_abs());
             safe.insert(or_child, res.clone());
         }
         _ => (),
@@ -626,10 +615,11 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
 
     for (line_number, line) in lines.enumerate() {
         // takes a line of the file and parses the i32 values
-        let res: Vec<i32> = line.split_whitespace().into_iter()
-        .map(|elem| elem.parse::<i32>()
-            .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path))
-        ).collect();
+        let res: Vec<i32> = line
+            .split_whitespace()
+            .map(|elem| elem.parse::<i32>()
+                .unwrap_or_else(|_| panic!("Unable to parse {:?} into an i32 value while trying to parse the querie file at {:?}.\nCheck the help page with \"-h\" or \"--help\" for further information.\n", elem, path)))
+            .collect();
         parsed_queries.push((line_number, res));
     }
     parsed_queries

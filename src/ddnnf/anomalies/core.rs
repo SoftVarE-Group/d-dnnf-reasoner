@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{Ddnnf};
+use crate::Ddnnf;
 
 impl Ddnnf {
     /// Computes all dead and core features.
@@ -17,15 +17,15 @@ impl Ddnnf {
     /// Checks if removing the feature assigment from the query does not change the query
     /// i.e. that feature is an included core feature or an excluded dead feature
     pub(crate) fn has_no_effect_on_query(&self, feature: &i32) -> bool {
-        return feature.is_positive() && self.core.contains(feature) ||
-               feature.is_negative() && self.core.contains(feature);
+        feature.is_positive() && self.core.contains(feature) ||
+        feature.is_negative() && self.core.contains(feature)
     }
 
     /// Checks if that feature assignment alone must result in an unsat query
     /// i.e. that feature is an excluded core feature or an included dead feature
     pub(crate) fn makes_query_unsat(&self, feature: &i32) -> bool {
-        return feature.is_negative() && self.core.contains(&-feature) ||
-               feature.is_positive() && self.core.contains(&-feature);
+        feature.is_negative() && self.core.contains(&-feature) ||
+        feature.is_positive() && self.core.contains(&-feature)
     }
 
     #[inline]

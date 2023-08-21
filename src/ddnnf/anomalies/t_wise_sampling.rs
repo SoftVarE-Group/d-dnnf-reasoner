@@ -7,7 +7,7 @@ pub mod sat_wrapper;
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::{fs, io, iter};
+use std::{fs, io, iter, fmt};
 
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
@@ -108,17 +108,19 @@ impl SamplingResult {
             ResultWithSample(sample) => sample.is_empty(),
         }
     }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            SamplingResult::Empty | SamplingResult::Void => String::new(),
-            ResultWithSample(sample) => format_vec(sample.iter()),
-        }
-    }
 }
 
 const EXPECT_SAMPLE: &str =
     "children should have a sampling result when sampling their parent";
+
+impl fmt::Display for SamplingResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SamplingResult::Empty | SamplingResult::Void => write!(f, ""),
+            ResultWithSample(sample) => write!(f, "{}", format_vec(sample.iter())),
+        }
+    }
+}
 
 impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     /// Constructs a new sampler

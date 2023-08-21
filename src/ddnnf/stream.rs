@@ -296,11 +296,8 @@ impl Ddnnf {
                 }
             },
             "random" => {
-                let limit_interpretation = match limit {
-                    Some(limit) => limit,
-                    None => 1,
-                };
-                let samples = self.uniform_random_sampling(&mut params, limit_interpretation, seed);
+                let limit_interpretation = limit.unwrap_or(1);
+                let samples = self.uniform_random_sampling(&params, limit_interpretation, seed);
                 match samples {
                     Some(s) => format_vec_vec(s.iter()),
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
@@ -331,10 +328,7 @@ impl Ddnnf {
                 }
             },
             "t-wise" => {
-                let limit_interpretation = match limit {
-                    Some(limit) => limit,
-                    None => 1,
-                };
+                let limit_interpretation = limit.unwrap_or(1);
                 self.sample_t_wise(limit_interpretation).to_string()
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),

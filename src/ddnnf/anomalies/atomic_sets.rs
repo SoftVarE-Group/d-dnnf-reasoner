@@ -179,9 +179,8 @@ impl Ddnnf {
 
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
 
-        let samples;
-        match self.uniform_random_sampling(assumptions, SAMPLE_AMOUNT, 10) {
-            Some(x) => samples = x,
+        let samples = match self.uniform_random_sampling(assumptions, SAMPLE_AMOUNT, 10) {
+            Some(x) => x,
             None => {
                 // If the assumptions make the query unsat, then we get no samples.
                 // Hence, we can't exclude any combination of features
@@ -190,7 +189,7 @@ impl Ddnnf {
                 }
                 return signed_excludes;
             },
-        }
+        };
 
         for var in 0..self.number_of_variables as usize {
             let mut bitvec = bitarr![u64, Lsb0; 0; SAMPLE_AMOUNT];

@@ -53,7 +53,7 @@ fn set_permissions() {
     {
         use std::fs::OpenOptions;
         use std::os::windows::fs::OpenOptionsExt;
-        use winapi::um::winnt::{FILE_ATTRIBUTE_NORMAL};
+        use winapi::um::winnt::FILE_ATTRIBUTE_NORMAL;
 
         let mut options = OpenOptions::new();
         options.write(true)

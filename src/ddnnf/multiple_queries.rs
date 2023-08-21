@@ -1,6 +1,6 @@
 use std::{error::Error, sync::mpsc, thread, io::{BufWriter, Write}, fs::File};
 
-use workctl::{WorkQueue};
+use workctl::WorkQueue;
 
 use crate::{Ddnnf, parser};
 
@@ -41,7 +41,7 @@ impl Ddnnf{
         let work_queue: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
 
         for (_, work) in &work_queue {
-            let cardinality = operation(self, &work);
+            let cardinality = operation(self, work);
             let mut features_str =
             work.iter().fold(String::new(), |acc, &num| {
                 acc + &num.to_string() + " "

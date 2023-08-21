@@ -182,7 +182,7 @@ impl Config {
 /// The sample differentiates between complete and partial configs.
 /// A config is complete (in the context of this sample) if it contains all variables this sample
 /// defines. Otherwise the config is partial.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Sample {
     /// Configs that contain all variables of this sample
     pub complete_configs: Vec<Config>,
@@ -280,16 +280,6 @@ impl Sample {
         sample.literals = literals.into_iter().collect();
         sample.literals.sort_unstable();
         sample
-    }
-
-    /// Create an empty sample with no variables defined
-    pub fn default() -> Self {
-        Self {
-            complete_configs: vec![],
-            partial_configs: vec![],
-            vars: HashSet::new(),
-            literals: vec![],
-        }
     }
 
     /// Create a sample that only contains a single configuration with a single literal

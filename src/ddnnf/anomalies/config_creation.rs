@@ -5,13 +5,14 @@ use once_cell::sync::Lazy;
 use rand::seq::SliceRandom;
 use rand_distr::{WeightedAliasIndex, Distribution, Binomial};
 use rand_pcg::{Pcg32, Lcg64Xsh32};
-use rand::{SeedableRng};
+use rand::SeedableRng;
 
 use rug::{Assign, Rational, Integer};
 
 use crate::Ddnnf;
 use crate::NodeType::*;
 
+#[allow(clippy::type_complexity)]
 static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>,usize>>>> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 impl Ddnnf {
@@ -26,7 +27,7 @@ impl Ddnnf {
         }
         assumptions.sort_unstable_by_key(|f| f.abs());
         
-        if self.execute_query(&assumptions) > 0 {
+        if self.execute_query(assumptions) > 0 {
             let last_stop = match ENUMERATION_CACHE.lock().unwrap().get(assumptions) {
                 Some(&x) => x,
                 None => 0,
@@ -56,7 +57,7 @@ impl Ddnnf {
             return None;
         }
         
-        if self.execute_query(&assumptions) > 0 {
+        if self.execute_query(assumptions) > 0 {
             let mut sample_list = self.sample_node(amount, self.nodes.len()-1, &mut Pcg32::seed_from_u64(seed));
             for sample in sample_list.iter_mut() {
                 sample.sort_unstable_by_key(|f| f.abs());
@@ -80,10 +81,7 @@ impl Ddnnf {
         }
 
         for literal in assumptions.iter() {
-            match self.literals.get(&-literal) {
-                Some(&x) => self.nodes[x].temp.assign(0),
-                None => (),
-            }
+            if let Some(&x) = self.literals.get(&-literal) { self.nodes[x].temp.assign(0) }
         }
 
         // We can't create a config that contains a true node.
@@ -91,7 +89,7 @@ impl Ddnnf {
         for &index in self.true_nodes.iter() {
             self.nodes[index].temp.assign(0);
         }
-        return true;
+        true
     }
 
     // Handles a node appropiate depending on its kind to produce complete
@@ -202,6 +200,7 @@ impl Ddnnf {
                 
                 // compute the probability of getting a sample of a child node
                 let parent_count_as_float = Rational::from((&self.nodes[index].temp, 1));
+                #[allow(clippy::needless_range_loop)]
                 for child_index in 0..children.len() {
                     let child_count_as_float = Rational::from((&self.nodes[children[child_index]].temp, 1));
                     
@@ -253,7 +252,7 @@ impl Ddnnf {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet};
+    use std::collections::HashSet;
 
     use rand::thread_rng;
 

@@ -91,12 +91,12 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
     for (position, node) in ddnnf.nodes.iter().enumerate().rev() {
         result = format!("{}{}", result, match &node.ntype {
             NodeType::And { children } | NodeType::Or { children } => {
-                let mut mm_node = format!("\t\t{}{} --> ", mermaidify_type(&ddnnf, position), marking_insert(marking, position));
+                let mut mm_node = format!("\t\t{}{} --> ", mermaidify_type(ddnnf, position), marking_insert(marking, position));
 
                 let mut children_series = children.clone();
-                children_series.sort_by(|c1, c2| compute_depth(ddnnf, *c1).cmp(&&compute_depth(ddnnf, *c2)));
+                children_series.sort_by_key(|c1| compute_depth(ddnnf, *c1));
 
-                if children_series.len() != 0 {
+                if !children_series.is_empty() {
                     for (i, &child) in children_series.iter().enumerate() {
                         if ddnnf.nodes[child].ntype == NodeType::True {
                             continue;
@@ -112,7 +112,7 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
                 mm_node
             },
             NodeType::Literal { literal: _ } | NodeType::False => { 
-                format!("\t\t{}{};\n", mermaidify_type(&ddnnf, position), marking_insert(marking, position))
+                format!("\t\t{}{};\n", mermaidify_type(ddnnf, position), marking_insert(marking, position))
             },
             _ => String::new()
         });
@@ -152,7 +152,7 @@ fn mermaidify_type(ddnnf: &Ddnnf, position: usize) -> String {
 fn compute_depth(ddnnf: &Ddnnf, position: usize) -> usize {
     match &ddnnf.nodes[position].ntype {
         NodeType::And { children } | NodeType::Or { children } => {
-            children.into_iter().fold(0, |acc, &x| max(acc+1, compute_depth(ddnnf, x) + 1))
+            children.iter().fold(0, |acc, &x| max(acc+1, compute_depth(ddnnf, x) + 1))
         },
         NodeType::True => 0,
         _ => 1
@@ -160,10 +160,9 @@ fn compute_depth(ddnnf: &Ddnnf, position: usize) -> usize {
 }
 
 fn marking_insert(marking: &[usize], position: usize) -> &str {
-    let marking_insert = if marking.binary_search(&position).is_ok() {
+    if marking.binary_search(&position).is_ok() {
         ":::marked"
     } else {
         ""
-    };
-    marking_insert
+    }
 }
