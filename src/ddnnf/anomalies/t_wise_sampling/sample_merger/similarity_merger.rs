@@ -1,6 +1,6 @@
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{OrMerger, SampleMerger};
+use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use std::cmp::{min, Ordering};
 
 use rand::prelude::{SliceRandom, StdRng};
@@ -121,12 +121,7 @@ impl<'a> Candidate<'a> {
         }
     }
 
-    fn is_t_wise_covered_by(
-        &self,
-        sample: &Sample,
-        t: usize,
-        rng: &mut StdRng,
-    ) -> bool {
+    fn is_t_wise_covered_by(&self, sample: &Sample, t: usize, rng: &mut StdRng) -> bool {
         if self.max_intersect == self.literals.len() {
             return true;
         }
@@ -143,8 +138,7 @@ impl<'a> Candidate<'a> {
             return false;
         }
 
-        let mut literals: Vec<i32> =
-            self.config.get_decided_literals().collect();
+        let mut literals: Vec<i32> = self.config.get_decided_literals().collect();
         literals.shuffle(rng);
         debug_assert!(!literals.contains(&0));
 
@@ -186,9 +180,9 @@ mod test {
             Config::from(&[3, 4], number_of_variables),
         ]);
 
-        sample.iter().for_each(|c| {
-            candidate.update(&c.get_decided_literals().collect())
-        });
+        sample
+            .iter()
+            .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
 
         assert!(candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
 
@@ -199,9 +193,9 @@ mod test {
             Config::from(&[2, 4], number_of_variables),
         ]);
 
-        sample.iter().for_each(|c| {
-            candidate.update(&c.get_decided_literals().collect())
-        });
+        sample
+            .iter()
+            .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
 
         assert!(!candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
     }

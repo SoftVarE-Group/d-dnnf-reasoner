@@ -1,15 +1,15 @@
-pub mod stream;
-pub mod node;
-pub mod heuristics;
-pub mod counting;
-pub mod multiple_queries;
 pub mod anomalies;
+pub mod counting;
+pub mod heuristics;
+pub mod multiple_queries;
+pub mod node;
+pub mod stream;
 
 use std::collections::{HashMap, HashSet};
 
-use rug::{Integer};
+use rug::Integer;
 
-use self::node::{Node};
+use self::node::Node;
 
 #[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
@@ -87,7 +87,7 @@ impl Ddnnf {
 
     /// executes a query
     /// we use the in our opinion best type of query depending on the amount of features
-    /// 
+    ///
     /// # Example
     /// ```
     /// extern crate ddnnf_lib;
@@ -105,12 +105,13 @@ impl Ddnnf {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]),
-            2..=20 => self.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node),
-            _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count)
+            2..=20 => {
+                self.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node)
+            }
+            _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count),
         }
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -119,8 +120,14 @@ mod test {
     #[test]
     fn features_opposing_indexes() {
         let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
-        
-        assert_eq!(vec![3, 2, 6], ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4]));
-        assert_eq!(vec![0, 1, 4, 5], ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4]));
+
+        assert_eq!(
+            vec![3, 2, 6],
+            ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4])
+        );
+        assert_eq!(
+            vec![0, 1, 4, 5],
+            ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4])
+        );
     }
 }

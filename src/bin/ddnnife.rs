@@ -1,19 +1,22 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use clap::{Parser, ArgGroup, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
 use ddnnf_lib::parser::util::format_vec;
 use itertools::Itertools;
 
 use std::fs::File;
-use std::io::{self, Write, BufRead, BufWriter, BufReader};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
 
 use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{self as dparser, persisting::{write_as_mermaid_md, write_ddnnf}};
+use ddnnf_lib::parser::{
+    self as dparser,
+    persisting::{write_as_mermaid_md, write_ddnnf},
+};
 
 #[derive(Parser)]
 #[command(author, version, about, arg_required_else_help(true),
@@ -24,7 +27,6 @@ help_template("\
 
 {all-args}{after-help}
 "), allow_negative_numbers = true, long_about = None)]
-
 #[clap(group(
     ArgGroup::new("loading")
         .required(true)
@@ -43,10 +45,10 @@ struct Cli {
     /// and n is the number of variables over which the d-dnnf is defined.
     /// Like the c2d and the d4 format specifies, each line must be defided by a new line.
     /// Two following new lines end the reading from stdin.
-    #[arg(short, long, verbatim_doc_comment)]    
+    #[arg(short, long, verbatim_doc_comment)]
     pipe_ddnnf_stdin: bool,
 
-    /// Choose one of the available 
+    /// Choose one of the available
     #[clap(subcommand)]
     operation: Option<Operation>,
 
@@ -130,7 +132,7 @@ enum Operation {
         jobs: u16,
     },
     /// Evaluates multiple queries of the stream format from a file.
-    StreamQueries{
+    StreamQueries {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
@@ -194,7 +196,7 @@ enum Operation {
         seed: u64,
         /// The amount of samples ddnnife should generate.
         #[clap(short, long, default_value_t = 1000)]
-        number: usize
+        number: usize,
     },
     /// Computes the core and dead features.
     #[clap(verbatim_doc_comment)]
@@ -220,7 +222,7 @@ enum Operation {
         /// and the only allowed seperator is a whitespace.
         /// The default is no assumption.
         #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
-        assumptions: Vec<i32>
+        assumptions: Vec<i32>,
     },
 }
 
@@ -236,7 +238,9 @@ fn main() {
         let mut input = Vec::new();
         for line in io::stdin().lock().lines() {
             let read_line = line.unwrap();
-            if read_line.is_empty() { break; }
+            if read_line.is_empty() {
+                break;
+            }
             input.push(read_line);
         }
         ddnnf = dparser::distribute_building(input, cli.total_features);
@@ -248,15 +252,23 @@ fn main() {
     // file path without last extension
     let input_file_path = String::from(
         Path::new(&cli.file_path.unwrap_or(String::from("ddnnf.nnf")))
-        .with_extension("").file_name().unwrap().to_str().unwrap());
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    );
 
     // Uses the supplied file path if there is any.
     // If there is no prefix, we switch to the default fallback.
-    let construct_ouput_path = 
-        |maybe_prefix: &Option<String>, operation: &str, file_type: &str| {
-        format!("{}-{}.{}", maybe_prefix.clone().unwrap_or(input_file_path.clone()), operation.to_string(), file_type)
+    let construct_ouput_path = |maybe_prefix: &Option<String>, operation: &str, file_type: &str| {
+        format!(
+            "{}-{}.{}",
+            maybe_prefix.clone().unwrap_or(input_file_path.clone()),
+            operation.to_string(),
+            file_type
+        )
     };
-
 
     // print additional output, iff we are not in the stream mode
     match &cli.operation {
@@ -280,73 +292,112 @@ fn main() {
 
         // change the number of threads used for cardinality of features and partial configurations
         match operation {
-            CountFeatures { jobs, .. } |
-            CountQueries { jobs, .. } |
-            Stream { jobs } |
-            Sat { jobs, .. } => {
+            CountFeatures { jobs, .. }
+            | CountQueries { jobs, .. }
+            | Stream { jobs }
+            | Sat { jobs, .. } => {
                 ddnnf.max_worker = jobs;
-            },
-            _ => ()
+            }
+            _ => (),
         }
 
         // compute the output file path to which the results (if any) will be written
         let output_file_path: String = match &operation {
-            CountFeatures { custom_output_file, .. } 
-                => construct_ouput_path(custom_output_file, "features", "csv"),
-            CountQueries { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "queries", "csv"),
-            Sat { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "sat", "csv"),
-            StreamQueries { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "stream", "csv"),
-            TWise { custom_output_file, t }
-                => construct_ouput_path(custom_output_file, format!("{}-wise", t).as_str(), "csv"),
-            Anomalies { custom_output_file }
-                => construct_ouput_path(custom_output_file, "anomalies", "txt"),
-            AtomicSets { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "atomic", "csv"),
-            Urs { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "urs", "csv"),
-            Core { custom_output_file }
-                => construct_ouput_path(custom_output_file, "core", "csv"),
-            Mermaid { custom_output_file, .. }
-                => construct_ouput_path(custom_output_file, "mermaid", "md"),
-            _ => String::new()
+            CountFeatures {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "features", "csv"),
+            CountQueries {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "queries", "csv"),
+            Sat {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "sat", "csv"),
+            StreamQueries {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "stream", "csv"),
+            TWise {
+                custom_output_file,
+                t,
+            } => construct_ouput_path(custom_output_file, format!("{}-wise", t).as_str(), "csv"),
+            Anomalies { custom_output_file } => {
+                construct_ouput_path(custom_output_file, "anomalies", "txt")
+            }
+            AtomicSets {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "atomic", "csv"),
+            Urs {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "urs", "csv"),
+            Core { custom_output_file } => construct_ouput_path(custom_output_file, "core", "csv"),
+            Mermaid {
+                custom_output_file, ..
+            } => construct_ouput_path(custom_output_file, "mermaid", "md"),
+            _ => String::new(),
         };
 
         use Operation::*;
         match &operation {
-            AtomicSets { custom_output_file: _, assumptions, candidates } => {
-                let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+            AtomicSets {
+                custom_output_file: _,
+                assumptions,
+                candidates,
+            } => {
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
                 for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions) {
                     wtr.write_all(format_vec(set.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }
                 wtr.flush().unwrap();
-                println!("\nComputed the atomic sets and saved the results in {}.", output_file_path);
-            },
-            Urs { assumptions, seed, number, custom_output_file: _ } => {
-                let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                for sample in ddnnf.uniform_random_sampling(assumptions, *number, *seed).unwrap() {
+                println!(
+                    "\nComputed the atomic sets and saved the results in {}.",
+                    output_file_path
+                );
+            }
+            Urs {
+                assumptions,
+                seed,
+                number,
+                custom_output_file: _,
+            } => {
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+                for sample in ddnnf
+                    .uniform_random_sampling(assumptions, *number, *seed)
+                    .unwrap()
+                {
                     wtr.write_all(format_vec(sample.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }
                 wtr.flush().unwrap();
-                println!("\nComputed {} uniform random samples and saved the results in {}.", number, output_file_path);
-            },
-            TWise { t, custom_output_file: _ } => {
+                println!(
+                    "\nComputed {} uniform random samples and saved the results in {}.",
+                    number, output_file_path
+                );
+            }
+            TWise {
+                t,
+                custom_output_file: _,
+            } => {
                 let sample_result = ddnnf.sample_t_wise(*t);
-                save_sample_to_file(&sample_result,  &output_file_path).unwrap();
-                println!("\nComputed {}-wise samples and saved the results in {}.", t, output_file_path);
-            },
+                save_sample_to_file(&sample_result, &output_file_path).unwrap();
+                println!(
+                    "\nComputed {}-wise samples and saved the results in {}.",
+                    t, output_file_path
+                );
+            }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Count { features } => {
                 let features = features.clone().unwrap_or(vec![]);
-                println!("\nDdnnf count for query {:?} is: {:?}", &features, ddnnf.execute_query(&features));
+                println!(
+                    "\nDdnnf count for query {:?} is: {:?}",
+                    &features,
+                    ddnnf.execute_query(&features)
+                );
                 let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
                 println!("While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
                     That are {:.2}%", marked_nodes.len(), ddnnf.nodes.len(), marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0);
-            },
+            }
             // computes the cardinality of features and saves the results in a .csv file
             // the cardinalities are always sorted from lowest to highest (also for multiple threads)
             CountFeatures { .. } => {
@@ -355,7 +406,7 @@ fn main() {
                     .card_of_each_feature(&output_file_path)
                     .unwrap_or_default();
                 let elapsed_time = time.elapsed().as_secs_f64();
-        
+
                 println!(
                     "\nComputed the Cardinality of all features in {} and the results are saved in {}\n\
                     It took {} seconds. That is an average of {} seconds per feature",
@@ -364,60 +415,84 @@ fn main() {
                     elapsed_time,
                     elapsed_time / ddnnf.number_of_variables as f64
                 );
-            },
-            CountQueries { queries_input_file, .. } => {
-                compute_queries(&mut ddnnf,
+            }
+            CountQueries {
+                queries_input_file, ..
+            } => {
+                compute_queries(
+                    &mut ddnnf,
                     queries_input_file,
                     &output_file_path,
-                    Ddnnf::execute_query
+                    Ddnnf::execute_query,
                 );
-            },
-            Sat { queries_input_file, .. } => {
-                compute_queries(&mut ddnnf,
+            }
+            Sat {
+                queries_input_file, ..
+            } => {
+                compute_queries(
+                    &mut ddnnf,
                     queries_input_file,
                     &output_file_path,
-                    Ddnnf::sat
+                    Ddnnf::sat,
                 );
-            },
-            StreamQueries { queries_input_file, ..} => {
-                let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                
+            }
+            StreamQueries {
+                queries_input_file, ..
+            } => {
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+
                 let file = dparser::open_file_savely(queries_input_file);
                 let queries = BufReader::new(file)
                     .lines()
                     .map(|line| line.expect("Unable to read line"));
-                
+
                 for query in queries {
-                    wtr.write_all(ddnnf.handle_stream_msg(&query).as_bytes()).unwrap();
+                    wtr.write_all(ddnnf.handle_stream_msg(&query).as_bytes())
+                        .unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }
 
                 wtr.flush().unwrap();
-                println!("\nComputed stream queries and saved the results in {}.", output_file_path);
-            },
+                println!(
+                    "\nComputed stream queries and saved the results in {}.",
+                    output_file_path
+                );
+            }
             // switch in the stream mode
             Stream { .. } => {
                 ddnnf.init_stream();
-            },
+            }
             // writes the anomalies of the d-DNNF to file
             // anomalies are: core, dead, false-optional features and atomic sets
-            Anomalies { custom_output_file: _ } => {
+            Anomalies {
+                custom_output_file: _,
+            } => {
                 ddnnf.write_anomalies(&output_file_path).unwrap();
                 println!("\nThe anomalies of the d-DNNF (i.e. core, dead, false-optional features, and atomic sets) are written into {}.", output_file_path);
-            },
-            Core { custom_output_file: _ } => {
+            }
+            Core {
+                custom_output_file: _,
+            } => {
                 let mut core = ddnnf.core.clone().into_iter().collect_vec();
                 core.sort_unstable_by_key(|k| k.abs());
-        
-                let mut wtr = BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
                 wtr.write_all(format_vec(core.iter()).as_bytes()).unwrap();
                 wtr.write_all("\n".as_bytes()).unwrap();
-                println!("\nComputed the core / dead features and saved the results in {}.", output_file_path);
-            },
-            Mermaid { custom_output_file: _, assumptions } => {
+                println!(
+                    "\nComputed the core / dead features and saved the results in {}.",
+                    output_file_path
+                );
+            }
+            Mermaid {
+                custom_output_file: _,
+                assumptions,
+            } => {
                 write_as_mermaid_md(&mut ddnnf, assumptions, &output_file_path).unwrap();
                 println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {}.", output_file_path);
-            },
+            }
         }
     }
 
@@ -425,7 +500,10 @@ fn main() {
     if cli.save_ddnnf.is_some() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
         write_ddnnf(&ddnnf, &path).unwrap();
-        println!("\nThe smooth d-DNNF was written into the c2d format in {}.", path);
+        println!(
+            "\nThe smooth d-DNNF was written into the c2d format in {}.",
+            path
+        );
     }
 }
 
@@ -433,10 +511,11 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
     ddnnf: &mut Ddnnf,
     queries_file: &String,
     output_file: &String,
-    operation: fn(&mut Ddnnf, query: &[i32]) -> T) {
-
+    operation: fn(&mut Ddnnf, query: &[i32]) -> T,
+) {
     let time = Instant::now();
-    ddnnf.operate_on_queries(operation, queries_file, output_file)
+    ddnnf
+        .operate_on_queries(operation, queries_file, output_file)
         .unwrap_or_default();
     let elapsed_time = time.elapsed().as_secs_f64();
 
