@@ -25,7 +25,7 @@ pub enum D4Token {
     Edge {
         from: i32,
         to: i32,
-        features: Vec<i32>
+        features: Vec<i32>,
     },
 }
 
@@ -42,11 +42,7 @@ pub fn lex_line_d4(line: &str) -> IResult<&str, D4Token> {
 fn lex_edge(line: &str) -> IResult<&str, D4Token> {
     map(
         terminated(
-            recognize(many_m_n(
-                2,
-                usize::MAX,
-                parse_signed_alt_space1_number1,
-            )),
+            recognize(many_m_n(2, usize::MAX, parse_signed_alt_space1_number1)),
             tag("0"),
         ),
         |out: &str| {

@@ -22,7 +22,7 @@ impl PartialEq for Config {
 }
 
 impl Extend<i32> for Config {
-    fn extend<T: IntoIterator<Item=i32>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = i32>>(&mut self, iter: T) {
         self.sat_state_complete = false;
         for literal in iter {
             self.add(literal);
@@ -49,13 +49,8 @@ impl Config {
     }
 
     /// Creates a new config from two disjoint configs.
-    pub fn from_disjoint(
-        left: &Self,
-        right: &Self,
-        number_of_variables: usize,
-    ) -> Self {
-        let sat_state = match (left.sat_state.clone(), right.sat_state.clone())
-        {
+    pub fn from_disjoint(left: &Self, right: &Self, number_of_variables: usize) -> Self {
+        let sat_state = match (left.sat_state.clone(), right.sat_state.clone()) {
             (Some(left_state), Some(right_state)) => {
                 /*
                 We pick the cached state of the larger config because we can not combine the
@@ -67,9 +62,7 @@ impl Config {
                 marker does not propagate upward to the AND. So the AND remains unmarked which
                 is wrong and may cause wrong results when SAT solving.
                  */
-                if left.get_decided_literals().count()
-                    >= right.get_decided_literals().count()
-                {
+                if left.get_decided_literals().count() >= right.get_decided_literals().count() {
                     Some(left_state)
                 } else {
                     Some(right_state)
@@ -95,7 +88,7 @@ impl Config {
     }
 
     /// Returns an iterator over the selected and unselected features
-    pub fn get_decided_literals(&self) -> impl Iterator<Item=i32> + '_ {
+    pub fn get_decided_literals(&self) -> impl Iterator<Item = i32> + '_ {
         self.literals
             .iter()
             .copied()
@@ -208,7 +201,7 @@ impl Ord for Sample {
 }
 
 impl Extend<Config> for Sample {
-    fn extend<T: IntoIterator<Item=Config>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = Config>>(&mut self, iter: T) {
         for config in iter {
             self.add(config);
         }
@@ -250,8 +243,7 @@ impl Sample {
         literals.sort_unstable();
         literals.dedup();
 
-        let vars: HashSet<u32> =
-            literals.iter().map(|x| x.unsigned_abs()).collect();
+        let vars: HashSet<u32> = literals.iter().map(|x| x.unsigned_abs()).collect();
 
         let mut sample = Self {
             complete_configs: vec![],
@@ -344,15 +336,13 @@ impl Sample {
     }
 
     /// Creates an iterator that first iterates over complete_configs and then over partial_configs
-    pub fn iter(&self) -> impl Iterator<Item=&Config> {
+    pub fn iter(&self) -> impl Iterator<Item = &Config> {
         self.complete_configs
             .iter()
             .chain(self.partial_configs.iter())
     }
 
-    pub fn iter_with_completeness(
-        &self,
-    ) -> impl Iterator<Item=(&Config, bool)> {
+    pub fn iter_with_completeness(&self) -> impl Iterator<Item = (&Config, bool)> {
         let partial_iter = self.partial_configs.iter().zip(iter::repeat(false));
 
         self.complete_configs

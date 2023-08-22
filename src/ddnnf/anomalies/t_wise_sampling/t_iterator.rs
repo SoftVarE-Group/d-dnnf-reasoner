@@ -25,9 +25,7 @@ impl StreamingIterator for TIndicesIter {
             let mut p: usize = 0;
 
             // carry over to the next places - like 0999 -> 1000
-            while self.tuple[p] >= self.number_of_vars - p
-                && self.tuple[self.t] == 0
-            {
+            while self.tuple[p] >= self.number_of_vars - p && self.tuple[self.t] == 0 {
                 self.tuple[p] = 0;
                 p += 1; // go to next place
                 self.tuple[p] += 1;
