@@ -1,13 +1,14 @@
+use std::os::unix::fs::PermissionsExt;
 use std::{
     fs,
     process::{self, Command},
 };
+use tempfile::NamedTempFile;
 
 #[cfg(windows)]
 const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
 #[cfg(unix)]
 const D4V2: &[u8] = include_bytes!("../bin/d4v2.bin");
-const EXECUTABLE_PATH: &str = ".d4v2"; // relative from the root of the project
 
 /// Using the d4v2 CNF to dDNNF compiler from cril,
 /// we take a CNF from path_in and write the dDNNF to path_out
@@ -21,12 +22,31 @@ pub fn compile_cnf(path_in: &str, path_out: &str) {
         process::exit(1);
     }
 
-    // persist the binary data to a callable file
-    std::fs::write(EXECUTABLE_PATH, D4V2).expect("failed to write file");
-    set_permissions();
+    // Write d4 to a temporary file.
+    // Will be removed by system once out of scope.
+    let d4_file = NamedTempFile::new().expect("Failed to create temporary file to run d4.");
+    fs::write(&d4_file, D4V2).expect("Failed to write d4 to file.");
 
-    // execute the command to compile a dDNNF from a CNF file
-    Command::new(String::from("./") + EXECUTABLE_PATH)
+    // Make the file executable.
+    let mut permissions = d4_file
+        .as_file()
+        .metadata()
+        .expect("Failed to get d4 file metadata.")
+        .permissions();
+
+    #[cfg(unix)]
+    permissions.set_mode(0o755);
+
+    #[cfg(windows)]
+    permissions.set_readonly(false);
+
+    d4_file
+        .as_file()
+        .set_permissions(permissions)
+        .expect("Failed to make d4 file executable.");
+
+    // Execute the command to compile a dDNNF from a CNF file.
+    Command::new(&d4_file.into_temp_path())
         .args([
             "-i",
             path_in,
@@ -37,45 +57,4 @@ pub fn compile_cnf(path_in: &str, path_out: &str) {
         ])
         .output()
         .unwrap();
-
-    // Remove it again, after the call. This operation is very cheap!
-    fs::remove_file(EXECUTABLE_PATH).unwrap();
-}
-
-// When writing the stored bytes of the binary to a file,
-// we have to adjust the permissions of that file to execute commands on that binary.
-fn set_permissions() {
-    // Set executable permissions on Unix systems
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(EXECUTABLE_PATH)
-            .expect("failed to get metadata")
-            .permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(EXECUTABLE_PATH, perms).expect("failed to set permissions");
-    }
-
-    // Set executable permissions on Windows systems
-    #[cfg(windows)]
-    {
-        use std::fs::OpenOptions;
-        use std::os::windows::fs::OpenOptionsExt;
-        use winapi::um::winnt::FILE_ATTRIBUTE_NORMAL;
-
-        let mut options = OpenOptions::new();
-        options
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .custom_flags(FILE_ATTRIBUTE_NORMAL);
-        let file = options.open(EXECUTABLE_PATH).expect("failed to open file");
-        let mut permissions = file
-            .metadata()
-            .expect("failed to get metadata")
-            .permissions();
-        permissions.set_readonly(false);
-        file.set_permissions(permissions)
-            .expect("failed to set permissions");
-    }
 }
