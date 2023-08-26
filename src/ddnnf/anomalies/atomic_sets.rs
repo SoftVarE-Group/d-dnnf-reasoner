@@ -132,7 +132,7 @@ impl Ddnnf {
         &mut self,
         candidates: Option<Vec<u32>>,
         assumptions: &[i32],
-        cross: bool
+        cross: bool,
     ) -> Vec<Vec<i16>> {
         let mut combinations: Vec<(Integer, i32)> = Vec::new();
 
@@ -148,7 +148,7 @@ impl Ddnnf {
         }
 
         // compute the cardinality of features to obtain atomic set candidates
-        for feature  in considered_features {
+        for feature in considered_features {
             let signed_feature = feature as i32;
             combinations.push((
                 self.execute_query(&[&[signed_feature], assumptions].concat()),
@@ -189,7 +189,7 @@ impl Ddnnf {
                 &group,
                 &signed_excludes,
                 assumptions,
-                &mut atomic_sets
+                &mut atomic_sets,
             );
         }
 
@@ -237,10 +237,10 @@ impl Ddnnf {
         pot_atomic_set: &[i32],
         signed_excludes: &[BitArray<[u64; 8]>],
         assumptions: &[i32],
-        atomic_sets: &mut UnionFind<i16>
+        atomic_sets: &mut UnionFind<i16>,
     ) {
         // goes through all combinations of set candidates and checks whether the pair is part of an atomic set
-        for pair in pot_atomic_set.iter().copied().combinations(2) {            
+        for pair in pot_atomic_set.iter().copied().combinations(2) {
             // normalize data: If the model has 100 features: 50 stays 50, -50 gets sign flipped and offset by 100
             let x = pair[0] as i16;
             let y = pair[1] as i16;
@@ -255,11 +255,13 @@ impl Ddnnf {
             // applying XOR to the two bitvectors and checking if any bit is set.
             let var_occurences_x = if (x.signum() * y.signum()).is_positive() {
                 signed_excludes[x.abs() as usize - 1]
-            }   else {
+            } else {
                 !signed_excludes[x.abs() as usize - 1]
             };
 
-            if (var_occurences_x ^ signed_excludes[y.abs() as usize - 1]).any() { continue; }
+            if (var_occurences_x ^ signed_excludes[y.abs() as usize - 1]).any() {
+                continue;
+            }
 
             // we identify a pair of values to be in the same atomic set, then we union them
             if self.execute_query(&[&pair, assumptions].concat()) == control {
@@ -282,7 +284,7 @@ mod test {
     #[test]
     fn union_find_operations() {
         let mut union: UnionFind<u32> = UnionFind::default();
-        
+
         // nothing done yet
         assert!(union.subsets().is_empty());
 
@@ -317,7 +319,8 @@ mod test {
         let mut subsets2 = union.subsets();
         assert!(subsets2.len() == 2);
         subsets2.sort_by_key(|subset| subset.len());
-        subsets2[0].sort(); subsets2[1].sort();
+        subsets2[0].sort();
+        subsets2[1].sort();
         assert_eq!(vec![vec![5, 100], vec![1, 2, 3, 4, 7]], subsets2);
     }
 
@@ -327,7 +330,7 @@ mod test {
         let ddnnfs: Vec<Ddnnf> = vec![
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
             build_ddnnf("tests/data/KC_axTLS.cnf", None),
-            build_ddnnf("tests/data/toybox.cnf", None)
+            build_ddnnf("tests/data/toybox.cnf", None),
         ];
 
         for mut ddnnf in ddnnfs {
@@ -346,12 +349,13 @@ mod test {
         let ddnnfs: Vec<Ddnnf> = vec![
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
             build_ddnnf("tests/data/KC_axTLS.cnf", None),
-            build_ddnnf("tests/data/toybox.cnf", None)
+            build_ddnnf("tests/data/toybox.cnf", None),
         ];
 
         for mut ddnnf in ddnnfs {
             // brute force atomic sets via counting operations
-            let mut combinations: Vec<i32> = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect();
+            let mut combinations: Vec<i32> =
+                (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect();
             combinations.retain(|&x| x != 0);
             assert_eq!(
                 ddnnf.get_atomic_sets(None, &[], true),
@@ -361,13 +365,14 @@ mod test {
     }
 
     // Compute atomic sets by comparing cardinalities
-    fn brute_force_atomic_sets(ddnnf: &mut Ddnnf, combinations: Vec<i32>)  -> Vec<Vec<i16>> {
+    fn brute_force_atomic_sets(ddnnf: &mut Ddnnf, combinations: Vec<i32>) -> Vec<Vec<i16>> {
         let mut atomic_sets: UnionFind<i16> = UnionFind::default();
 
         // check every possible combination of number combinations
         for pair in combinations.iter().copied().combinations(2) {
             if ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[0]])
-                && ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[1]]) {
+                && ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[1]])
+            {
                 atomic_sets.union(pair[0] as i16, pair[1] as i16);
             }
         }
@@ -451,7 +456,9 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.get_atomic_sets(Some(vec![]), &vec![], false).is_empty());
-        assert!(auto1.get_atomic_sets(Some(vec![]), &vec![], false).is_empty());
+        assert!(auto1
+            .get_atomic_sets(Some(vec![]), &vec![], false)
+            .is_empty());
     }
 
     #[test]
