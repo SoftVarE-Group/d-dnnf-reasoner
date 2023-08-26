@@ -333,7 +333,7 @@ impl Ddnnf {
                 } else {
                     None
                 };
-                format_vec_vec(self.get_atomic_sets(candidates, &params).iter())
+                format_vec_vec(self.get_atomic_sets(candidates, &params, false).iter())
             }
             "exit" => String::from("exit"),
             "save" => {
@@ -478,6 +478,7 @@ mod test {
 
     use assert_cmd::Command;
     use itertools::Itertools;
+    use serial_test::serial;
 
     use super::*;
     use crate::parser::build_ddnnf;
@@ -926,6 +927,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn parallel_stream() {
         let mut ddnnf: Ddnnf = build_ddnnf("example_input/auto1_d4_2513.nnf", Some(2513));
 

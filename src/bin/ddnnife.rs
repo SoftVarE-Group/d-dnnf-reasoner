@@ -344,7 +344,7 @@ fn main() {
             } => {
                 let mut wtr =
                     BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions) {
+                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, false) {
                     wtr.write_all(format_vec(set.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }

@@ -43,6 +43,6 @@ impl Ddnnf {
     /// Checks if a query is satisfiable. That is not the case if either a core feature is excluded or a dead feature is included
     pub(crate) fn query_is_not_sat(&mut self, features: &[i32]) -> bool {
         // if there is an included dead or an excluded core feature
-        features.iter().any({ |f| self.makes_query_unsat(f) })
+        features.iter().any(|f| self.makes_query_unsat(f))
     }
 }

@@ -132,7 +132,8 @@ impl Ddnnf {
         &mut self,
         candidates: Option<Vec<u32>>,
         assumptions: &[i32],
-    ) -> Vec<Vec<u16>> {
+        cross: bool
+    ) -> Vec<Vec<i16>> {
         let mut combinations: Vec<(Integer, i32)> = Vec::new();
 
         // If there are no candidates supplied, we consider all features to be a candidate
@@ -147,11 +148,19 @@ impl Ddnnf {
         }
 
         // compute the cardinality of features to obtain atomic set candidates
-        for i in considered_features {
+        for feature  in considered_features {
+            let signed_feature = feature as i32;
             combinations.push((
-                self.execute_query(&[&[i as i32], assumptions].concat()),
-                i as i32,
+                self.execute_query(&[&[signed_feature], assumptions].concat()),
+                signed_feature,
             ));
+
+            if cross {
+                combinations.push((
+                    self.execute_query(&[&[-signed_feature], assumptions].concat()),
+                    -signed_feature,
+                ));
+            }
         }
         combinations.sort_unstable(); // sorting is required to group in the next step
 
@@ -172,7 +181,7 @@ impl Ddnnf {
         data_grouped.push((current_key, values_current_key));
 
         // initalize Unionfind and Samples
-        let mut atomic_sets: UnionFind<u16> = UnionFind::default();
+        let mut atomic_sets: UnionFind<i16> = UnionFind::default();
         let signed_excludes = self.get_signed_excludes(assumptions);
         for (key, group) in data_grouped {
             self.incremental_subset_check(
@@ -180,7 +189,7 @@ impl Ddnnf {
                 &group,
                 &signed_excludes,
                 assumptions,
-                &mut atomic_sets,
+                &mut atomic_sets
             );
         }
 
@@ -228,12 +237,13 @@ impl Ddnnf {
         pot_atomic_set: &[i32],
         signed_excludes: &[BitArray<[u64; 8]>],
         assumptions: &[i32],
-        atomic_sets: &mut UnionFind<u16>,
+        atomic_sets: &mut UnionFind<i16>
     ) {
         // goes through all combinations of set candidates and checks whether the pair is part of an atomic set
-        for pair in pot_atomic_set.iter().copied().combinations(2) {
-            let x = pair[0] as u16;
-            let y = pair[1] as u16;
+        for pair in pot_atomic_set.iter().copied().combinations(2) {            
+            // normalize data: If the model has 100 features: 50 stays 50, -50 gets sign flipped and offset by 100
+            let x = pair[0] as i16;
+            let y = pair[1] as i16;
 
             // we don't have to check if a pair is part of an atomic set if they already are connected via transitivity
             if atomic_sets.equiv(x, y) {
@@ -243,9 +253,13 @@ impl Ddnnf {
             // If the sign of the two feature candidates differs in at least one of the uniform random samples,
             // then we can by sure that they don't belong to the same atomic set. Differences can be checked by
             // applying XOR to the two bitvectors and checking if any bit is set.
-            if (signed_excludes[x as usize - 1] ^ signed_excludes[y as usize - 1]).any() {
-                continue;
-            }
+            let var_occurences_x = if (x.signum() * y.signum()).is_positive() {
+                signed_excludes[x.abs() as usize - 1]
+            }   else {
+                !signed_excludes[x.abs() as usize - 1]
+            };
+
+            if (var_occurences_x ^ signed_excludes[y.abs() as usize - 1]).any() { continue; }
 
             // we identify a pair of values to be in the same atomic set, then we union them
             if self.execute_query(&[&pair, assumptions].concat()) == control {
@@ -259,9 +273,67 @@ impl Ddnnf {
 mod test {
     use std::{collections::HashSet, iter::FromIterator};
 
+    use serial_test::serial;
+
     use crate::parser::build_ddnnf;
 
     use super::*;
+
+    #[test]
+    #[serial]
+    fn brute_force_wo_cross() {
+        let ddnnfs: Vec<Ddnnf> = vec![
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
+            build_ddnnf("tests/data/KC_axTLS.cnf", None),
+            build_ddnnf("tests/data/toybox.cnf", None)
+        ];
+
+        for mut ddnnf in ddnnfs {
+            // brute force atomic sets via counting operations
+            let combinations: Vec<i32> = (1_i32..=ddnnf.number_of_variables as i32).collect();
+            assert_eq!(
+                ddnnf.get_atomic_sets(None, &[], false),
+                brute_force_atomic_sets(&mut ddnnf, combinations)
+            );
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn brute_force_cross() {
+        let ddnnfs: Vec<Ddnnf> = vec![
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
+            build_ddnnf("tests/data/KC_axTLS.cnf", None),
+            build_ddnnf("tests/data/toybox.cnf", None)
+        ];
+
+        for mut ddnnf in ddnnfs {
+            // brute force atomic sets via counting operations
+            let mut combinations: Vec<i32> = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect();
+            combinations.retain(|&x| x != 0);
+            assert_eq!(
+                ddnnf.get_atomic_sets(None, &[], true),
+                brute_force_atomic_sets(&mut ddnnf, combinations)
+            );
+        }
+    }
+
+    // Compute atomic sets by comparing cardinalities
+    fn brute_force_atomic_sets(ddnnf: &mut Ddnnf, combinations: Vec<i32>)  -> Vec<Vec<i16>> {
+        let mut atomic_sets: UnionFind<i16> = UnionFind::default();
+
+        // check every possible combination of number combinations
+        for pair in combinations.iter().copied().combinations(2) {
+            if ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[0]])
+                && ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[1]]) {
+                atomic_sets.union(pair[0] as i16, pair[1] as i16);
+            }
+        }
+
+        let mut subsets = atomic_sets.subsets();
+        subsets.sort_unstable();
+        subsets
+    }
 
     #[test]
     fn atomic_sets_vp9() {
@@ -269,18 +341,18 @@ mod test {
 
         // make sure that the results are reproducible
         for _ in 0..3 {
-            let vp9_atomic_sets = vp9.get_atomic_sets(None, &vec![]);
+            let vp9_atomic_sets = vp9.get_atomic_sets(None, &vec![], false);
             assert_eq!(vec![vec![1, 2, 6, 10, 15, 19, 25, 31, 40]], vp9_atomic_sets);
 
             // There should exactly one atomic set that is a subset of the core and the dead features.
             // Vp9 has no dead features. Hence, we can not test for a subset
             let vp9_core_features = HashSet::<_>::from_iter(vp9.core.iter().copied())
                 .into_iter()
-                .map(|f| f as u16)
-                .collect::<Vec<u16>>();
+                .map(|f| f as i16)
+                .collect::<Vec<i16>>();
             assert!(vp9_atomic_sets
                 .iter()
-                .filter(|set| vp9_core_features.iter().all(|f| set.contains(&f)))
+                .filter(|set| vp9_core_features.iter().all(|f| set.contains(f)))
                 .exactly_one()
                 .is_ok());
         }
@@ -292,7 +364,7 @@ mod test {
 
         // ensure reproducible
         for _ in 0..3 {
-            let auto1_atomic_sets = auto1.get_atomic_sets(None, &vec![]);
+            let auto1_atomic_sets = auto1.get_atomic_sets(None, &vec![], false);
             assert_eq!(155, auto1_atomic_sets.len());
 
             // check some subset values
@@ -336,36 +408,39 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
-        assert!(vp9.get_atomic_sets(Some(vec![]), &vec![]).is_empty());
-        assert!(auto1.get_atomic_sets(Some(vec![]), &vec![]).is_empty());
+        assert!(vp9.get_atomic_sets(Some(vec![]), &vec![], false).is_empty());
+        assert!(auto1.get_atomic_sets(Some(vec![]), &vec![], false).is_empty());
     }
 
     #[test]
     fn candidates_and_assumptions_for_core() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
-        let vp9_default_as = vp9.get_atomic_sets(None, &vec![]);
+        let vp9_default_as = vp9.get_atomic_sets(None, &vec![], false);
         let vp9_core = vp9.core.clone().into_iter().collect_vec();
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
                 Some((1..=vp9.number_of_variables as u32).collect_vec()),
-                &vec![]
+                &vec![],
+                false
             )
         );
-        assert_eq!(vp9_default_as, vp9.get_atomic_sets(None, &vp9_core));
+        assert_eq!(vp9_default_as, vp9.get_atomic_sets(None, &vp9_core, false));
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
                 Some((1..=vp9.number_of_variables as u32).collect_vec()),
-                &vp9_core
+                &vp9_core,
+                false
             )
         );
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
                 Some(vp9.core.clone().into_iter().map(|f| f as u32).collect_vec()),
-                &vp9_core
+                &vp9_core,
+                false
             )
         );
     }
@@ -375,7 +450,7 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let assumptions = vec![10, 20, 35];
         let atomic_sets = auto1
-            .get_atomic_sets(Some((1..=50).collect_vec()), &vec![10, 20, 35])
+            .get_atomic_sets(Some((1..=50).collect_vec()), &vec![10, 20, 35], false)
             .iter()
             .map(|subset| subset.iter().map(|&f| f as i32).collect_vec())
             .collect_vec();
