@@ -280,6 +280,48 @@ mod test {
     use super::*;
 
     #[test]
+    fn union_find_operations() {
+        let mut union: UnionFind<u32> = UnionFind::default();
+        
+        // nothing done yet
+        assert!(union.subsets().is_empty());
+
+        // add elements to union
+        union.union(1, 2);
+        union.union(3, 4);
+        union.union(2, 3);
+
+        // check for transitivity via equiv
+        assert!(union.equiv(1, 3));
+        assert!(union.equiv(1, 4));
+        assert!(union.equiv(4, 1));
+
+        // check for transitivity via subsets
+        let mut subsets1 = union.subsets();
+        assert!(subsets1.len() == 1);
+        subsets1[0].sort();
+        assert_eq!(vec![1, 2, 3, 4], subsets1[0]);
+
+        // add second subset
+        union.union(5, 100);
+        union.union(100, 5);
+        union.union(7, 1);
+
+        // check again for unions
+        assert!(union.equiv(5, 100));
+        assert!(union.equiv(2, 4));
+        assert!(!union.equiv(2, 5));
+        assert!(!union.equiv(4, 100));
+
+        // make sure subsets are still valid
+        let mut subsets2 = union.subsets();
+        assert!(subsets2.len() == 2);
+        subsets2.sort_by_key(|subset| subset.len());
+        subsets2[0].sort(); subsets2[1].sort();
+        assert_eq!(vec![vec![5, 100], vec![1, 2, 3, 4, 7]], subsets2);
+    }
+
+    #[test]
     #[serial]
     fn brute_force_wo_cross() {
         let ddnnfs: Vec<Ddnnf> = vec![
