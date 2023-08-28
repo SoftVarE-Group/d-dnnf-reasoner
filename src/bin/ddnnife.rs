@@ -178,6 +178,12 @@ enum Operation {
         /// The default are all features of the model.
         #[clap(short, long, allow_negative_numbers = false, num_args = 0.., verbatim_doc_comment)]
         candidates: Option<Vec<u32>>,
+        /// Without the cross flag,
+        /// we only consider atomic set candidates of included features.
+        /// With the cross flag,
+        /// we consider included and excluded feature candidates.
+        #[clap(long, verbatim_doc_comment)]
+        cross: bool,
     },
     /// Generates uniform random sample
     Urs {
@@ -341,10 +347,11 @@ fn main() {
                 custom_output_file: _,
                 assumptions,
                 candidates,
+                cross,
             } => {
                 let mut wtr =
                     BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
-                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, false) {
+                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, *cross) {
                     wtr.write_all(format_vec(set.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }

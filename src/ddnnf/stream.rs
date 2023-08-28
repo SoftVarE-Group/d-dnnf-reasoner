@@ -324,7 +324,7 @@ impl Ddnnf {
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             }
-            "atomic" => {
+            "atomic" | "atomic-cross" => {
                 if values.iter().any(|&f| f.is_negative()) {
                     return String::from("E5 error: candidates must be positive");
                 }
@@ -333,7 +333,8 @@ impl Ddnnf {
                 } else {
                     None
                 };
-                format_vec_vec(self.get_atomic_sets(candidates, &params, false).iter())
+                let cross = args[0] == "atomic-cross";
+                format_vec_vec(self.get_atomic_sets(candidates, &params, cross).iter())
             }
             "exit" => String::from("exit"),
             "save" => {
