@@ -1,8 +1,12 @@
 use crate::ddnnf::anomalies::t_wise_sampling::covering_strategies::cover_with_caching;
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
-use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, SampleMerger};
+use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{
+    Config, Sample,
+};
+use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{
+    AndMerger, SampleMerger,
+};
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
+use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use crate::Ddnnf;
 use std::cmp::min;
 
@@ -114,9 +118,9 @@ impl ZippingMerger<'_> {
             .zip(right.iter_with_completeness())
             .for_each(
                 |(
-                     (left_config, left_complete),
-                     (right_config, right_complete),
-                 )| {
+                    (left_config, left_complete),
+                    (right_config, right_complete),
+                )| {
                     let new_config = Config::from_disjoint(
                         left_config,
                         right_config,
@@ -145,7 +149,10 @@ impl ZippingMerger<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::{parser::build_ddnnf, ddnnf::anomalies::t_wise_sampling::sample_merger::_new_sample_from_configs};
+    use crate::{
+        ddnnf::anomalies::t_wise_sampling::sample_merger::_new_sample_from_configs,
+        parser::build_ddnnf,
+    };
 
     use super::*;
     use rand::SeedableRng;
@@ -173,10 +180,7 @@ mod test {
     /// Create an empty sample that may contain the given variables and will certainly contain
     /// the given literals. Only use this if you know that the configs you are going to add to
     /// this sample contain the given literals.
-    fn new_with_literals(
-        vars: HashSet<u32>,
-        mut literals: Vec<i32>,
-    ) -> Sample {
+    fn new_with_literals(vars: HashSet<u32>, mut literals: Vec<i32>) -> Sample {
         literals.sort_unstable();
         literals.dedup();
         Sample {
@@ -189,8 +193,7 @@ mod test {
 
     #[test]
     fn test_zipping_merger() {
-        let ddnnf =
-            build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
+        let ddnnf = build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
         let node = ddnnf.nodes.len() - 1;
         let sat_solver = SatWrapper::new(&ddnnf);
 

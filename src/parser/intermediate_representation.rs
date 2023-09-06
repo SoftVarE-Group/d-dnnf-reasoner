@@ -1,44 +1,86 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::Write, time::Instant, cmp::max, panic};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+    fs::File,
+    io::Write,
+    panic,
+    time::Instant,
+};
 
 use itertools::Itertools;
 use petgraph::{
-    stable_graph::{StableGraph, NodeIndex},
-    visit::{DfsPostOrder, Dfs, NodeIndexable},
     algo::is_cyclic_directed,
-    Direction::{Incoming, Outgoing}
+    stable_graph::{NodeIndex, StableGraph},
+    visit::{Dfs, DfsPostOrder, NodeIndexable},
+    Direction::{Incoming, Outgoing},
 };
 
-use crate::{c2d_lexer::TId, Node, NodeType, parser::{util::format_vec, build_ddnnf, extend_literal_diffs, from_cnf::{get_all_clauses_cnf, simplify_clauses}, persisting::write_as_mermaid_md}, Ddnnf};
+use crate::{
+    c2d_lexer::TId,
+    parser::{
+        build_ddnnf, extend_literal_diffs,
+        from_cnf::{get_all_clauses_cnf, simplify_clauses},
+        persisting::write_as_mermaid_md,
+        util::format_vec,
+    },
+    Ddnnf, Node, NodeType,
+};
 
-use super::{calc_and_count, calc_or_count, from_cnf::{reduce_clause, apply_decisions}};
+use super::{
+    calc_and_count, calc_or_count,
+    from_cnf::apply_decisions,
+};
 
 /// The IntermediateGraph enables us to modify the dDNNF. The structure of a vector of nodes does not allow
-/// for that because deleting or removing nodes would mess up the indices. 
+/// for that because deleting or removing nodes would mess up the indices.
 #[derive(Clone, Debug, Default)]
 pub struct IntermediateGraph {
-    graph: StableGraph::<TId, Option<Vec<i32>>>,
+    graph: StableGraph<TId, Option<Vec<i32>>>,
     pub root: NodeIndex,
     number_of_variables: u32,
     literals_nx: HashMap<i32, NodeIndex>,
     literal_children: HashMap<NodeIndex, HashSet<i32>>,
-    cnf_clauses: Vec<Vec<i32>>
+    cnf_clauses: Vec<Vec<i32>>,
+}
+
+/// There are four different strategies that can be used to incrementally add a clause.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum IncrementalStrategy {
+    /// Adding this clause does not alter the d-DNNF. Thus, we don't have to do anything
+    Tautology,
+    /// A clause that contains exactly one literal. We have a special handling for those clauses.
+    UnitClause,
+    /// The core algorithm: we identify the affected sub-DAG and
+    /// replace it with its substitute that contains the incremental clause
+    SubDAGReplacement,
+    /// There is no better solution, than compile the whole CNF with the changes
+    /// becuase almost everything is affected by the new clause
+    Recompile,
 }
 
 const DEBUG: bool = false;
 
 impl IntermediateGraph {
-    /// Creates a new IntermediateGraph 
-    pub fn new(graph: StableGraph::<TId, Option<Vec<i32>>>, root: NodeIndex, number_of_variables: u32,
-               literals_nx: HashMap<i32, NodeIndex>, literal_children: HashMap<NodeIndex, HashSet<i32>>,
-               cnf_path: Option<&str>) -> IntermediateGraph {
+    /// Creates a new IntermediateGraph
+    pub fn new(
+        graph: StableGraph<TId, Option<Vec<i32>>>,
+        root: NodeIndex,
+        number_of_variables: u32,
+        literals_nx: HashMap<i32, NodeIndex>,
+        literal_children: HashMap<NodeIndex, HashSet<i32>>,
+        cnf_path: Option<&str>,
+    ) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
-            graph, root, number_of_variables,
-            literals_nx, literal_children,
+            graph,
+            root,
+            number_of_variables,
+            literals_nx,
+            literal_children,
             cnf_clauses: match cnf_path {
                 Some(path) => get_all_clauses_cnf(path),
-                None => Vec::new()
-            }
+                None => Vec::new(),
+            },
         };
         inter_graph.add_decision_nodes_fu();
         inter_graph.cnf_clauses = simplify_clauses(inter_graph.cnf_clauses);
@@ -57,31 +99,35 @@ impl IntermediateGraph {
 
     /// Starting for the IntermediateGraph, we do a PostOrder walk through the graph the create the
     /// list of nodes which we use for counting operations and other types of queries.
-    pub fn rebuild(&mut self, alt_root: Option<NodeIndex>) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>)  {
+    pub fn rebuild(
+        &mut self,
+        alt_root: Option<NodeIndex>,
+    ) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>) {
         // always make sure that there are no cycles
         debug_assert!(!is_cyclic_directed(&self.graph));
 
         // perform a depth first search to get the nodes ordered such
         // that child nodes are listed before their parents
         // transform that interim representation into a node vector
-        let mut dfs = DfsPostOrder::new(&self.graph, alt_root.unwrap_or(self.root));
+        let mut dfs =
+            DfsPostOrder::new(&self.graph, alt_root.unwrap_or(self.root));
         let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
-        let mut parsed_nodes: Vec<Node> = Vec::with_capacity(self.graph.node_count());
+        let mut parsed_nodes: Vec<Node> =
+            Vec::with_capacity(self.graph.node_count());
         let mut literals: HashMap<i32, usize> = HashMap::new();
         let mut true_nodes = Vec::new();
 
         while let Some(nx) = dfs.next(&self.graph) {
             nd_to_usize.insert(nx, parsed_nodes.len());
-            let neighs = self.graph
+            let neighs = self
+                .graph
                 .neighbors(nx)
                 .map(|n| *nd_to_usize.get(&n).unwrap())
                 .collect::<Vec<usize>>();
             let next: Node = match self.graph[nx] {
                 // extract the parsed Token
-                TId::Literal { feature } => Node::new_literal(
-                    feature
-                ),
+                TId::Literal { feature } => Node::new_literal(feature),
                 TId::And => Node::new_and(
                     calc_and_count(&mut parsed_nodes, &neighs),
                     neighs,
@@ -93,13 +139,14 @@ impl IntermediateGraph {
                 ),
                 TId::True => Node::new_bool(true),
                 TId::False => Node::new_bool(false),
-                TId::Header => panic!("The d4 standard does not include a header!"),
+                TId::Header => {
+                    panic!("The d4 standard does not include a header!")
+                }
             };
 
             match &next.ntype {
                 // build additional references from the child to its parent
-                NodeType::And { children } |
-                NodeType::Or { children } => {
+                NodeType::And { children } | NodeType::Or { children } => {
                     let next_indize: usize = parsed_nodes.len();
                     for &i in children {
                         parsed_nodes[i].parents.push(next_indize);
@@ -125,29 +172,43 @@ impl IntermediateGraph {
     /// and therefore, all other clauses that contain those literals while having as little children
     /// as possible.
     /// Further, the node has to be the endpoint of bridge.
-    pub fn closest_unsplitable_bridge(&mut self, clause: &[i32]) -> Option<(NodeIndex, HashSet<i32>)> {
-        if clause.is_empty() { return None }
-        let mut closest_node = (self.root, self.literal_children.get(&self.root).unwrap());
-        
-        let mut bridge_end_point = Vec::new();        
+    pub fn closest_unsplitable_bridge(
+        &mut self,
+        clause: &[i32],
+    ) -> Option<(NodeIndex, HashSet<i32>)> {
+        if clause.is_empty() {
+            return None;
+        }
+        let mut closest_node =
+            (self.root, self.literal_children.get(&self.root).unwrap());
+
+        let mut bridge_end_point = Vec::new();
         for bridge_endpoint in self.find_bridges() {
             match self.graph[bridge_endpoint] {
                 TId::And | TId::Or => {
-                    let diffs = self.literal_children.get(&bridge_endpoint).unwrap();
+                    let diffs =
+                        self.literal_children.get(&bridge_endpoint).unwrap();
                     // we only consider and nodes that include all literals of the clause
-                    if clause.iter().all(|e| diffs.contains(e) && diffs.contains(&-e)) {
+                    if clause
+                        .iter()
+                        .all(|e| /*diffs.contains(e) && */diffs.contains(&-e))
+                    {
                         if closest_node.1.len() > diffs.len() {
                             closest_node = (bridge_endpoint, diffs);
                         }
                     }
                     bridge_end_point.push(bridge_endpoint);
                 }
-                _ => ()
+                _ => (),
             }
         }
 
-        let devided_and = self.divide_bridge(closest_node.0, &bridge_end_point, clause);
-        Some((devided_and, self.literal_children.get(&devided_and).unwrap().clone()))
+        let devided_and =
+            self.divide_bridge(closest_node.0, &bridge_end_point, clause);
+        Some((
+            devided_and,
+            self.literal_children.get(&devided_and).unwrap().clone(),
+        ))
     }
 
     // Evgeny: https://stackoverflow.com/questions/23179579/finding-bridges-in-graph-without-recursion
@@ -158,9 +219,16 @@ impl IntermediateGraph {
         // calculate neighbours beforehand, because we have to index them multiple times
         let mut neighbours = vec![Vec::new(); self.graph.node_bound()];
         for i in 0..self.graph.node_count() {
-            let neighbours_inc = self.graph.neighbors_directed(self.graph.from_index(i), Incoming);
-            let neighbours_out = self.graph.neighbors_directed(self.graph.from_index(i), Outgoing);
-            neighbours[i] = neighbours_inc.chain(neighbours_out).map(|nx| self.graph.to_index(nx)).collect::<Vec<usize>>();
+            let neighbours_inc = self
+                .graph
+                .neighbors_directed(self.graph.from_index(i), Incoming);
+            let neighbours_out = self
+                .graph
+                .neighbors_directed(self.graph.from_index(i), Outgoing);
+            neighbours[i] = neighbours_inc
+                .chain(neighbours_out)
+                .map(|nx| self.graph.to_index(nx))
+                .collect::<Vec<usize>>();
         }
 
         let mut visited = vec![false; self.graph.node_bound()];
@@ -168,7 +236,7 @@ impl IntermediateGraph {
         let mut low = vec![0usize; self.graph.node_bound()]; // f-up (minimum discovery time)
         let mut timer = 0usize;
         let mut stack: Vec<(usize, usize, usize)> = Vec::new(); // (node, parent) pairs
-    
+
         stack.push((self.root.index(), self.graph.node_bound() + 1, 0));
 
         while let Some((v, parent, i)) = stack.pop() {
@@ -222,18 +290,31 @@ impl IntermediateGraph {
     //                            /   \
     //                           c1   c2
     //
-    fn divide_bridge(&mut self, initial_start: NodeIndex, bridges: &[NodeIndex], clause: &[i32]) -> NodeIndex {
-        if clause.is_empty() { return initial_start; }
-        
+    fn divide_bridge(
+        &mut self,
+        initial_start: NodeIndex,
+        bridges: &[NodeIndex],
+        clause: &[i32],
+    ) -> NodeIndex {
+        if clause.is_empty() {
+            return initial_start;
+        }
+
         // Find those children that are relevant to the provided clause.
         // Those all contain at least one of the literals of the clause.
         let mut relevant_children = Vec::new();
         let mut contains_at_least_one_irrelevant = false;
-        let mut children = self.graph.neighbors_directed(initial_start, Outgoing).detach();
+        let mut children = self
+            .graph
+            .neighbors_directed(initial_start, Outgoing)
+            .detach();
         while let Some(child) = children.next_node(&self.graph) {
             let lits = self.literal_children.get(&child).unwrap();
-            if clause.iter().any(|f| lits.contains(f) || lits.contains(&-f))
-                || bridges.contains(&child) {
+            if clause
+                .iter()
+                .any(|f| lits.contains(f) || lits.contains(&-f))
+                || bridges.contains(&child)
+            {
                 relevant_children.push(child);
             } else {
                 contains_at_least_one_irrelevant = true;
@@ -265,35 +346,65 @@ impl IntermediateGraph {
     }
 
     // Experimental method to use the initial CNF for recompiling
-    pub fn transform_to_cnf_from_starting_cnf(&mut self, clause: Vec<i32>) -> (Vec<String>, NodeIndex, HashMap<u32, u32>) {
+    pub fn transform_to_cnf_from_starting_cnf(
+        &mut self,
+        clause: Vec<i32>,
+    ) -> (Vec<String>, NodeIndex, HashMap<u32, u32>) {
         if DEBUG {
             println!("starting 'transform_to_cnf_from_starting_cnf' with clause: {:?}", clause);
         }
-        if self.cnf_clauses.is_empty() { return (Vec::new(), NodeIndex::new(0), HashMap::new()); }
+
+        if self.cnf_clauses.is_empty() {
+            return (Vec::new(), NodeIndex::new(0), HashMap::new());
+        }
+
+        // Remove clauses that are redundant
+        let set_addded_clause: HashSet<_> = clause.clone().into_iter().collect();
+        for cnf_clause in self.cnf_clauses.iter() {
+            let set_current_clause: HashSet<_> = cnf_clause.clone().into_iter().collect();
+            if set_current_clause.is_subset(&set_addded_clause) {
+                return (Vec::new(), NodeIndex::new(0), HashMap::new());
+            }
+        }
 
         // 1) Find the closest node and the decisions to that point
-        let (closest_node, relevant_literals) = match self.closest_unsplitable_bridge(&clause) {
-            Some((nx, lits)) => (nx, lits.clone()),
-            None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
-        };
+        let (closest_node, relevant_literals) =
+            match self.closest_unsplitable_bridge(&clause) {
+                Some((nx, lits)) => (nx, lits.clone()),
+                None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
+            };
 
         if DEBUG {
-            println!("closest node: {:?}, and its relevant literals: {:?}", closest_node, relevant_literals);
+            println!(
+                "closest node: {:?}, and its relevant literals: {:?}",
+                closest_node, relevant_literals
+            );
         }
 
         // Recompile the whole dDNNF if at least 80% are children of the closest_node we could replace
-        if relevant_literals.len() as f32 / 2.0 > self.number_of_variables as f32 * 0.8 {
+        if relevant_literals.len() as f32 / 2.0
+            > self.number_of_variables as f32 * 0.8
+        {
             return (Vec::new(), self.root, HashMap::new());
         }
 
-        let mut accumlated_decisions = self.get_decisions_target_nx(closest_node);
+        let mut accumlated_decisions =
+            self.get_decisions_target_nx(closest_node);
+        
         // Add unit clauses. Those decisions are implicit in the dDNNF.
         // Hence, we have to search for them
-        self.cnf_clauses.iter().for_each(
-            |clause| if clause.len() == 1 { accumlated_decisions.insert(clause[0]); });
+        self.cnf_clauses.iter().for_each(|cnf_clause| {
+            if cnf_clause.len() == 1 {
+                accumlated_decisions.insert(cnf_clause[0]);
+            }
+        });
 
         if DEBUG {
-            println!("lits count: {} lits: {:?}", relevant_literals.len(), relevant_literals);
+            println!(
+                "lits count: {} lits: {:?}",
+                relevant_literals.len(),
+                relevant_literals
+            );
         }
 
         // 2) Filter for clauses that contain at least one of the relevant literals
@@ -304,10 +415,12 @@ impl IntermediateGraph {
             self.cnf_clauses
                 .clone()
                 .into_iter()
-                .filter(|initial_clause| 
-                    initial_clause.iter()
-                        .any(|elem| relevant_literals.contains(elem)
-                            || relevant_literals.contains(&-elem)))
+                .filter(|initial_clause| {
+                    initial_clause.iter().any(|elem| {
+                        relevant_literals.contains(elem)
+                            || relevant_literals.contains(&-elem)
+                    })
+                })
                 .collect_vec()
         };
         relevant_clauses.push(clause.clone());
@@ -326,8 +439,10 @@ impl IntermediateGraph {
         }
 
         // 3) Repeatedly apply the summed up decions to the remaining clauses
-        (relevant_clauses, accumlated_decisions) = apply_decisions(relevant_clauses, accumlated_decisions);
+        (relevant_clauses, accumlated_decisions) =
+            apply_decisions(relevant_clauses, accumlated_decisions);
 
+        /*
         let initial_clause = &clause;
         match reduce_clause(&clause, &accumlated_decisions) {
             Some(clause) => {
@@ -340,14 +455,15 @@ impl IntermediateGraph {
                     _ => {
                         if initial_clause.len() > clause.len() {
                             println!("AND ANOTHER ROUND FROM CLAUSE {:?} TO CLAUSE {:?}", initial_clause, clause);
-                            return self.transform_to_cnf_from_starting_cnf(clause);
+                            exit(1);
+                            //return self.transform_to_cnf_from_starting_cnf(clause);
                         }
                     }
                 }
             },
             None => panic!("dDNNF becomes UNSAT for clause: {:?} under the decisions: {:?}",
                 clause, accumlated_decisions),
-        };
+        };*/
 
         // Continue 2.5
         let mut red_variables = HashSet::new();
@@ -358,19 +474,25 @@ impl IntermediateGraph {
         }
 
         if DEBUG {
-            println!("Potential optional features: {:?}", variables.symmetric_difference(&red_variables).cloned());
+            println!(
+                "Potential optional features: {:?}",
+                variables.symmetric_difference(&red_variables).cloned()
+            );
         }
 
         if DEBUG {
             println!("decisions: {:?}", accumlated_decisions.clone());
         }
 
-        for variable in variables.difference(&red_variables).cloned() {
+        for variable in variables.symmetric_difference(&red_variables).cloned() {
             let v_i32 = &(variable as i32);
             if !accumlated_decisions.contains(v_i32)
-            && !accumlated_decisions.contains(&-v_i32)
-            && (relevant_literals.contains(v_i32) || relevant_literals.contains(&-v_i32)) {
-                relevant_clauses.push(vec![variable as i32, -(variable as i32)]);
+                && !accumlated_decisions.contains(&-v_i32)
+                && (relevant_literals.contains(v_i32)
+                    || relevant_literals.contains(&-v_i32))
+            {
+                relevant_clauses
+                    .push(vec![variable as i32, -(variable as i32)]);
             }
 
             if accumlated_decisions.contains(v_i32) {
@@ -387,17 +509,19 @@ impl IntermediateGraph {
         // 4) Adjust indices of the literals
         //    (to avoid unwanted gaps in the CNF which would be interpreted as optional features)
         let mut index = 1_u32;
-        let mut re_index: HashMap<u32,u32> = HashMap::new();
+        let mut re_index: HashMap<u32, u32> = HashMap::new();
         for clause in relevant_clauses.iter_mut() {
             for elem in clause {
                 let elem_signum = elem.signum();
                 match re_index.get(&(elem.unsigned_abs())) {
-                    Some(val) => { *elem = *val as i32 * elem_signum; },
+                    Some(val) => {
+                        *elem = *val as i32 * elem_signum;
+                    }
                     None => {
                         re_index.insert(elem.unsigned_abs(), index);
                         *elem = index as i32 * elem_signum;
                         index += 1;
-                    },
+                    }
                 }
             }
         }
@@ -405,8 +529,12 @@ impl IntermediateGraph {
         //if DEBUG { println!("reindex: {:?}", re_index); }
 
         // write the meta information of the header
-        let mut cnf = vec![format!("p cnf {} {}\n", index - 1, relevant_clauses.len() + 1)];
-        
+        let mut cnf = vec![format!(
+            "p cnf {} {}\n",
+            index - 1,
+            relevant_clauses.len()
+        )];
+
         for clause in relevant_clauses {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
@@ -422,8 +550,12 @@ impl IntermediateGraph {
 
     fn recompile_everything(&mut self, clause: Vec<i32>) {
         const INTER_CNF: &str = ".sub.cnf";
-        
-        let mut cnf = vec![format!("p cnf {} {}\n", self.number_of_variables, self.cnf_clauses.len() + 1)];
+
+        let mut cnf = vec![format!(
+            "p cnf {} {}\n",
+            self.number_of_variables,
+            self.cnf_clauses.len() + 1
+        )];
         for clause in self.cnf_clauses.iter() {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
@@ -439,32 +571,39 @@ impl IntermediateGraph {
         println!("recompiled everything");
     }
 
-    pub fn add_clause(&mut self, clause: Vec<i32>) -> bool {
-        if clause.is_empty() { return true; }
-        let clause_max_var = clause.iter().map(|f| f.unsigned_abs()).max().unwrap();
+    pub fn add_clause(&mut self, clause: Vec<i32>) -> IncrementalStrategy {
+        if clause.is_empty() {
+            return IncrementalStrategy::Tautology;
+        }
+        let clause_max_var =
+            clause.iter().map(|f| f.unsigned_abs()).max().unwrap();
         if self.number_of_variables < clause_max_var {
             self.number_of_variables = clause_max_var;
             self.recompile_everything(clause);
-            return true;
+            return IncrementalStrategy::Recompile;
         }
-        self.cnf_clauses.push(clause.clone());
-        //if clause.len() == 1 { self.add_unit_clause(clause[0]); return true; }
-        
+        //self.cnf_clauses.push(clause.clone());
+        if clause.len() == 1 {
+            self.add_unit_clause(clause[0]);
+            return IncrementalStrategy::UnitClause;
+        }
+
         let mut _start = Instant::now();
         const INTER_CNF: &str = ".sub.cnf";
 
         _start = Instant::now();
-        let (cnf, adjusted_replace, re_indices) = self.transform_to_cnf_from_starting_cnf(clause.clone());
-        
+        let (cnf, adjusted_replace, re_indices) =
+            self.transform_to_cnf_from_starting_cnf(clause.clone());
+
         if cnf.is_empty() {
             if adjusted_replace == self.root {
                 self.recompile_everything(clause);
+                return IncrementalStrategy::Recompile;
             } else {
-                println!("clause was redundant :D");
+                return IncrementalStrategy::Tautology;
             }
-            return true;
         }
-        
+
         println!("Replace CNF clauses: {}", cnf.len());
         _start = Instant::now();
         // persist CNF
@@ -474,19 +613,31 @@ impl IntermediateGraph {
 
         if DEBUG {
             let mut ddnnf_remove = Ddnnf::default();
-            ddnnf_remove.inter_graph = self.clone(); ddnnf_remove.rebuild();
-            write_as_mermaid_md(&ddnnf_remove, &[], "removed_sub.md", Some((adjusted_replace, 1_000))).unwrap();
+            ddnnf_remove.inter_graph = self.clone();
+            ddnnf_remove.rebuild();
+            write_as_mermaid_md(
+                &ddnnf_remove,
+                &[],
+                "removed_sub.md",
+                Some((adjusted_replace, 1_000)),
+            )
+            .unwrap();
         }
 
-        let mut parents = self.graph.neighbors_directed(adjusted_replace, Outgoing).detach();
+        let mut parents = self
+            .graph
+            .neighbors_directed(adjusted_replace, Outgoing)
+            .detach();
         while let Some(parent_edge) = parents.next_edge(&self.graph) {
             self.graph.remove_edge(parent_edge);
         }
 
         if DEBUG {
             let mut ddnnf_after_remove = Ddnnf::default();
-            ddnnf_after_remove.inter_graph = self.clone(); ddnnf_after_remove.rebuild();
-            write_as_mermaid_md(&ddnnf_after_remove, &[], "after_rm.md", None).unwrap();
+            ddnnf_after_remove.inter_graph = self.clone();
+            ddnnf_after_remove.rebuild();
+            write_as_mermaid_md(&ddnnf_after_remove, &[], "after_rm.md", None)
+                .unwrap();
         }
 
         let mut sup = build_ddnnf(INTER_CNF, None);
@@ -497,13 +648,18 @@ impl IntermediateGraph {
         }
 
         // add the new subgraph as additional graph (unconnected to self)
-        let mut dfs = DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
+        let mut dfs =
+            DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
         while let Some(nx) = dfs.next(&sup.inter_graph.graph) {
             match sup.inter_graph.graph[nx] {
                 TId::Literal { feature } => {
-                    let re_lit = *re_indices.get(&(feature.unsigned_abs())).unwrap() as i32;
-                    sup.inter_graph.graph[nx] = TId::Literal { feature: re_lit * feature.signum() };
-                },
+                    let re_lit = *re_indices
+                        .get(&(feature.unsigned_abs()))
+                        .unwrap() as i32;
+                    sup.inter_graph.graph[nx] = TId::Literal {
+                        feature: re_lit * feature.signum(),
+                    };
+                }
                 _ => (),
             }
         }
@@ -513,7 +669,8 @@ impl IntermediateGraph {
             write_as_mermaid_md(&sup, &[], "sub.md", None).unwrap();
         }
 
-        let mut dfs = DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
+        let mut dfs =
+            DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
         let mut cache = HashMap::new();
         while let Some(nx) = dfs.next(&sup.inter_graph.graph) {
             let new_nx = match sup.inter_graph.graph[nx] {
@@ -529,16 +686,28 @@ impl IntermediateGraph {
             };
             cache.insert(nx, new_nx);
 
-            let mut children = sup.inter_graph.graph.neighbors_directed(nx, Outgoing).detach();
-            while let Some((child_ex, child_nx)) = children.next(&sup.inter_graph.graph) {
-                self.graph.add_edge(new_nx, *cache.get(&child_nx).unwrap(), sup.inter_graph.graph[child_ex].clone());
+            let mut children = sup
+                .inter_graph
+                .graph
+                .neighbors_directed(nx, Outgoing)
+                .detach();
+            while let Some((child_ex, child_nx)) =
+                children.next(&sup.inter_graph.graph)
+            {
+                self.graph.add_edge(
+                    new_nx,
+                    *cache.get(&child_nx).unwrap(),
+                    sup.inter_graph.graph[child_ex].clone(),
+                );
             }
         }
 
         if DEBUG {
             let mut ddnnf_after_add = Ddnnf::default();
-            ddnnf_after_add.inter_graph = self.clone(); ddnnf_after_add.rebuild();
-            write_as_mermaid_md(&ddnnf_after_add, &[], "after_adding.md", None).unwrap();
+            ddnnf_after_add.inter_graph = self.clone();
+            ddnnf_after_add.rebuild();
+            write_as_mermaid_md(&ddnnf_after_add, &[], "after_adding.md", None)
+                .unwrap();
         }
 
         // replace the reference to the starting node with the new subgraph
@@ -546,11 +715,16 @@ impl IntermediateGraph {
         self.graph.add_edge(adjusted_replace, new_sub_root, None);
 
         // add the literal_children of the newly created ddnnf
-        extend_literal_diffs(&self.graph, &mut self.literal_children, new_sub_root);
+        extend_literal_diffs(
+            &self.graph,
+            &mut self.literal_children,
+            new_sub_root,
+        );
 
         if DEBUG {
             let mut ddnnf_at_end = Ddnnf::default();
-            ddnnf_at_end.inter_graph = self.clone(); ddnnf_at_end.rebuild();   
+            ddnnf_at_end.inter_graph = self.clone();
+            ddnnf_at_end.rebuild();
             write_as_mermaid_md(&ddnnf_at_end, &[], "at_end.md", None).unwrap();
         }
 
@@ -558,50 +732,64 @@ impl IntermediateGraph {
         //if Path::new(INTER_CNF).exists() { fs::remove_file(INTER_CNF).unwrap(); }
         //if Path::new(INTER_NNF).exists() { fs::remove_file(INTER_NNF).unwrap(); }
 
-        true
+        IncrementalStrategy::SubDAGReplacement
     }
 
     fn add_decision_nodes_fu(&mut self) {
         let mut dfs = Dfs::new(&self.graph, self.root);
         while let Some(nx) = dfs.next(&self.graph) {
-            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
-            
+            let mut children =
+                self.graph.neighbors_directed(nx, Outgoing).detach();
+
             match self.graph[nx] {
                 TId::Or => {
-                    let literals_parent = self.literal_children.get(&nx).unwrap();
+                    let literals_parent =
+                        self.literal_children.get(&nx).unwrap();
                     let mut literals_children = Vec::new();
-                    let mut deciding_intersection: HashSet<u32> = literals_parent.iter().map(|l| l.unsigned_abs()).collect();
+                    let mut deciding_intersection: HashSet<u32> =
+                        literals_parent
+                            .iter()
+                            .map(|l| l.unsigned_abs())
+                            .collect();
                     while let Some((edge, child)) = children.next(&self.graph) {
-                        let literals_child = self.literal_children.get(&child).unwrap();
-                        
+                        let literals_child =
+                            self.literal_children.get(&child).unwrap();
+
                         let diff = literals_parent
                             .difference(literals_child)
                             .map(|literal| -literal)
                             .collect_vec();
-                        
-                        let unsigned_diff: HashSet<u32> = diff.iter().map(|l| l.unsigned_abs()).collect();
-                        deciding_intersection.retain(|&x| unsigned_diff.contains(&x));
+
+                        let unsigned_diff: HashSet<u32> =
+                            diff.iter().map(|l| l.unsigned_abs()).collect();
+                        deciding_intersection
+                            .retain(|&x| unsigned_diff.contains(&x));
                         literals_children.push((diff, edge));
                     }
-        
+
                     for (mut diff, edge) in literals_children {
-                        diff.retain(|literal| deciding_intersection.contains(&literal.unsigned_abs()));
+                        diff.retain(|literal| {
+                            deciding_intersection
+                                .contains(&literal.unsigned_abs())
+                        });
                         self.graph[edge] = match &self.graph[edge] {
                             Some(existing_diff) => {
                                 diff.extend(existing_diff.iter());
                                 Some(diff)
-                            },
+                            }
                             None => Some(diff),
                         }
                     }
-                },
+                }
                 TId::And => {
                     let mut literal_children = Vec::new();
                     let mut non_literal_ex = Vec::new();
                     while let Some((edge, child)) = children.next(&self.graph) {
                         match self.graph[child] {
-                            TId::Literal { feature } => literal_children.push(feature),
-                            _ => non_literal_ex.push(edge)
+                            TId::Literal { feature } => {
+                                literal_children.push(feature)
+                            }
+                            _ => non_literal_ex.push(edge),
                         }
                     }
 
@@ -611,13 +799,13 @@ impl IntermediateGraph {
                                 let mut ndec = dec.clone();
                                 ndec.extend(literal_children.iter());
                                 Some(ndec)
-                            },
+                            }
                             None => Some(literal_children.clone()),
                         };
 
                         self.graph[edge] = new_decisions;
                     }
-                },
+                }
                 _ => (),
             }
         }
@@ -634,12 +822,17 @@ impl IntermediateGraph {
                 // We resolve the FALSE node immidiatly.
                 Some(&node) => {
                     let mut need_to_be_removed = vec![node];
-                    
+
                     while !need_to_be_removed.is_empty() {
                         let mut remove_in_next_step = Vec::new();
                         for node in need_to_be_removed {
-                            let mut children = self.graph.neighbors_directed(node, Incoming).detach();
-                            while let Some(parent) = children.next_node(&self.graph) {
+                            let mut children = self
+                                .graph
+                                .neighbors_directed(node, Incoming)
+                                .detach();
+                            while let Some(parent) =
+                                children.next_node(&self.graph)
+                            {
                                 if self.graph[parent] == TId::And {
                                     remove_in_next_step.push(parent);
                                 }
@@ -648,7 +841,7 @@ impl IntermediateGraph {
                         }
                         need_to_be_removed = remove_in_next_step;
                     }
-                },
+                }
                 // If its contradiction does not exist, we don't have to do anything
                 None => (),
             }
@@ -658,16 +851,20 @@ impl IntermediateGraph {
             // we have to add all the features from 43 to 49 (including) as optional features (or triangle at root)
             while self.number_of_variables != feature.unsigned_abs() {
                 self.number_of_variables += 1;
-                
+
                 let new_or = self.graph.add_node(TId::Or);
                 self.graph.add_edge(self.root, new_or, None);
-                
-                let new_positive_lit = self.graph.add_node(TId::Literal { feature: self.number_of_variables as i32 });
-                let new_negative_lit = self.graph.add_node(TId::Literal { feature: -(self.number_of_variables as i32) });
+
+                let new_positive_lit = self.graph.add_node(TId::Literal {
+                    feature: self.number_of_variables as i32,
+                });
+                let new_negative_lit = self.graph.add_node(TId::Literal {
+                    feature: -(self.number_of_variables as i32),
+                });
                 self.graph.add_edge(new_or, new_positive_lit, None);
                 self.graph.add_edge(new_or, new_negative_lit, None);
             }
-            
+
             // Add the actual new feature
             let new_feature = self.graph.add_node(TId::Literal { feature });
             self.graph.add_edge(self.root, new_feature, None);
@@ -682,11 +879,14 @@ impl IntermediateGraph {
 
         let mut dfs = Dfs::new(&self.graph, self.root);
         while let Some(nx) = dfs.next(&self.graph) {
-            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+            let mut children =
+                self.graph.neighbors_directed(nx, Outgoing).detach();
             while let Some((edge, child)) = children.next(&self.graph) {
-                let mut current_decisions: Vec<i32> = nx_decisions.get(&nx).unwrap().clone();
+                let mut current_decisions: Vec<i32> =
+                    nx_decisions.get(&nx).unwrap().clone();
                 //println!("current before: {:?}", current_decisions);
-                let edge_decisions = self.graph[edge].clone().unwrap_or(Vec::new());
+                let edge_decisions =
+                    self.graph[edge].clone().unwrap_or(Vec::new());
                 current_decisions.extend(edge_decisions.iter());
                 //println!("current after: {:?}", current_decisions);
                 nx_decisions.insert(child, current_decisions);
@@ -695,11 +895,15 @@ impl IntermediateGraph {
 
         match nx_decisions.get(&target) {
             Some(decision) => decision.clone().into_iter().collect(),
-            None => HashSet::new()
+            None => HashSet::new(),
         }
     }
 
-    pub fn get_partial_graph_til_depth(&self, start: NodeIndex, depth: i32) -> IntermediateGraph {
+    pub fn get_partial_graph_til_depth(
+        &self,
+        start: NodeIndex,
+        depth: i32,
+    ) -> IntermediateGraph {
         let mut sub_ig = self.clone();
         let mut distance_mapping = HashMap::new();
 
@@ -707,9 +911,13 @@ impl IntermediateGraph {
         while let Some(nx) = dfs.next(&self.graph) {
             let mut highest_parent_depth = 0;
 
-            let mut parents = self.graph.neighbors_directed(nx, Incoming).detach();
+            let mut parents =
+                self.graph.neighbors_directed(nx, Incoming).detach();
             while let Some(node) = parents.next_node(&self.graph) {
-                highest_parent_depth = max(highest_parent_depth, *distance_mapping.get(&node).unwrap_or(&0));
+                highest_parent_depth = max(
+                    highest_parent_depth,
+                    *distance_mapping.get(&node).unwrap_or(&0),
+                );
             }
 
             distance_mapping.insert(nx, highest_parent_depth + 1);
@@ -724,12 +932,14 @@ impl IntermediateGraph {
             };
 
             if remove_node {
-                let mut parents = sub_ig.graph.neighbors_directed(nx, Incoming).detach();
+                let mut parents =
+                    sub_ig.graph.neighbors_directed(nx, Incoming).detach();
                 while let Some(edge_inc) = parents.next_edge(&sub_ig.graph) {
                     sub_ig.graph.remove_edge(edge_inc);
                 }
 
-                let mut children = sub_ig.graph.neighbors_directed(nx, Outgoing).detach();
+                let mut children =
+                    sub_ig.graph.neighbors_directed(nx, Outgoing).detach();
                 while let Some(edge_out) = children.next_edge(&sub_ig.graph) {
                     sub_ig.graph.remove_edge(edge_out);
                 }
@@ -737,7 +947,7 @@ impl IntermediateGraph {
                 sub_ig.graph.remove_node(nx);
             }
         }
-        
+
         sub_ig.root = start;
         sub_ig
     }
@@ -745,45 +955,75 @@ impl IntermediateGraph {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, fs::{File, self}, io::Write};
+    use std::{
+        collections::HashSet,
+        fs::{self, File},
+        io::Write,
+    };
 
     use rand::{rngs::StdRng, Rng};
     use serial_test::serial;
 
-    use crate::{parser::{build_ddnnf, persisting::write_as_mermaid_md, from_cnf::{remove_clause_cnf, get_all_clauses_cnf, add_clause_cnf}}, Ddnnf};
+    use crate::{
+        parser::{
+            build_ddnnf,
+            from_cnf::{
+                add_clause_cnf, get_all_clauses_cnf, remove_clause_cnf,
+            },
+            persisting::write_as_mermaid_md,
+        },
+        Ddnnf,
+    };
 
     const DEBUG: bool = false;
 
     #[test]
     #[serial]
     fn closest_unsplittable_and() {
-        let bridge_comparison = |mut ddnnf: Ddnnf, input: Vec<Vec<i32>>, output: Vec<Option<Vec<i32>>>| {
-            for (index, inp) in input.iter().enumerate() {
-                match ddnnf.inter_graph.closest_unsplitable_bridge(inp) {
-                    Some((_replace_and_node, literals)) => {
-                        let mut literals_as_vec = HashSet::<_>::from_iter(
-                            literals.iter().copied())
+        let bridge_comparison =
+            |mut ddnnf: Ddnnf,
+             input: Vec<Vec<i32>>,
+             output: Vec<Option<Vec<i32>>>| {
+                for (index, inp) in input.iter().enumerate() {
+                    match ddnnf.inter_graph.closest_unsplitable_bridge(inp) {
+                        Some((_replace_and_node, literals)) => {
+                            let mut literals_as_vec = HashSet::<_>::from_iter(
+                                literals.iter().copied(),
+                            )
                             .into_iter()
                             .collect::<Vec<i32>>();
-    
-                        literals_as_vec.sort();
-                        assert_eq!(output[index].clone().unwrap(), literals_as_vec);
-                    },
-                    None => {
-                        assert!(output[index].is_none());
+
+                            literals_as_vec.sort();
+                            assert_eq!(
+                                output[index].clone().unwrap(),
+                                literals_as_vec
+                            );
+                        }
+                        None => {
+                            assert!(output[index].is_none());
+                        }
                     }
                 }
-            }
-        };
-        
+            };
+
         let ddnnf_vp9 = build_ddnnf("tests/data/VP9.cnf", Some(42));
         let input_vp9 = vec![
-            vec![], vec![4], vec![5], vec![4, 5],
-            vec![42], vec![-5], vec![-8]
+            vec![],
+            vec![4],
+            vec![5],
+            vec![4, 5],
+            vec![42],
+            vec![-5],
+            vec![-8],
         ];
         let output_vp9 = vec![
-            None, Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-5, -4, -3, 3, 4, 5]),
-            Some(vec![-42, -41, 41, 42]), Some(vec![-5, -4, -3, 3, 4, 5]), Some(vec![-9, -8, -7, 7, 8, 9])
+            None,
+            Some(vec![-5, -4, -3, 3, 4, 5]),
+            Some(vec![-5, -4, -3, 3, 4, 5]),
+            Some(vec![-5, -4, -3, 3, 4, 5]),
+            Some(vec![-42, -41, 41, 42]),
+            Some(vec![-5, -4, -3, 3, 4, 5]),
+            Some(vec![-9, -8, -7, 7, 8, 9]),
         ];
         bridge_comparison(ddnnf_vp9, input_vp9, output_vp9);
     }
@@ -794,15 +1034,23 @@ mod test {
             .map(|_| (rng.gen_range(b'a'..=b'z') as char))
             .collect();
 
-        let copy_path_string = format!(".{}_{}_copy.cnf", path.split("/").collect::<Vec<&str>>().last().unwrap(), random_string);
+        let copy_path_string = format!(
+            ".{}_{}_copy.cnf",
+            path.split("/").collect::<Vec<&str>>().last().unwrap(),
+            random_string
+        );
         let copy_path = &copy_path_string;
         fs::copy(path, copy_path).unwrap();
 
         let mut clauses = get_all_clauses_cnf(copy_path);
-        use rand::SeedableRng; let mut rng: StdRng = SeedableRng::seed_from_u64(42);
-        use rand::prelude::SliceRandom; clauses.shuffle(&mut rng);
+        use rand::SeedableRng;
+        let mut rng: StdRng = SeedableRng::seed_from_u64(42);
+        use rand::prelude::SliceRandom;
+        clauses.shuffle(&mut rng);
         for (index, clause) in clauses.into_iter().enumerate() {
-            if index >= break_point { break; }
+            if index >= break_point {
+                break;
+            }
             if DEBUG {
                 println!("-------------------------------------------------------------");
                 println!("Current clause: {:?}", clause);
@@ -810,14 +1058,20 @@ mod test {
 
             remove_clause_cnf(copy_path, &clause, None);
             let mut ddnnf_wo = build_ddnnf(copy_path, None);
-            if DEBUG { write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap(); }
+            if DEBUG {
+                write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap();
+            }
             ddnnf_wo.inter_graph.add_clause(clause.clone());
             ddnnf_wo.rebuild();
-            if DEBUG { write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap(); }
+            if DEBUG {
+                write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap();
+            }
 
             add_clause_cnf(copy_path, &clause);
             let mut ddnnf_w = build_ddnnf(copy_path, None);
-            if DEBUG { write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap(); }
+            if DEBUG {
+                write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
+            }
 
             assert_eq!(ddnnf_wo.rc(), ddnnf_w.rc());
             for feature in 0_i32..ddnnf_w.number_of_variables as i32 {
@@ -836,21 +1090,19 @@ mod test {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",
             "tests/data/X264.cnf",
-            "tests/data/HiPAcc.cnf"
+            "tests/data/HiPAcc.cnf",
         ];
 
         for path in ddnnf_file_paths {
-            check_for_cardinality_correctness(path, usize::MAX);    
+            check_for_cardinality_correctness(path, usize::MAX);
         }
     }
 
     #[test]
     #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses_medium_models() {
-        let ddnnf_file_paths = vec![
-            "tests/data/kc_axTLS.cnf",
-            "tests/data/toybox.cnf"
-        ];
+        let ddnnf_file_paths =
+            vec!["tests/data/kc_axTLS.cnf", "tests/data/toybox.cnf"];
 
         for path in ddnnf_file_paths {
             check_for_cardinality_correctness(path, 100);
@@ -860,10 +1112,8 @@ mod test {
     #[test]
     #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses_big_models() {
-        let ddnnf_file_paths = vec![
-            "tests/data/auto1.cnf",
-            "tests/data/auto2.cnf"
-        ];
+        let ddnnf_file_paths =
+            vec!["tests/data/auto1.cnf", "tests/data/auto2.cnf"];
 
         for path in ddnnf_file_paths {
             check_for_cardinality_correctness(path, 10);
@@ -873,27 +1123,39 @@ mod test {
     #[test]
     #[serial]
     fn incremental_adding_clause() {
-        let ddnnf_file_paths = vec![
-            ("tests/data/VP9.cnf", "tests/data/VP9_wo_-4-5.cnf", 42, vec![-4, -5])
-        ];
+        let ddnnf_file_paths = vec![(
+            "tests/data/VP9.cnf",
+            "tests/data/VP9_wo_-4-5.cnf",
+            42,
+            vec![-4, -5],
+        )];
 
-        for (path_w_clause, path_wo_clause, features, clause) in ddnnf_file_paths {
+        for (path_w_clause, path_wo_clause, features, clause) in
+            ddnnf_file_paths
+        {
             let mut ddnnf_w = build_ddnnf(path_w_clause, Some(features));
 
             let mut expected_results = Vec::new();
             for f in 1..=features {
                 expected_results.push(ddnnf_w.execute_query(&[f as i32]));
             }
-            
+
             let mut ddnnf_wo = build_ddnnf(path_wo_clause, Some(features));
-            if DEBUG { write_as_mermaid_md(&mut ddnnf_wo, &[], "before.md", None).unwrap(); }
+            if DEBUG {
+                write_as_mermaid_md(&mut ddnnf_wo, &[], "before.md", None)
+                    .unwrap();
+            }
             ddnnf_wo.inter_graph.add_clause(clause);
             ddnnf_wo.rebuild();
-            if DEBUG { write_as_mermaid_md(&mut ddnnf_wo, &[], "after.md", None).unwrap(); }
+            if DEBUG {
+                write_as_mermaid_md(&mut ddnnf_wo, &[], "after.md", None)
+                    .unwrap();
+            }
 
             let mut results_after_addition = Vec::new();
             for f in 1..=features {
-                results_after_addition.push(ddnnf_wo.execute_query(&[f as i32]));
+                results_after_addition
+                    .push(ddnnf_wo.execute_query(&[f as i32]));
             }
 
             assert_eq!(expected_results.len(), results_after_addition.len());
@@ -938,13 +1200,16 @@ mod test {
         ddnnf_missing_clause2.rebuild();
 
         // We have to sort the results because the inner structure does not have to be identical
-        let mut sb_enumeration = ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap();
+        let mut sb_enumeration =
+            ddnnf_sb.enumerate(&mut vec![], 1_000).unwrap();
         sb_enumeration.sort();
 
-        let mut ms1_enumeration = ddnnf_missing_clause1.enumerate(&mut vec![], 1_000).unwrap();
+        let mut ms1_enumeration =
+            ddnnf_missing_clause1.enumerate(&mut vec![], 1_000).unwrap();
         ms1_enumeration.sort();
 
-        let mut ms2_enumeration = ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap();
+        let mut ms2_enumeration =
+            ddnnf_missing_clause2.enumerate(&mut vec![], 1_000).unwrap();
         ms2_enumeration.sort();
 
         // check whether the dDNNFs contain the same configurations

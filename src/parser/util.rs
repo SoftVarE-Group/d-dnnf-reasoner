@@ -1,11 +1,14 @@
 //! A collection of small utility functions.
 
-use std::{fs::File, io::{BufReader, BufRead}, process};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+    process,
+};
 
-use rug::{Integer, Complete};
+use rug::{Complete, Integer};
 
 use crate::Node;
-
 
 // multiplies the count of all child Nodes of an And Node
 #[inline]
@@ -16,10 +19,7 @@ pub(super) fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
 
 // adds up the count of all child Nodes of an And Node
 #[inline]
-pub(super) fn calc_or_count(
-    nodes: &mut [Node],
-    indices: &[usize],
-) -> Integer {
+pub(super) fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
     Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()
 }
 
@@ -80,16 +80,18 @@ pub fn open_file_savely(path: &str) -> File {
 /// Builds a string from a vector without commas or brackets.
 /// Example: format_vec([1, 2, 3]) => "1 2 3".
 pub fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
-    vals.map(|v| v.to_string()).collect::<Vec<String>>().join(" ")
+    vals.map(|v| v.to_string())
+        .collect::<Vec<String>>()
+        .join(" ")
 }
 
 /// Does the same as [format_vec] and divides the vectors by a semicolon.
 pub fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
-    where
+where
     T: IntoIterator,
     T::Item: ToString,
 {
     vals.map(|res| format_vec(res.into_iter()))
-    .collect::<Vec<String>>()
-    .join(";")
+        .collect::<Vec<String>>()
+        .join(";")
 }

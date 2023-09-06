@@ -22,7 +22,7 @@ impl PartialEq for Config {
 }
 
 impl Extend<i32> for Config {
-    fn extend<T: IntoIterator<Item=i32>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = i32>>(&mut self, iter: T) {
         self.sat_state_complete = false;
         for literal in iter {
             self.add(literal);
@@ -95,7 +95,7 @@ impl Config {
     }
 
     /// Returns an iterator over the selected and unselected features
-    pub fn get_decided_literals(&self) -> impl Iterator<Item=i32> + '_ {
+    pub fn get_decided_literals(&self) -> impl Iterator<Item = i32> + '_ {
         self.literals
             .iter()
             .copied()
@@ -208,7 +208,7 @@ impl Ord for Sample {
 }
 
 impl Extend<Config> for Sample {
-    fn extend<T: IntoIterator<Item=Config>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = Config>>(&mut self, iter: T) {
         for config in iter {
             self.add(config);
         }
@@ -295,7 +295,7 @@ impl Sample {
     }
 
     /// Creates an iterator that first iterates over complete_configs and then over partial_configs
-    pub fn iter(&self) -> impl Iterator<Item=&Config> {
+    pub fn iter(&self) -> impl Iterator<Item = &Config> {
         self.complete_configs
             .iter()
             .chain(self.partial_configs.iter())
@@ -303,7 +303,7 @@ impl Sample {
 
     pub(crate) fn iter_with_completeness(
         &self,
-    ) -> impl Iterator<Item=(&Config, bool)> {
+    ) -> impl Iterator<Item = (&Config, bool)> {
         let partial_iter = self.partial_configs.iter().zip(iter::repeat(false));
 
         self.complete_configs

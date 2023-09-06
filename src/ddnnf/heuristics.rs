@@ -1,5 +1,5 @@
+use super::{node::NodeType::*, Ddnnf};
 use crate::Node;
-use super::{Ddnnf, node::NodeType::*};
 
 impl Ddnnf {
     /// Computes and prints some heuristics including:
@@ -72,8 +72,8 @@ impl Ddnnf {
                     total_child_counter += children.len() as u64;
                     and_child_counter += children.len() as u64;
                     and_counter += 1;
-                },
-                Or { children } => { 
+                }
+                Or { children } => {
                     total_child_counter += children.len() as u64;
                     or_child_counter += children.len() as u64;
                     or_counter += 1;

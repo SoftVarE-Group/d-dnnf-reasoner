@@ -1,6 +1,6 @@
 extern crate ddnnf_lib;
 
-use ddnnf_lib::ddnnf::{Ddnnf, node::NodeType::*};
+use ddnnf_lib::ddnnf::{node::NodeType::*, Ddnnf};
 use ddnnf_lib::parser;
 
 use rug::Integer;
@@ -28,8 +28,8 @@ fn ddnnf_parsing_test() {
         And { children } => {
             assert_eq!(children.len(), 3_usize);
             assert_eq!(and_node.count, Integer::from(4_u32))
-        },
-        _ => panic!("Node isn't an and node")
+        }
+        _ => panic!("Node isn't an and node"),
     }
 
     let or_node = ddnnf_c2d.nodes.pop().unwrap();
@@ -37,7 +37,7 @@ fn ddnnf_parsing_test() {
         Or { children } => {
             assert_eq!(children.len(), 2_usize);
             assert_eq!(or_node.count, Integer::from(2_u32))
-        },
-        _ => panic!("Node isn't an or node")
+        }
+        _ => panic!("Node isn't an or node"),
     }
 }

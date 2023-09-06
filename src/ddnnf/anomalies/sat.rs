@@ -1,5 +1,5 @@
-//! SAT solving refers to the process of determining the satisfiability of a feature model, 
-//! which involves finding a valid configuration that satisfies all the constraints and dependencies specified by the model. 
+//! SAT solving refers to the process of determining the satisfiability of a feature model,
+//! which involves finding a valid configuration that satisfies all the constraints and dependencies specified by the model.
 //! It is also used to determine of a partial configuration is still satisfiable.
 
 use crate::{Ddnnf, NodeType::*};
@@ -25,7 +25,12 @@ impl Ddnnf {
     /// If wanted, one can supply an marking `Vec<bool>`, that can be reused in following method calls to propagate satisfiability.
     /// The root_index does not have to be the root of the DAG. Instead it can be any node. If 'None' is supplied we use the root of the DAG.
     #[inline]
-    pub fn sat_propagate(&self, features: &[i32], mark: &mut Vec<bool>, root_index: Option<usize>) -> bool {
+    pub fn sat_propagate(
+        &self,
+        features: &[i32],
+        mark: &mut Vec<bool>,
+        root_index: Option<usize>,
+    ) -> bool {
         let root_index = root_index.unwrap_or(self.nodes.len() - 1);
 
         if features.iter().any(|f| self.makes_query_unsat(f)) {
@@ -36,11 +41,13 @@ impl Ddnnf {
             if let Some(&index) = self.literals.get(&-feature) {
                 self.propagate_mark(index, mark);
                 // if the root is unsatisfiable after any of the literals in the query,
-                // then the whole query must be unsatisfiable too. 
-                if mark[root_index] { return false; }
+                // then the whole query must be unsatisfiable too.
+                if mark[root_index] {
+                    return false;
+                }
             }
         }
-        
+
         // the result is the marking of the root node
         !mark[root_index]
     }
@@ -56,7 +63,10 @@ impl Ddnnf {
         if let Or { children } = &self.nodes[index].ntype {
             // An Or node is only unsatisfiable if all of its children are either marked
             // or have an count of zero (that handle False nodes).
-            if !children.iter().all(|&c| mark[c] || self.nodes[c].count == 0) {
+            if !children
+                .iter()
+                .all(|&c| mark[c] || self.nodes[c].count == 0)
+            {
                 return;
             }
         }
@@ -84,24 +94,30 @@ mod test {
 
     #[test]
     fn sat_urs() {
-        let mut vp9: Ddnnf =
-            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
             build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // Uniform random samples produce an SATISFIABLE complete configuration.
-        for sample in vp9.uniform_random_sampling(&vec![], 1000, 42).unwrap().iter() {
+        for sample in vp9
+            .uniform_random_sampling(&vec![], 1000, 42)
+            .unwrap()
+            .iter()
+        {
             assert!(vp9.sat(sample));
         }
-        for sample in auto1.uniform_random_sampling(&vec![], 1000, 42).unwrap().iter() {
+        for sample in auto1
+            .uniform_random_sampling(&vec![], 1000, 42)
+            .unwrap()
+            .iter()
+        {
             assert!(auto1.sat(sample));
         }
     }
 
     #[test]
     fn sat_card_of_features() {
-        let mut vp9: Ddnnf =
-            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
             build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 

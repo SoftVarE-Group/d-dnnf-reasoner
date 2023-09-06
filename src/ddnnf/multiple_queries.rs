@@ -1,10 +1,16 @@
-use std::{error::Error, sync::mpsc, thread, io::{BufWriter, Write}, fs::File};
+use std::{
+    error::Error,
+    fs::File,
+    io::{BufWriter, Write},
+    sync::mpsc,
+    thread,
+};
 
-use workctl::{WorkQueue};
+use workctl::WorkQueue;
 
-use crate::{Ddnnf, parser::util::parse_queries_file};
+use crate::{parser::util::parse_queries_file, Ddnnf};
 
-impl Ddnnf{
+impl Ddnnf {
     #[inline]
     /// Computes the given operation for all queries in path_in.
     /// The results are saved in the path_out. The .csv ending always gets added to the user input.
@@ -42,12 +48,12 @@ impl Ddnnf{
 
         for (_, work) in &work_queue {
             let cardinality = operation(self, work);
-            let mut features_str =
-            work.iter().fold(String::new(), |acc, &num| {
-                acc + &num.to_string() + " "
-            });
+            let mut features_str = work
+                .iter()
+                .fold(String::new(), |acc, &num| acc + &num.to_string() + " ");
             features_str.pop();
-            let data = &format!("{},{}\n", features_str, cardinality.to_string());
+            let data =
+                &format!("{},{}\n", features_str, cardinality.to_string());
             wtr.write_all(data.as_bytes())?;
         }
 
@@ -90,7 +96,11 @@ impl Ddnnf{
                     // Sending could fail. If so, there's no use in
                     // doing any more work, so abort.
                     let work_c = work.clone();
-                    match t_results_tx.send((index, work_c, operation(&mut ddnnf, &work))) {
+                    match t_results_tx.send((
+                        index,
+                        work_c,
+                        operation(&mut ddnnf, &work),
+                    )) {
                         Ok(_) => (),
                         Err(_) => {
                             break;
@@ -130,9 +140,9 @@ impl Ddnnf{
         results.sort_unstable();
 
         for (_, query, result) in results {
-            let mut features_str = query.iter().fold(String::new(), |acc, &num| {
-                acc + &num.to_string() + " "
-            });
+            let mut features_str = query
+                .iter()
+                .fold(String::new(), |acc, &num| acc + &num.to_string() + " ");
             features_str.pop();
             let data = &format!("{},{}\n", features_str, result.to_string());
             wtr.write_all(data.as_bytes())?;
@@ -154,7 +164,10 @@ impl Ddnnf{
 
 #[cfg(test)]
 mod test {
-    use std::{fs, io::{BufReader, BufRead}};
+    use std::{
+        fs,
+        io::{BufRead, BufReader},
+    };
 
     use file_diff::diff_files;
     use itertools::Itertools;
@@ -167,10 +180,22 @@ mod test {
     fn card_multi_queries() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs.csv").unwrap();
+        ddnnf
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                "./tests/data/VP9.config",
+                "./tests/data/pcs.csv",
+            )
+            .unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm.csv").unwrap();
+        ddnnf
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                "./tests/data/VP9.config",
+                "./tests/data/pcm.csv",
+            )
+            .unwrap();
 
         let mut is_single = File::open("./tests/data/pcs.csv").unwrap();
         let mut is_multi = File::open("./tests/data/pcm.csv").unwrap();
@@ -179,7 +204,10 @@ mod test {
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
         is_single = File::open("./tests/data/pcs.csv").unwrap();
-        assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
+        assert!(
+            diff_files(&mut is_single, &mut should_be),
+            "partial config results differ from the expected results"
+        );
 
         fs::remove_file("./tests/data/pcs.csv").unwrap();
         fs::remove_file("./tests/data/pcm.csv").unwrap();
@@ -188,23 +216,31 @@ mod test {
     #[test]
     fn sat_multi_queries() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
-        ddnnf.operate_on_queries(Ddnnf::sat, "./tests/data/VP9.config", "./tests/data/sat.csv").unwrap();
+        ddnnf
+            .operate_on_queries(
+                Ddnnf::sat,
+                "./tests/data/VP9.config",
+                "./tests/data/sat.csv",
+            )
+            .unwrap();
 
         let sat_results = File::open("./tests/data/sat.csv").unwrap();
         let lines = BufReader::new(sat_results)
             .lines()
             .map(|line| line.expect("Unable to read line"));
-    
+
         for line in lines {
             // a line has the format "[QUERY],[RESULT]"
             let split_query_res = line.split(',').collect_vec();
 
             // takes a query of the file and parses the i32 values
             let query: Vec<i32> = split_query_res[0]
-                .split_whitespace().into_iter()
-                .map(|elem| elem.parse::<i32>().unwrap()).collect();
+                .split_whitespace()
+                .into_iter()
+                .map(|elem| elem.parse::<i32>().unwrap())
+                .collect();
             let res = split_query_res[1].parse::<bool>().unwrap();
-            
+
             assert_eq!(ddnnf.sat(&query), res);
             assert_eq!(ddnnf.sat(&query), (ddnnf.execute_query(&query) > 0));
         }
@@ -217,23 +253,44 @@ mod test {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
-        ddnnf.queries_single_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcs1.csv").unwrap();
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm1.csv").unwrap();
+        ddnnf
+            .queries_single_thread(
+                Ddnnf::execute_query,
+                "./tests/data/VP9.config",
+                "./tests/data/pcs1.csv",
+            )
+            .unwrap();
+        ddnnf
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                "./tests/data/VP9.config",
+                "./tests/data/pcm1.csv",
+            )
+            .unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", "./tests/data/pcm4.csv").unwrap();
+        ddnnf
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                "./tests/data/VP9.config",
+                "./tests/data/pcm4.csv",
+            )
+            .unwrap();
 
         let mut is_single = File::open("./tests/data/pcs1.csv").unwrap();
         let mut is_multi = File::open("./tests/data/pcm1.csv").unwrap();
         let mut is_multi4 = File::open("./tests/data/pcm4.csv").unwrap();
         let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
-    
+
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
         is_single = File::open("./tests/data/pcs1.csv").unwrap();
         is_multi = File::open("./tests/data/pcm1.csv").unwrap();
         assert!(diff_files(&mut is_multi, &mut is_multi4), "partial config for multiple threads differs when using multiple threads");
-        assert!(diff_files(&mut is_single, &mut should_be), "partial config results differ from the expected results");
+        assert!(
+            diff_files(&mut is_single, &mut should_be),
+            "partial config results differ from the expected results"
+        );
 
         fs::remove_file("./tests/data/pcs1.csv").unwrap();
         fs::remove_file("./tests/data/pcm1.csv").unwrap();

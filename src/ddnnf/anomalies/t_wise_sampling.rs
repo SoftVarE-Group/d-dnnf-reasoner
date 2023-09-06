@@ -1,37 +1,39 @@
-//! T-wise sampling in the context of feature models is a technique used to systematically 
-//! select a subset of feature combinations for testing or analysis. 
-//! The "t" in t-wise sampling represents the interaction strength, 
-//! indicating the maximum number of features that can vary together in a combination. 
-//! By selecting t-wise samples, which cover all possible combinations of t features, 
-//! it provides a representative subset of configurations to analyze or test, 
+//! T-wise sampling in the context of feature models is a technique used to systematically
+//! select a subset of feature combinations for testing or analysis.
+//! The "t" in t-wise sampling represents the interaction strength,
+//! indicating the maximum number of features that can vary together in a combination.
+//! By selecting t-wise samples, which cover all possible combinations of t features,
+//! it provides a representative subset of configurations to analyze or test,
 //! reducing the overall number of combinations to consider while still ensuring coverage of important interactions.
 
 mod covering_strategies;
 mod data_structure;
-mod t_iterator;
 mod sample_merger;
 mod sat_wrapper;
+mod t_iterator;
 
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::{fs, io, iter, fmt};
+use std::{fmt, fs, io, iter};
 
+use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{
+    AndMerger, OrMerger,
+};
+use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
 use streaming_iterator::StreamingIterator;
-use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, OrMerger};
-use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 
 use crate::parser::util::format_vec;
 use crate::{Ddnnf, NodeType::*};
 
 use self::covering_strategies::cover_with_caching;
 use self::data_structure::Sample;
-use self::t_iterator::TInteractionIter;
 use self::sample_merger::similarity_merger::SimilarityMerger;
 use self::sample_merger::zipping_merger::ZippingMerger;
 use self::sat_wrapper::SatWrapper;
+use self::t_iterator::TInteractionIter;
 
 impl Ddnnf {
     /// Computes a minimal amount of samples that cover all t-wise interactions of the dDNNF.
@@ -110,7 +112,9 @@ impl fmt::Display for SamplingResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SamplingResult::Empty | SamplingResult::Void => write!(f, ""),
-            ResultWithSample(sample) => write!(f, "{}", format_vec(sample.iter())),
+            ResultWithSample(sample) => {
+                write!(f, "{}", format_vec(sample.iter()))
+            }
         }
     }
 }
@@ -418,7 +422,10 @@ pub fn save_sample_to_file(
         SamplingResult::Void => wtr.write_record(iter::once("false"))?,
         ResultWithSample(sample) => {
             for (index, config) in sample.iter().enumerate() {
-                wtr.write_record([index.to_string(), format_vec(config.get_literals().iter())])?;
+                wtr.write_record([
+                    index.to_string(),
+                    format_vec(config.get_literals().iter()),
+                ])?;
             }
         }
     }
@@ -430,12 +437,11 @@ pub fn save_sample_to_file(
 mod test {
     use itertools::Itertools;
 
-    use crate::{Ddnnf, parser::build_ddnnf};
+    use crate::{parser::build_ddnnf, Ddnnf};
 
     #[test]
     fn t_wise_sampling_validity() {
-        let mut vp9: Ddnnf =
-            build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf =
             build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
@@ -447,25 +453,35 @@ mod test {
 
         fn check_validity_samplingresult(ddnnf: &mut Ddnnf, t: usize) {
             let t_wise_samples = ddnnf.sample_t_wise(t);
-            let configs = t_wise_samples.get_sample().unwrap().iter()
-                .map(|config| config.get_literals()).collect_vec();
+            let configs = t_wise_samples
+                .get_sample()
+                .unwrap()
+                .iter()
+                .map(|config| config.get_literals())
+                .collect_vec();
 
             for config in configs.iter() {
                 // every config must be complete and satisfiable
-                assert_eq!(ddnnf.number_of_variables as usize, config.len(), "config is not complete");
+                assert_eq!(
+                    ddnnf.number_of_variables as usize,
+                    config.len(),
+                    "config is not complete"
+                );
                 assert!(ddnnf.sat(config));
             }
 
-            let mut possible_features = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect_vec();
+            let mut possible_features = (-(ddnnf.number_of_variables as i32)
+                ..=ddnnf.number_of_variables as i32)
+                .collect_vec();
             possible_features.remove(ddnnf.number_of_variables as usize); // remove the 0
             for combi in possible_features.into_iter().combinations(t) {
                 // checks if the pair can be found in at least one of the samples
                 let combi_exists = |combi: &[i32]| -> bool {
-                    configs.iter().any(|config|
+                    configs.iter().any(|config| {
                         combi.iter().all(|&f| config[f.abs() as usize - 1] == f)
-                    )
+                    })
                 };
-                
+
                 assert!(combi_exists(&combi) || !ddnnf.sat(&combi), "combination: {:?} can neither be convered with samples nor is it unsat", combi)
             }
         }

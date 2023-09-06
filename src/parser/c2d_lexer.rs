@@ -22,7 +22,7 @@ pub enum TokenIdentifier {
     /// A leaf node that countains a positive or negative number of a variable
     Literal {
         /// The number representing a feature in the FM
-        feature: i32
+        feature: i32,
     },
     /// A special And node that has zero childs
     True,
@@ -45,12 +45,12 @@ pub enum C2DToken {
         /// edges,
         edges: usize,
         /// and variables in the dDNNF file
-        variables: usize
+        variables: usize,
     },
     /// An inner node that contains atleast one child
     And {
         /// The indices of the children nodes
-        children: Vec<usize>
+        children: Vec<usize>,
     },
     /// An inner node that contains exactly two child nodes
     Or {
@@ -58,12 +58,12 @@ pub enum C2DToken {
         children: Vec<usize>,
         /// The variable indicates that the feature is included in one of the children
         /// and excluded in the other one.
-        decision: u32
+        decision: u32,
     },
     /// A leaf node that countains a positive/negative number of a variable
     Literal {
         /// The number corresponding to the feature
-        feature: i32
+        feature: i32,
     },
     /// A special And node that has zero childs
     True,
@@ -118,7 +118,11 @@ fn lex_header(line: &str) -> IResult<&str, C2DToken> {
         preceded(tag("nnf"), parse_alt_space1_number1),
         |out: &str| {
             let nums: Vec<usize> = split_numbers(out);
-            Header { nodes: nums[0], edges: nums[1], variables: nums[2] }
+            Header {
+                nodes: nums[0],
+                edges: nums[1],
+                variables: nums[2],
+            }
         },
     )(line)
 }
@@ -130,7 +134,7 @@ fn lex_and(line: &str) -> IResult<&str, C2DToken> {
         preceded(char('A'), parse_alt_space1_number1),
         |out: &str| {
             let mut nums: Vec<usize> = split_numbers(out);
-            nums.remove(0); // remove information about number of children 
+            nums.remove(0); // remove information about number of children
             And { children: nums }
         },
     )(line)
@@ -144,24 +148,28 @@ fn lex_or(line: &str) -> IResult<&str, C2DToken> {
             let mut nums: Vec<usize> = split_numbers(out);
             let dec = nums.remove(0) as u32;
             nums.remove(0); // remove information about number of children
-            Or { decision: dec , children: nums }
+            Or {
+                decision: dec,
+                children: nums,
+            }
         },
     )(line)
 }
 
 // Lexes a positive Literal node which is a leaf node with the format "L i1" with i1 as the variable number.
 fn lex_positive_literal(line: &str) -> IResult<&str, C2DToken> {
-    map(
-        preceded(tag("L "), recognize(digit1)),
-        |s: &str| Literal { feature: s.parse::<i32>().unwrap() },
-    )(line)
+    map(preceded(tag("L "), recognize(digit1)), |s: &str| Literal {
+        feature: s.parse::<i32>().unwrap(),
+    })(line)
 }
 
 // Lexes a negative Literal node which is a leaf node with the format "L i1" with i1 as the variable number.
 fn lex_negative_literal(line: &str) -> IResult<&str, C2DToken> {
     map(
         preceded(tag("L "), recognize(pair(char('-'), digit1))),
-        |s: &str| Literal { feature: s.parse::<i32>().unwrap() },
+        |s: &str| Literal {
+            feature: s.parse::<i32>().unwrap(),
+        },
     )(line)
 }
 
@@ -179,9 +187,8 @@ fn lex_false(line: &str) -> IResult<&str, C2DToken> {
 pub(super) fn split_numbers(out: &str) -> Vec<usize> {
     out.split_whitespace()
         .map(|num: &str| {
-            num.parse::<usize>()
-            .unwrap_or_else(|_| {
-                panic!( "Was not able to parse usize for node. String was {out}")
+            num.parse::<usize>().unwrap_or_else(|_| {
+                panic!("Was not able to parse usize for node. String was {out}")
             })
         })
         .collect::<Vec<usize>>()
@@ -196,8 +203,12 @@ pub(super) fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
 #[allow(non_snake_case)]
 pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
     match C2DToken {
-        Header { nodes, edges, variables } => format!("nnf {nodes} {edges} {variables}\n"),
-        And { children: c} => {
+        Header {
+            nodes,
+            edges,
+            variables,
+        } => format!("nnf {nodes} {edges} {variables}\n"),
+        And { children: c } => {
             let mut s = String::from("A ");
             s.push_str(&c.len().to_string());
             s.push(' ');
@@ -213,7 +224,10 @@ pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
             }
             s
         }
-        Or { decision, children: c } => format!("O {} 2 {} {}\n", decision, c[0], c[1]),
+        Or {
+            decision,
+            children: c,
+        } => format!("O {} 2 {} {}\n", decision, c[0], c[1]),
         Literal { feature } => format!("L {feature}\n"),
         False => String::from("O 0 0\n"),
         True => String::from("A 0\n"),
@@ -231,13 +245,28 @@ mod test {
         let positive_literal_str = "L 3";
         let failed_and_str = "A THREE 11 TWELVE 13";
 
-        assert_eq!(lex_line_c2d(and_str).unwrap().1, And { children: vec![11,12,13] });
+        assert_eq!(
+            lex_line_c2d(and_str).unwrap().1,
+            And {
+                children: vec![11, 12, 13]
+            }
+        );
 
-        assert_eq!(lex_line_c2d(or_str).unwrap().1, Or { decision: 10, children: vec![40,44] } );
+        assert_eq!(
+            lex_line_c2d(or_str).unwrap().1,
+            Or {
+                decision: 10,
+                children: vec![40, 44]
+            }
+        );
 
-        assert_eq!(lex_line_c2d(positive_literal_str).unwrap().1, Literal { feature: 3 } );
+        assert_eq!(
+            lex_line_c2d(positive_literal_str).unwrap().1,
+            Literal { feature: 3 }
+        );
 
-        let result = std::panic::catch_unwind(|| lex_line_c2d(failed_and_str)).unwrap();
+        let result =
+            std::panic::catch_unwind(|| lex_line_c2d(failed_and_str)).unwrap();
         assert!(result.is_err());
     }
 
@@ -245,65 +274,65 @@ mod test {
     fn individual_lexer() {
         let header_str = "nnf 32 13 23";
         assert_eq!(
-            lex_header(header_str).unwrap().1, 
-            Header { nodes: 32, edges: 13, variables: 23 }
+            lex_header(header_str).unwrap().1,
+            Header {
+                nodes: 32,
+                edges: 13,
+                variables: 23
+            }
         );
 
         let and_str = "A 1 1";
-        assert_eq!(
-            lex_and(and_str).unwrap().1,
-            And { children: vec![1] }
-        );
+        assert_eq!(lex_and(and_str).unwrap().1, And { children: vec![1] });
 
         let or_str = "O 10 2 20 24";
         assert_eq!(
-            lex_or(or_str).unwrap().1, 
+            lex_or(or_str).unwrap().1,
             Or {
                 decision: 10,
-                children: vec![20,24]
+                children: vec![20, 24]
             }
         );
 
         let positive_literal_str = "L 13";
         assert_eq!(
             lex_positive_literal(positive_literal_str).unwrap().1,
-            Literal {
-                feature: 13
-            }
+            Literal { feature: 13 }
         );
 
         let negative_literal_str = "L -113";
         assert_eq!(
             lex_negative_literal(negative_literal_str).unwrap().1,
-            Literal {
-                feature: -113
-            }
+            Literal { feature: -113 }
         );
 
         let true_str = "A 0";
-        assert_eq!(
-            lex_true(true_str).unwrap().1,
-            True
-        );
+        assert_eq!(lex_true(true_str).unwrap().1, True);
 
         let false_str = "O 0 0";
-        assert_eq!(
-            lex_false(false_str).unwrap().1, 
-            False
-        );
+        assert_eq!(lex_false(false_str).unwrap().1, False);
     }
 
     #[test]
     fn serialization() {
-        let header: C2DToken = Header { nodes: 10, edges: 20, variables: 30};
+        let header: C2DToken = Header {
+            nodes: 10,
+            edges: 20,
+            variables: 30,
+        };
         let header_s: String = String::from("nnf 10 20 30\n");
         assert_eq!(deconstruct_C2DToken(header), header_s);
 
-        let and: C2DToken = And { children: vec![1, 2, 3, 4, 5]};
+        let and: C2DToken = And {
+            children: vec![1, 2, 3, 4, 5],
+        };
         let and_s: String = String::from("A 5 1 2 3 4 5\n");
         assert_eq!(deconstruct_C2DToken(and), and_s);
 
-        let or: C2DToken = Or { decision: 42, children: vec![1, 2]};
+        let or: C2DToken = Or {
+            decision: 42,
+            children: vec![1, 2],
+        };
         let or_s: String = String::from("O 42 2 1 2\n");
         assert_eq!(deconstruct_C2DToken(or), or_s);
 

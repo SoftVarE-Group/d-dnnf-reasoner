@@ -1,4 +1,6 @@
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
+use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{
+    Config, Sample,
+};
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 
 /// Covering strategy that uses the sat state caching.

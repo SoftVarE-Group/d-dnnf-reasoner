@@ -1,4 +1,4 @@
-use std::{sync::mpsc, error::Error, thread};
+use std::{error::Error, sync::mpsc, thread};
 
 use rug::Float;
 use workctl::WorkQueue;
@@ -52,8 +52,11 @@ impl Ddnnf {
             wtr.write_record(vec![
                 work.to_string(),
                 cardinality.to_string(),
-                format!("{:.20}", Float::with_val(200, cardinality) / self.rc()
-            )])?;
+                format!(
+                    "{:.20}",
+                    Float::with_val(200, cardinality) / self.rc()
+                ),
+            ])?;
         }
 
         Ok(())
@@ -194,7 +197,10 @@ mod test {
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
         is_single = File::open("./tests/data/fcs.csv").unwrap();
-        assert!(diff_files(&mut is_single, &mut should_be), "card of features results differ from the expected results");
+        assert!(
+            diff_files(&mut is_single, &mut should_be),
+            "card of features results differ from the expected results"
+        );
 
         fs::remove_file("./tests/data/fcs.csv").unwrap();
         fs::remove_file("./tests/data/fcm.csv").unwrap();
@@ -205,23 +211,32 @@ mod test {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
 
-        ddnnf.card_of_each_feature_single("./tests/data/fcs1.csv").unwrap();
-        ddnnf.card_of_each_feature_single("./tests/data/fcm1.csv").unwrap();
+        ddnnf
+            .card_of_each_feature_single("./tests/data/fcs1.csv")
+            .unwrap();
+        ddnnf
+            .card_of_each_feature_single("./tests/data/fcm1.csv")
+            .unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_of_each_feature_multi("./tests/data/fcm4.csv").unwrap();
+        ddnnf
+            .card_of_each_feature_multi("./tests/data/fcm4.csv")
+            .unwrap();
 
         let mut is_single = File::open("./tests/data/fcs1.csv").unwrap();
         let mut is_multi = File::open("./tests/data/fcm1.csv").unwrap();
         let mut is_multi4 = File::open("./tests/data/fcm4.csv").unwrap();
         let mut should_be = File::open("./tests/data/VP9_sb_fs.csv").unwrap();
-    
+
         // diff_files is true if the files are identical
         assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
         is_single = File::open("./tests/data/fcs1.csv").unwrap();
         is_multi = File::open("./tests/data/fcm1.csv").unwrap();
         assert!(diff_files(&mut is_multi, &mut is_multi4), "card of features for multiple threads differs when using multiple threads");
-        assert!(diff_files(&mut is_single, &mut should_be), "card of features results differ from the expected results");
+        assert!(
+            diff_files(&mut is_single, &mut should_be),
+            "card of features results differ from the expected results"
+        );
 
         fs::remove_file("./tests/data/fcs1.csv").unwrap();
         fs::remove_file("./tests/data/fcm1.csv").unwrap();

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
+use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{
+    Config, Sample,
+};
 use crate::Ddnnf;
 use rand::prelude::StdRng;
 
