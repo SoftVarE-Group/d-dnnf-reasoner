@@ -209,23 +209,15 @@ pub fn simplify_clauses(mut clauses: Vec<Vec<i32>>) -> Vec<Vec<i32>> {
     clause_set
         .retain(|clause| clause.iter().all(|elem| !clause.contains(&-elem)));
 
-    let mut min_clause_set = Vec::new();
-    for clause in clause_set.iter() {
-        if clause_set.iter().any(|comp| comp != clause && comp.is_subset(&clause)) {
-            continue;
-        }
-        min_clause_set.push(clause.clone());
-    }
-
     let mut decisions = HashSet::new();
-    min_clause_set.iter().for_each(|clause| {
+    clause_set.iter().for_each(|clause| {
         if clause.len() == 1 {
             decisions.insert(clause.clone().into_iter().collect::<Vec<_>>()[0]);
         }
     });
 
-    let mut simplified_clauses = Vec::with_capacity(min_clause_set.len());
-    for clause in min_clause_set.into_iter() {
+    let mut simplified_clauses = Vec::with_capacity(clause_set.len());
+    for clause in clause_set.into_iter() {
         simplified_clauses.push(clause.into_iter().collect());
     }
 

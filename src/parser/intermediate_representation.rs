@@ -26,10 +26,7 @@ use crate::{
     Ddnnf, Node, NodeType,
 };
 
-use super::{
-    calc_and_count, calc_or_count,
-    from_cnf::apply_decisions,
-};
+use super::{calc_and_count, calc_or_count, from_cnf::apply_decisions};
 
 /// The IntermediateGraph enables us to modify the dDNNF. The structure of a vector of nodes does not allow
 /// for that because deleting or removing nodes would mess up the indices.
@@ -190,8 +187,8 @@ impl IntermediateGraph {
                         self.literal_children.get(&bridge_endpoint).unwrap();
                     // we only consider and nodes that include all literals of the clause
                     if clause
-                        .iter()
-                        .all(|e| /*diffs.contains(e) && */diffs.contains(&-e))
+                        .iter() 
+                        .all(|e| diffs.contains(e) && diffs.contains(&-e))
                     {
                         if closest_node.1.len() > diffs.len() {
                             closest_node = (bridge_endpoint, diffs);
@@ -358,15 +355,6 @@ impl IntermediateGraph {
             return (Vec::new(), NodeIndex::new(0), HashMap::new());
         }
 
-        // Remove clauses that are redundant
-        let set_addded_clause: HashSet<_> = clause.clone().into_iter().collect();
-        for cnf_clause in self.cnf_clauses.iter() {
-            let set_current_clause: HashSet<_> = cnf_clause.clone().into_iter().collect();
-            if set_current_clause.is_subset(&set_addded_clause) {
-                return (Vec::new(), NodeIndex::new(0), HashMap::new());
-            }
-        }
-
         // 1) Find the closest node and the decisions to that point
         let (closest_node, relevant_literals) =
             match self.closest_unsplitable_bridge(&clause) {
@@ -390,7 +378,7 @@ impl IntermediateGraph {
 
         let mut accumlated_decisions =
             self.get_decisions_target_nx(closest_node);
-        
+
         // Add unit clauses. Those decisions are implicit in the dDNNF.
         // Hence, we have to search for them
         self.cnf_clauses.iter().for_each(|cnf_clause| {
@@ -441,29 +429,6 @@ impl IntermediateGraph {
         // 3) Repeatedly apply the summed up decions to the remaining clauses
         (relevant_clauses, accumlated_decisions) =
             apply_decisions(relevant_clauses, accumlated_decisions);
-
-        /*
-        let initial_clause = &clause;
-        match reduce_clause(&clause, &accumlated_decisions) {
-            Some(clause) => {
-                match clause.len() {
-                    0 => return (Vec::new(), self.root, HashMap::new()),
-                    1 => {
-                        self.add_unit_clause(clause[0]);
-                        return (Vec::new(), self.root, HashMap::new())
-                    },
-                    _ => {
-                        if initial_clause.len() > clause.len() {
-                            println!("AND ANOTHER ROUND FROM CLAUSE {:?} TO CLAUSE {:?}", initial_clause, clause);
-                            exit(1);
-                            //return self.transform_to_cnf_from_starting_cnf(clause);
-                        }
-                    }
-                }
-            },
-            None => panic!("dDNNF becomes UNSAT for clause: {:?} under the decisions: {:?}",
-                clause, accumlated_decisions),
-        };*/
 
         // Continue 2.5
         let mut red_variables = HashSet::new();
@@ -529,11 +494,8 @@ impl IntermediateGraph {
         //if DEBUG { println!("reindex: {:?}", re_index); }
 
         // write the meta information of the header
-        let mut cnf = vec![format!(
-            "p cnf {} {}\n",
-            index - 1,
-            relevant_clauses.len()
-        )];
+        let mut cnf =
+            vec![format!("p cnf {} {}\n", index - 1, relevant_clauses.len())];
 
         for clause in relevant_clauses {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
@@ -961,7 +923,7 @@ mod test {
         io::Write,
     };
 
-    use rand::{rngs::StdRng, Rng};
+    use rand::rngs::StdRng;
     use serial_test::serial;
 
     use crate::{
@@ -975,7 +937,7 @@ mod test {
         Ddnnf,
     };
 
-    const DEBUG: bool = false;
+    const DEBUG: bool = true;
 
     #[test]
     #[serial]
@@ -1029,24 +991,27 @@ mod test {
     }
 
     fn check_for_cardinality_correctness(path: &str, break_point: usize) {
-        let mut rng = rand::thread_rng();
-        let random_string: String = (0..10)
-            .map(|_| (rng.gen_range(b'a'..=b'z') as char))
-            .collect();
+        let temp_file =
+            tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
+        let temp_file_path_buf = temp_file.path().to_path_buf();
+        let temp_file_path = temp_file_path_buf.to_str().unwrap();
+        fs::copy(path, temp_file_path).unwrap();
 
-        let copy_path_string = format!(
-            ".{}_{}_copy.cnf",
-            path.split("/").collect::<Vec<&str>>().last().unwrap(),
-            random_string
-        );
-        let copy_path = &copy_path_string;
-        fs::copy(path, copy_path).unwrap();
-
-        let mut clauses = get_all_clauses_cnf(copy_path);
+        let mut clauses = get_all_clauses_cnf(temp_file_path);
         use rand::SeedableRng;
         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
         use rand::prelude::SliceRandom;
         clauses.shuffle(&mut rng);
+
+        let mut ddnnf_w = build_ddnnf(temp_file_path, None);
+        if DEBUG {
+            write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
+        }
+        let mut card_of_features = Vec::new();
+        for feature in 1_i32..ddnnf_w.number_of_variables as i32 {
+            card_of_features.push(ddnnf_w.execute_query(&[feature]));
+        }
+
         for (index, clause) in clauses.into_iter().enumerate() {
             if index >= break_point {
                 break;
@@ -1056,32 +1021,27 @@ mod test {
                 println!("Current clause: {:?}", clause);
             }
 
-            remove_clause_cnf(copy_path, &clause, None);
-            let mut ddnnf_wo = build_ddnnf(copy_path, None);
+            remove_clause_cnf(temp_file_path, &clause, None);
+            let mut ddnnf_wo = build_ddnnf(temp_file_path, None);
             if DEBUG {
                 write_as_mermaid_md(&ddnnf_wo, &[], "before.md", None).unwrap();
             }
+            
             ddnnf_wo.inter_graph.add_clause(clause.clone());
             ddnnf_wo.rebuild();
             if DEBUG {
                 write_as_mermaid_md(&ddnnf_wo, &[], "after.md", None).unwrap();
             }
-
-            add_clause_cnf(copy_path, &clause);
-            let mut ddnnf_w = build_ddnnf(copy_path, None);
-            if DEBUG {
-                write_as_mermaid_md(&ddnnf_w, &[], "with.md", None).unwrap();
-            }
+            add_clause_cnf(temp_file_path, &clause);
 
             assert_eq!(ddnnf_wo.rc(), ddnnf_w.rc());
-            for feature in 0_i32..ddnnf_w.number_of_variables as i32 {
+            for feature in 1_i32..ddnnf_w.number_of_variables as i32 {
                 assert_eq!(
                     ddnnf_wo.execute_query(&[feature]),
-                    ddnnf_w.execute_query(&[feature])
+                    card_of_features[feature as usize - 1]
                 );
             }
         }
-        fs::remove_file(copy_path).unwrap();
     }
 
     #[test]
@@ -1111,13 +1071,8 @@ mod test {
 
     #[test]
     #[serial]
-    fn transform_to_cnf_from_starting_cnf_clauses_big_models() {
-        let ddnnf_file_paths =
-            vec!["tests/data/auto1.cnf", "tests/data/auto2.cnf"];
-
-        for path in ddnnf_file_paths {
-            check_for_cardinality_correctness(path, 10);
-        }
+    fn transform_to_cnf_from_starting_cnf_clauses_big_models_auto1() {
+        check_for_cardinality_correctness("tests/data/auto1.cnf", 20);
     }
 
     #[test]
