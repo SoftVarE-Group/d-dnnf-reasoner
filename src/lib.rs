@@ -17,6 +17,7 @@ extern crate test;
 pub mod parser;
 pub use crate::parser::c2d_lexer;
 pub use crate::parser::d4_lexer;
+pub use crate::parser::intermediate_representation::ClauseApplication;
 pub use crate::parser::intermediate_representation::IncrementalStrategy;
 
 /// The actual dDNNF with its methods to compute different kinds of queries and operations.

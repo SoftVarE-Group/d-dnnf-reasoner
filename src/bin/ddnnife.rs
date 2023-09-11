@@ -11,7 +11,7 @@ use ddnnf_lib::parser::from_cnf::{
 use ddnnf_lib::parser::util::{
     format_vec, open_file_savely, parse_queries_file,
 };
-use ddnnf_lib::IncrementalStrategy;
+use ddnnf_lib::{ClauseApplication, IncrementalStrategy};
 use itertools::Itertools;
 
 use rand::rngs::StdRng;
@@ -286,7 +286,7 @@ fn main() {
         };
 
     // print additional output, iff we are not in the stream mode
-    match &cli.operation.clone() {
+    match &cli.operation {
         Some(Operation::Stream { .. }) => (),
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
@@ -509,7 +509,7 @@ fn main() {
                 assumptions,
             } => {
                 write_as_mermaid_md(
-                    &mut ddnnf,
+                    &ddnnf,
                     assumptions,
                     &output_file_path,
                     None,
@@ -537,7 +537,7 @@ fn main() {
                     .len();
                 if file_size == 0 {
                     raw_wtr
-                        .write_record(&[
+                        .write_record([
                             "model",
                             "base",
                             "optimized",
@@ -559,7 +559,7 @@ fn main() {
                     .len();
                 if file_size == 0 {
                     total_wtr
-                        .write_record(&[
+                        .write_record([
                             "model",
                             "base_total",
                             "base_avg",
@@ -577,6 +577,7 @@ fn main() {
                             "scount_unit_clause",
                             "scount_sub-dag_recompile",
                             "scount_recompile",
+                            "scount_error",
                         ])
                         .unwrap();
                 }
@@ -611,8 +612,10 @@ fn main() {
                     );
 
                     start = Instant::now();
-                    let current_strategy =
-                        inter_ddnnf.apply_changes(&vec![&clause]);
+                    let current_strategy = inter_ddnnf.apply_changes(&vec![(
+                        &clause,
+                        ClauseApplication::Add,
+                    )]);
                     diff_recompile = start.elapsed().as_secs_f64();
                     total_recompile += diff_recompile;
 
@@ -667,15 +670,16 @@ fn main() {
                 println!("Total time naive method:     {total_naive:.10}");
                 println!("Total time recompile method: {total_recompile:.10}");
                 use IncrementalStrategy::*;
-                let flattend_strategies: (u32, u32, u32, u32) = strategy
+                let flattend_strategies: (u32, u32, u32, u32, u32) = strategy
                     .into_iter()
                     .flatten()
-                    .fold((0, 0, 0, 0), |mut acc, next| {
+                    .fold((0, 0, 0, 0, 0), |mut acc, next| {
                         match next {
                             Tautology => acc.0 += 1,
                             UnitClause => acc.1 += 1,
                             SubDAGReplacement => acc.2 += 1,
                             Recompile => acc.3 += 1,
+                            Error => acc.4 += 1,
                         };
                         acc
                     });
@@ -685,11 +689,13 @@ fn main() {
                     \n\tTautology:           {}\
                     \n\tUnit Clause:         {}\
                     \n\tSub-DAG Replacement: {}\
-                    \n\tRecompile:           {}",
+                    \n\tRecompile:           {}\
+                    \n\tError:               {}",
                     flattend_strategies.0,
                     flattend_strategies.1,
                     flattend_strategies.2,
-                    flattend_strategies.3
+                    flattend_strategies.3,
+                    flattend_strategies.4
                 );
 
                 let stdev_base = if base_raw.len() >= 2 {
@@ -727,6 +733,7 @@ fn main() {
                         flattend_strategies.1.to_string(),
                         flattend_strategies.2.to_string(),
                         flattend_strategies.3.to_string(),
+                        flattend_strategies.4.to_string(),
                     ])
                     .unwrap();
                 raw_wtr.flush().unwrap();

@@ -14,7 +14,9 @@ use rug::Integer;
 
 use crate::parser::{
     from_cnf::reduce_clause,
-    intermediate_representation::{IncrementalStrategy, IntermediateGraph},
+    intermediate_representation::{
+        ClauseApplication, IncrementalStrategy, IntermediateGraph,
+    },
 };
 
 use self::node::Node;
@@ -98,16 +100,18 @@ impl Ddnnf {
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4)
     pub fn apply_changes(
         &mut self,
-        clauses: &Vec<&[i32]>,
+        clauses: &Vec<(&[i32], ClauseApplication)>,
     ) -> Vec<IncrementalStrategy> {
         let mut strategies = Vec::new();
-        for clause in clauses {
-            match reduce_clause(&clause, &HashSet::new()) {
+        for (clause, application) in clauses {
+            match reduce_clause(clause, &HashSet::new()) {
                 Some(clause) => {
                     if clause.is_empty() {
                         strategies.push(IncrementalStrategy::Tautology);
                     } else {
-                        strategies.push(self.inter_graph.add_clause(clause));
+                        strategies.push(
+                            self.inter_graph.apply_clause(clause, *application),
+                        );
                     }
                 }
                 None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
@@ -178,7 +182,9 @@ impl Ddnnf {
 mod test {
     use serial_test::serial;
 
-    use crate::parser::build_ddnnf;
+    use crate::parser::{
+        build_ddnnf, intermediate_representation::ClauseApplication,
+    };
 
     #[test]
     #[serial]
@@ -239,7 +245,7 @@ mod test {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
             }
 
-            ddnnf.apply_changes(&vec![&clause]);
+            ddnnf.apply_changes(&vec![(&clause, ClauseApplication::Add)]);
             println!("Card of Features after change:");
             for i in 0..ddnnf.number_of_variables {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
