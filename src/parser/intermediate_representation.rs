@@ -212,20 +212,18 @@ impl IntermediateGraph {
         let mut bridges = HashSet::new();
 
         // calculate neighbours beforehand, because we have to index them multiple times
-        let mut neighbours = Vec::with_capacity(self.graph.node_bound());
-        for i in 0..self.graph.node_bound() {
+        let mut neighbours = vec![Vec::new(); self.graph.node_bound()];
+        for i in 0..self.graph.node_count() {
             let neighbours_inc = self
                 .graph
                 .neighbors_directed(self.graph.from_index(i), Incoming);
             let neighbours_out = self
                 .graph
                 .neighbors_directed(self.graph.from_index(i), Outgoing);
-            neighbours.push(
-                neighbours_inc
-                    .chain(neighbours_out)
-                    .map(|nx| self.graph.to_index(nx))
-                    .collect::<Vec<usize>>(),
-            );
+            neighbours[i] = neighbours_inc
+                .chain(neighbours_out)
+                .map(|nx| self.graph.to_index(nx))
+                .collect::<Vec<usize>>();
         }
 
         let mut visited = vec![false; self.graph.node_bound()];
