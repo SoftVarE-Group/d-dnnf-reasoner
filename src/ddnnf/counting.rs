@@ -13,5 +13,5 @@
 mod features;
 
 // Modules that provide the basic counting logic.
-mod default_count;
-mod marking;
+pub mod default_count;
+pub mod marking;

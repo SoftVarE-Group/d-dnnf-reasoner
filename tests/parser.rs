@@ -9,11 +9,9 @@ use serial_test::serial;
 #[test]
 #[serial]
 fn ddnnf_parsing_test() {
-    let ddnnf_d4: Ddnnf =
-        parser::build_ddnnf("./tests/data/small_ex_d4.nnf", Some(4));
+    let ddnnf_d4: Ddnnf = parser::build_ddnnf("./tests/data/small_ex_d4.nnf", Some(4));
 
-    let mut ddnnf_c2d: Ddnnf =
-        parser::build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
+    let mut ddnnf_c2d: Ddnnf = parser::build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
 
     assert_eq!(ddnnf_c2d.number_of_variables, 4);
     assert_eq!(ddnnf_c2d.rc(), 4);

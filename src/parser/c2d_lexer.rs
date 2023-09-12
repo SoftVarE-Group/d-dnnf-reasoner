@@ -44,27 +44,14 @@ pub enum C2DToken {
         nodes: usize,
         /// edges,
         edges: usize,
-        /// and variables in the dDNNF file
         variables: usize,
     },
     /// An inner node that contains atleast one child
-    And {
-        /// The indices of the children nodes
-        children: Vec<usize>,
-    },
+    And { children: Vec<usize> },
     /// An inner node that contains exactly two child nodes
-    Or {
-        /// The indices of the children nodes
-        children: Vec<usize>,
-        /// The variable indicates that the feature is included in one of the children
-        /// and excluded in the other one.
-        decision: u32,
-    },
+    Or { children: Vec<usize>, decision: u32 },
     /// A leaf node that countains a positive/negative number of a variable
-    Literal {
-        /// The number corresponding to the feature
-        feature: i32,
-    },
+    Literal { feature: i32 },
     /// A special And node that has zero childs
     True,
     /// A special Or node that has zero childs
@@ -265,8 +252,7 @@ mod test {
             Literal { feature: 3 }
         );
 
-        let result =
-            std::panic::catch_unwind(|| lex_line_c2d(failed_and_str)).unwrap();
+        let result = std::panic::catch_unwind(|| lex_line_c2d(failed_and_str)).unwrap();
         assert!(result.is_err());
     }
 

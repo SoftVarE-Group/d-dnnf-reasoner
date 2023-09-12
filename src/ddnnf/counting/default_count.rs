@@ -9,16 +9,13 @@ impl Ddnnf {
     pub(crate) fn calc_count(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {
-                self.nodes[i].temp = Integer::product(
-                    children.iter().map(|&indice| &self.nodes[indice].temp),
-                )
-                .complete()
+                self.nodes[i].temp =
+                    Integer::product(children.iter().map(|&indice| &self.nodes[indice].temp))
+                        .complete()
             }
             Or { children } => {
-                self.nodes[i].temp = Integer::sum(
-                    children.iter().map(|&indice| &self.nodes[indice].temp),
-                )
-                .complete()
+                self.nodes[i].temp =
+                    Integer::sum(children.iter().map(|&indice| &self.nodes[indice].temp)).complete()
             }
             False => self.nodes[i].temp.assign(0),
             _ => self.nodes[i].temp.assign(1), // True and Literal
@@ -99,8 +96,7 @@ mod test {
     #[test]
     fn operate_on_single_feature() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         for i in 1..=vp9.number_of_variables as i32 {
             assert_eq!(

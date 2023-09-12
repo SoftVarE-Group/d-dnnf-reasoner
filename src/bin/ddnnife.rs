@@ -5,12 +5,8 @@ use clap::{ArgGroup, Parser, Subcommand};
 
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
 use ddnnf_lib::parser::build_ddnnf;
-use ddnnf_lib::parser::from_cnf::{
-    add_clause_cnf, get_all_clauses_cnf, remove_clause_cnf,
-};
-use ddnnf_lib::parser::util::{
-    format_vec, open_file_savely, parse_queries_file,
-};
+use ddnnf_lib::parser::from_cnf::{add_clause_cnf, get_all_clauses_cnf, remove_clause_cnf};
+use ddnnf_lib::parser::util::{format_vec, open_file_savely, parse_queries_file};
 use ddnnf_lib::{ClauseApplication, IncrementalStrategy};
 use itertools::Itertools;
 
@@ -190,6 +186,12 @@ enum Operation {
         /// The default are all features of the model.
         #[clap(short, long, allow_negative_numbers = false, num_args = 0.., verbatim_doc_comment)]
         candidates: Option<Vec<u32>>,
+        /// Without the cross flag,
+        /// we only consider atomic set candidates of included features.
+        /// With the cross flag,
+        /// we consider included and excluded feature candidates.
+        #[clap(long, verbatim_doc_comment)]
+        cross: bool,
     },
     /// Generates uniform random sample
     Urs {
@@ -266,7 +268,6 @@ fn main() {
     // file path without last extension
     let input_file_path = String::from(
         Path::new(&cli.file_path.clone().unwrap_or(String::from("ddnnf.nnf")))
-            .with_extension("")
             .file_name()
             .unwrap()
             .to_str()
@@ -275,15 +276,14 @@ fn main() {
 
     // Uses the supplied file path if there is any.
     // If there is no prefix, we switch to the default fallback.
-    let construct_ouput_path =
-        |maybe_prefix: &Option<String>, operation: &str, file_type: &str| {
-            format!(
-                "{}-{}.{}",
-                maybe_prefix.clone().unwrap_or(input_file_path.clone()),
-                operation,
-                file_type
-            )
-        };
+    let construct_ouput_path = |maybe_prefix: &Option<String>, operation: &str, file_type: &str| {
+        format!(
+            "{}-{}.{}",
+            maybe_prefix.clone().unwrap_or(input_file_path.clone()),
+            operation.to_string(),
+            file_type
+        )
+    };
 
     // print additional output, iff we are not in the stream mode
     match &cli.operation {
@@ -333,11 +333,7 @@ fn main() {
             TWise {
                 custom_output_file,
                 t,
-            } => construct_ouput_path(
-                custom_output_file,
-                format!("{t}-wise").as_str(),
-                "csv",
-            ),
+            } => construct_ouput_path(custom_output_file, format!("{}-wise", t).as_str(), "csv"),
             Anomalies { custom_output_file } => {
                 construct_ouput_path(custom_output_file, "anomalies", "txt")
             }
@@ -347,9 +343,7 @@ fn main() {
             Urs {
                 custom_output_file, ..
             } => construct_ouput_path(custom_output_file, "urs", "csv"),
-            Core { custom_output_file } => {
-                construct_ouput_path(custom_output_file, "core", "csv")
-            }
+            Core { custom_output_file } => construct_ouput_path(custom_output_file, "core", "csv"),
             Mermaid {
                 custom_output_file, ..
             } => construct_ouput_path(custom_output_file, "mermaid", "md"),
@@ -362,14 +356,11 @@ fn main() {
                 custom_output_file: _,
                 assumptions,
                 candidates,
+                cross,
             } => {
-                let mut wtr = BufWriter::new(
-                    File::create(&output_file_path)
-                        .expect("Unable to create file"),
-                );
-                for set in
-                    ddnnf.get_atomic_sets(candidates.clone(), assumptions)
-                {
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
+                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, *cross) {
                     wtr.write_all(format_vec(set.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }
@@ -382,16 +373,13 @@ fn main() {
                 number,
                 custom_output_file: _,
             } => {
-                let mut wtr = BufWriter::new(
-                    File::create(&output_file_path)
-                        .expect("Unable to create file"),
-                );
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
                 for sample in ddnnf
                     .uniform_random_sampling(assumptions, *number, *seed)
                     .unwrap()
                 {
-                    wtr.write_all(format_vec(sample.iter()).as_bytes())
-                        .unwrap();
+                    wtr.write_all(format_vec(sample.iter()).as_bytes()).unwrap();
                     wtr.write_all("\n".as_bytes()).unwrap();
                 }
                 wtr.flush().unwrap();
@@ -403,7 +391,9 @@ fn main() {
             } => {
                 let sample_result = ddnnf.sample_t_wise(*t);
                 save_sample_to_file(&sample_result, &output_file_path).unwrap();
-                println!("\nComputed {t}-wise samples and saved the results in {output_file_path}.");
+                println!(
+                    "\nComputed {t}-wise samples and saved the results in {output_file_path}."
+                );
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Count { features } => {
@@ -458,10 +448,8 @@ fn main() {
             StreamQueries {
                 queries_input_file, ..
             } => {
-                let mut wtr = BufWriter::new(
-                    File::create(&output_file_path)
-                        .expect("Unable to create file"),
-                );
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
 
                 let file = open_file_savely(queries_input_file);
                 let queries = BufReader::new(file)
@@ -495,10 +483,8 @@ fn main() {
                 let mut core = ddnnf.core.clone().into_iter().collect_vec();
                 core.sort_unstable_by_key(|k| k.abs());
 
-                let mut wtr = BufWriter::new(
-                    File::create(&output_file_path)
-                        .expect("Unable to create file"),
-                );
+                let mut wtr =
+                    BufWriter::new(File::create(&output_file_path).expect("Unable to create file"));
                 wtr.write_all(format_vec(core.iter()).as_bytes()).unwrap();
                 wtr.write_all("\n".as_bytes()).unwrap();
                 wtr.flush().unwrap();
@@ -508,13 +494,7 @@ fn main() {
                 custom_output_file: _,
                 assumptions,
             } => {
-                write_as_mermaid_md(
-                    &ddnnf,
-                    assumptions,
-                    &output_file_path,
-                    None,
-                )
-                .unwrap();
+                write_as_mermaid_md(&ddnnf, assumptions, &output_file_path, None).unwrap();
                 println!("The smooth d-DNNF was transformed into mermaid markdown format and was written in {output_file_path}.");
             }
             Bench => {
@@ -537,13 +517,7 @@ fn main() {
                     .len();
                 if file_size == 0 {
                     raw_wtr
-                        .write_record([
-                            "model",
-                            "base",
-                            "optimized",
-                            "benefit",
-                            "strategy",
-                        ])
+                        .write_record(["model", "base", "optimized", "benefit", "strategy"])
                         .unwrap();
                 }
 
@@ -586,8 +560,7 @@ fn main() {
                 let mut opt_raw = Vec::new();
                 let mut benefit_raw = Vec::new();
 
-                let temp_file =
-                    tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
+                let temp_file = tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
                 let temp_file_path_buf = temp_file.path().to_path_buf();
                 let temp_file_path = temp_file_path_buf.to_str().unwrap();
                 fs::copy(cnf_s, temp_file_path).unwrap();
@@ -597,8 +570,7 @@ fn main() {
                 let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                 use rand::prelude::SliceRandom;
                 clauses.shuffle(&mut rng);
-                let total_clauses =
-                    cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100);
+                let total_clauses = cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses {
                         break;
@@ -606,33 +578,33 @@ fn main() {
                     println!("{index}/{total_clauses} clause: {clause:?}");
 
                     remove_clause_cnf(temp_file_path, &clause, None);
-                    let mut inter_ddnnf = build_ddnnf(
-                        temp_file_path,
-                        Some(ddnnf.number_of_variables),
-                    );
+                    let mut inter_ddnnf =
+                        build_ddnnf(temp_file_path, Some(ddnnf.number_of_variables));
 
                     start = Instant::now();
-                    let current_strategy = inter_ddnnf.apply_changes(&vec![(
-                        &clause,
-                        ClauseApplication::Add,
-                    )]);
+                    let current_strategy =
+                        inter_ddnnf.apply_changes(&vec![(&clause, ClauseApplication::Add)]);
                     diff_recompile = start.elapsed().as_secs_f64();
                     total_recompile += diff_recompile;
 
                     add_clause_cnf(temp_file_path, &clause);
                     start = Instant::now();
-                    let mut base_ddnnf = build_ddnnf(
-                        temp_file_path,
-                        Some(ddnnf.number_of_variables),
-                    );
+                    let mut base_ddnnf =
+                        build_ddnnf(temp_file_path, Some(ddnnf.number_of_variables));
                     diff_naive = start.elapsed().as_secs_f64();
                     total_naive += diff_naive;
 
                     let benefit = diff_naive - diff_recompile;
                     if benefit.is_sign_positive() {
-                        println!("\x1b[1;38;5;46m(+)\x1b[0m SUB-Recompile is {}s BETTER", benefit);
+                        println!(
+                            "\x1b[1;38;5;46m(+)\x1b[0m SUB-Recompile is {}s BETTER",
+                            benefit
+                        );
                     } else {
-                        println!("\x1b[1;38;5;196m(-)\x1b[0m SUB-Recompile is {}s WORSE", benefit);
+                        println!(
+                            "\x1b[1;38;5;196m(-)\x1b[0m SUB-Recompile is {}s WORSE",
+                            benefit
+                        );
                     }
 
                     raw_wtr
@@ -658,8 +630,7 @@ fn main() {
                     strategy.push(current_strategy);
 
                     assert_eq!(inter_ddnnf.rc(), base_ddnnf.rc());
-                    for feature in 1_i32..base_ddnnf.number_of_variables as i32
-                    {
+                    for feature in 1_i32..base_ddnnf.number_of_variables as i32 {
                         assert_eq!(
                             base_ddnnf.execute_query(&[feature]),
                             inter_ddnnf.execute_query(&[feature])
@@ -748,9 +719,7 @@ fn main() {
     if cli.save_ddnnf.is_some() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
         write_ddnnf(&ddnnf, &path).unwrap();
-        println!(
-            "\nThe smooth d-DNNF was written into the c2d format in {path}."
-        );
+        println!("\nThe smooth d-DNNF was written into the c2d format in {path}.");
     }
 
     if cli.heuristics {

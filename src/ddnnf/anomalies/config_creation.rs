@@ -20,8 +20,8 @@ use rug::{Assign, Integer, Rational};
 use crate::Ddnnf;
 use crate::NodeType::*;
 
-type Cache = Lazy<Arc<Mutex<HashMap<Vec<i32>, usize>>>>;
-static ENUMERATION_CACHE: Cache =
+#[allow(clippy::type_complexity)]
+static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>, usize>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 impl Ddnnf {
@@ -43,11 +43,10 @@ impl Ddnnf {
         assumptions.sort_unstable_by_key(|f| f.abs());
 
         if self.execute_query(assumptions) > 0 {
-            let last_stop =
-                match ENUMERATION_CACHE.lock().unwrap().get(assumptions) {
-                    Some(&x) => x,
-                    None => 0,
-                };
+            let last_stop = match ENUMERATION_CACHE.lock().unwrap().get(assumptions) {
+                Some(&x) => x,
+                None => 0,
+            };
 
             let mut sample_list = self.enumerate_node(
                 (
@@ -62,8 +61,7 @@ impl Ddnnf {
 
             ENUMERATION_CACHE.lock().unwrap().insert(
                 assumptions.to_vec(),
-                (min(self.rt(), Integer::from(last_stop + amount)) % self.rt())
-                    .to_usize_wrapping(),
+                (min(self.rt(), Integer::from(last_stop + amount)) % self.rt()).to_usize_wrapping(),
             );
             return Some(sample_list);
         }
@@ -129,13 +127,8 @@ impl Ddnnf {
 
     // Handles a node appropiate depending on its kind to produce complete
     // satisfiable configurations
-    fn enumerate_node(
-        &self,
-        range: (&Integer, &Integer),
-        index: usize,
-    ) -> Vec<Vec<i32>> {
-        let _range2 =
-            (range.0.to_usize_wrapping(), range.1.to_usize_wrapping());
+    fn enumerate_node(&self, range: (&Integer, &Integer), index: usize) -> Vec<Vec<i32>> {
+        let _range2 = (range.0.to_usize_wrapping(), range.1.to_usize_wrapping());
         let mut enumeration_list = Vec::new();
         if *range.1 == 0 || self.nodes[index].temp == 0 {
             return enumeration_list;
@@ -153,21 +146,14 @@ impl Ddnnf {
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (
-                            &Integer::ZERO,
-                            min(range.1, &self.nodes[child].temp),
-                        );
-                        enumeration_child_lists
-                            .push(self.enumerate_node(change, child));
+                        let change = (&Integer::ZERO, min(range.1, &self.nodes[child].temp));
+                        enumeration_child_lists.push(self.enumerate_node(change, child));
                         acc_amount *= change.1;
                     } else {
                         // restrict the creation of any more configs
                         enumeration_child_lists.push(vec![self
-                            .enumerate_node(
-                                (&Integer::ZERO, &Integer::from(1)),
-                                child,
-                            )[0]
-                        .clone()]);
+                            .enumerate_node((&Integer::ZERO, &Integer::from(1)), child)[0]
+                            .clone()]);
                     }
                 }
 
@@ -185,10 +171,7 @@ impl Ddnnf {
                     .multi_cartesian_product()
                     .map(|elem| elem.into_iter().flatten().collect())
                     .skip(range.0.to_usize_wrapping())
-                    .take(
-                        range.1.to_usize_wrapping()
-                            - range.0.to_usize_wrapping(),
-                    ) // stop after we got our required amount of configs
+                    .take(range.1.to_usize_wrapping() - range.0.to_usize_wrapping()) // stop after we got our required amount of configs
                     .collect();
             }
             Or { children } => {
@@ -200,12 +183,8 @@ impl Ddnnf {
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (
-                            &Integer::ZERO,
-                            min(range.1, &self.nodes[child].temp),
-                        );
-                        enumeration_list
-                            .append(&mut self.enumerate_node(change, child));
+                        let change = (&Integer::ZERO, min(range.1, &self.nodes[child].temp));
+                        enumeration_list.append(&mut self.enumerate_node(change, child));
                         acc_amount += change.1;
                     } else {
                         break;
@@ -222,12 +201,7 @@ impl Ddnnf {
 
     // Performs the operations needed to generate random samples.
     // The algorithm is based upon KUS's uniform random sampling algorithm.
-    fn sample_node(
-        &self,
-        amount: usize,
-        index: usize,
-        rng: &mut Lcg64Xsh32,
-    ) -> Vec<Vec<i32>> {
+    fn sample_node(&self, amount: usize, index: usize, rng: &mut Lcg64Xsh32) -> Vec<Vec<i32>> {
         let mut sample_list = Vec::new();
         if amount == 0 {
             return sample_list;
@@ -238,15 +212,12 @@ impl Ddnnf {
                     sample_list.push(Vec::new());
                 }
                 for &child in children {
-                    let mut child_sample_list =
-                        self.sample_node(amount, child, rng);
+                    let mut child_sample_list = self.sample_node(amount, child, rng);
                     // shuffle operation from KUS algorithm
                     child_sample_list.shuffle(rng);
 
                     // stitch operation
-                    for (index, sample) in
-                        child_sample_list.iter_mut().enumerate()
-                    {
+                    for (index, sample) in child_sample_list.iter_mut().enumerate() {
                         sample_list[index].append(sample);
                     }
                 }
@@ -257,17 +228,15 @@ impl Ddnnf {
                 let mut weights = Vec::new();
 
                 // compute the probability of getting a sample of a child node
-                let parent_count_as_float =
-                    Rational::from((&self.nodes[index].temp, 1));
-                for (child_index, &item) in children.iter().enumerate() {
+                let parent_count_as_float = Rational::from((&self.nodes[index].temp, 1));
+                #[allow(clippy::needless_range_loop)]
+                for child_index in 0..children.len() {
                     let child_count_as_float =
-                        Rational::from((&self.nodes[item].temp, 1));
+                        Rational::from((&self.nodes[children[child_index]].temp, 1));
 
                     // can't get a sample of a children with no more valid configuration
                     if child_count_as_float != 0 {
-                        let child_amount = (child_count_as_float
-                            / &parent_count_as_float)
-                            .to_f64()
+                        let child_amount = (child_count_as_float / &parent_count_as_float).to_f64()
                             * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
@@ -278,22 +247,16 @@ impl Ddnnf {
                 match weights.len() {
                     1 => pick_amount[choices[0]] += amount,
                     2 => {
-                        let binomial_dist = Binomial::new(
-                            amount as u64,
-                            weights[0] / (weights[0] + weights[1]),
-                        )
-                        .unwrap();
-                        pick_amount[choices[0]] +=
-                            binomial_dist.sample(rng) as usize;
-                        pick_amount[choices[1]] =
-                            amount - pick_amount[choices[0]];
+                        let binomial_dist =
+                            Binomial::new(amount as u64, weights[0] / (weights[0] + weights[1]))
+                                .unwrap();
+                        pick_amount[choices[0]] += binomial_dist.sample(rng) as usize;
+                        pick_amount[choices[1]] = amount - pick_amount[choices[0]];
                     }
                     _ => {
-                        let weighted_dist =
-                            WeightedAliasIndex::new(weights).unwrap();
+                        let weighted_dist = WeightedAliasIndex::new(weights).unwrap();
                         for _ in 0..amount {
-                            pick_amount[choices[weighted_dist.sample(rng)]] +=
-                                1;
+                            pick_amount[choices[weighted_dist.sample(rng)]] += 1;
                         }
                     }
                 }
@@ -343,11 +306,9 @@ mod test {
         let mut res_assumptions = HashSet::new();
 
         let mut assumptions = vec![
-            1, 2, 3, -4, -5, 6, 7, -8, -9, 10, 11, -12, -13, -14, 15, 16, -17,
-            -18, 19, 20, 27,
+            1, 2, 3, -4, -5, 6, 7, -8, -9, 10, 11, -12, -13, -14, 15, 16, -17, -18, 19, 20, 27,
         ];
-        let inter_res_assumptions_1 =
-            vp9.enumerate(&mut assumptions, 40).unwrap();
+        let inter_res_assumptions_1 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_1 {
             assert!(vp9.sat(&inter));
             assert_eq!(
@@ -379,16 +340,14 @@ mod test {
         assert_eq!(vp9.rt(), res_all.len(), "there are duplicates");
 
         assert_eq!(80, vp9.execute_query(&assumptions));
-        let inter_res_assumptions_2 =
-            vp9.enumerate(&mut assumptions, 40).unwrap();
+        let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_2.clone() {
             res_assumptions.insert(inter);
         }
         assert_eq!(40, inter_res_assumptions_2.len());
 
         // the cycle for that set of assumptions starts again
-        let inter_res_assumptions_3 =
-            vp9.enumerate(&mut assumptions, 40).unwrap();
+        let inter_res_assumptions_3 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_3.clone() {
             res_assumptions.insert(inter);
         }
@@ -404,8 +363,7 @@ mod test {
     #[test]
     #[serial]
     fn enumeration_big_ddnnf() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![
@@ -483,8 +441,7 @@ mod test {
     #[serial]
     fn enumeration_is_not_possible() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
         assert!(vp9
@@ -503,8 +460,7 @@ mod test {
     #[serial]
     fn sampling_validity() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         let vp9_assumptions = vec![38, 2, -14];
         let vp9_samples = vp9
@@ -532,8 +488,7 @@ mod test {
     #[serial]
     fn sampling_seeding() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // same seeding should yield same results, different seeding should (normally) yield different results
         assert_eq!(
@@ -566,16 +521,8 @@ mod test {
             ),
         );
         assert_ne!(
-            auto1.uniform_random_sampling(
-                &mut vec![11, 12, 13, -14, -15, -16],
-                100,
-                1
-            ),
-            auto1.uniform_random_sampling(
-                &mut vec![11, 12, 13, -14, -15, -16],
-                100,
-                2
-            )
+            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 1),
+            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 2)
         );
     }
 
@@ -583,18 +530,13 @@ mod test {
     #[serial]
     fn sampling_is_not_possible() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert!(vp9
             .uniform_random_sampling(&mut vec![1, -1], 1, 42)
             .is_none());
         assert!(vp9
-            .uniform_random_sampling(
-                &mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                1,
-                42
-            )
+            .uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
             .is_none());
         assert!(vp9.uniform_random_sampling(&mut vec![100], 1, 42).is_none());
 
@@ -602,11 +544,7 @@ mod test {
             .uniform_random_sampling(&mut vec![1, -1], 1, 42)
             .is_none());
         assert!(auto1
-            .uniform_random_sampling(
-                &mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-                1,
-                42
-            )
+            .uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
             .is_none());
         assert!(auto1
             .uniform_random_sampling(&mut vec![-10_000], 1, 42)

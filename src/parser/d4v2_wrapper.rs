@@ -1,4 +1,7 @@
-use std::process::{self, Command};
+use std::{
+    fs,
+    process::{self, Command},
+};
 
 #[cfg(windows)]
 const D4V2: &[u8] = include_bytes!("..\\bin\\d4v2.bin"); // relative from source file
@@ -19,10 +22,8 @@ pub(crate) fn compile_cnf(path_in: &str, path_out: &str) {
     }
 
     // persist the binary data to a callable file
-    if !std::path::Path::new(EXECUTABLE_PATH).exists() {
-        std::fs::write(EXECUTABLE_PATH, D4V2).expect("failed to write file");
-        set_permissions();
-    }
+    std::fs::write(EXECUTABLE_PATH, D4V2).expect("failed to write file");
+    set_permissions();
 
     // execute the command to compile a dDNNF from a CNF file
     Command::new(String::from("./") + EXECUTABLE_PATH)
@@ -36,6 +37,9 @@ pub(crate) fn compile_cnf(path_in: &str, path_out: &str) {
         ])
         .output()
         .unwrap();
+
+    // Remove it again, after the call. This operation is very cheap!
+    fs::remove_file(EXECUTABLE_PATH).unwrap();
 }
 
 // When writing the stored bytes of the binary to a file,
@@ -49,8 +53,7 @@ fn set_permissions() {
             .expect("failed to get metadata")
             .permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(EXECUTABLE_PATH, perms)
-            .expect("failed to set permissions");
+        std::fs::set_permissions(EXECUTABLE_PATH, perms).expect("failed to set permissions");
     }
 
     // Set executable permissions on Windows systems

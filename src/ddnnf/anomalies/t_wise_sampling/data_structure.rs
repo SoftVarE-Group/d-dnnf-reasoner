@@ -49,13 +49,8 @@ impl Config {
     }
 
     /// Creates a new config from two disjoint configs.
-    pub fn from_disjoint(
-        left: &Self,
-        right: &Self,
-        number_of_variables: usize,
-    ) -> Self {
-        let sat_state = match (left.sat_state.clone(), right.sat_state.clone())
-        {
+    pub fn from_disjoint(left: &Self, right: &Self, number_of_variables: usize) -> Self {
+        let sat_state = match (left.sat_state.clone(), right.sat_state.clone()) {
             (Some(left_state), Some(right_state)) => {
                 /*
                 We pick the cached state of the larger config because we can not combine the
@@ -67,9 +62,7 @@ impl Config {
                 marker does not propagate upward to the AND. So the AND remains unmarked which
                 is wrong and may cause wrong results when SAT solving.
                  */
-                if left.get_decided_literals().count()
-                    >= right.get_decided_literals().count()
-                {
+                if left.get_decided_literals().count() >= right.get_decided_literals().count() {
                     Some(left_state)
                 } else {
                     Some(right_state)
@@ -226,6 +219,43 @@ impl Sample {
         }
     }
 
+    /// Create a new sample that will contain the given configs
+    ///
+    /// # Examples
+    /// ```
+    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
+    ///
+    /// let conf_a = Config::from(&[1,2], 3);
+    /// let conf_b = Config::from(&[1,2,3], 3);
+    /// let sample = Sample::new_from_configs(vec![conf_a, conf_b]);
+    ///
+    /// assert_eq!(2, sample.len());
+    /// assert_eq!(1, sample.complete_configs.len());
+    /// assert_eq!(1, sample.partial_configs.len());
+    /// assert_eq!(Some(&Config::from(&[1,2,3], 3)), sample.complete_configs.get(0));
+    /// assert_eq!(Some(&Config::from(&[1,2], 3)), sample.partial_configs.get(0));
+    /// ```
+    pub fn new_from_configs(configs: Vec<Config>) -> Self {
+        let mut literals: Vec<i32> = configs
+            .iter()
+            .flat_map(|c| c.get_decided_literals())
+            .collect();
+        literals.sort_unstable();
+        literals.dedup();
+
+        let vars: HashSet<u32> = literals.iter().map(|x| x.unsigned_abs()).collect();
+
+        let mut sample = Self {
+            complete_configs: vec![],
+            partial_configs: vec![],
+            vars,
+            literals,
+        };
+
+        sample.extend(configs);
+        sample
+    }
+
     pub(crate) fn new_from_samples(samples: &[&Self]) -> Self {
         let vars: HashSet<u32> = samples
             .iter()
@@ -301,9 +331,7 @@ impl Sample {
             .chain(self.partial_configs.iter())
     }
 
-    pub(crate) fn iter_with_completeness(
-        &self,
-    ) -> impl Iterator<Item = (&Config, bool)> {
+    pub(crate) fn iter_with_completeness(&self) -> impl Iterator<Item = (&Config, bool)> {
         let partial_iter = self.partial_configs.iter().zip(iter::repeat(false));
 
         self.complete_configs
@@ -313,11 +341,12 @@ impl Sample {
     }
 
     /// Returns the number of configs in this sample
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.complete_configs.len() + self.partial_configs.len()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    /// Checks whether there are any configs in the sample
+    pub fn is_empty(&self) -> bool {
         self.complete_configs.is_empty() && self.partial_configs.is_empty()
     }
 

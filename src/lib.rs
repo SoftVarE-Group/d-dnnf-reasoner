@@ -1,12 +1,7 @@
-//! The ddnnife library provides different kinds of queries on dDNNFs.
-//! This includes atomic sets, enumeration of valid configurations, uniform random sampling,
-//! core and dead features, false optional features, SAT solving, and t-wise sampling.
-//! The main focus of this library is computation speed.
-
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
 #![warn(unused_qualifications)]
 #![deny(unreachable_pub)]
-// #![deny(deprecated)]
+#![deny(deprecated)]
 #![deny(missing_copy_implementations)]
 #![warn(clippy::disallowed_types)]
 

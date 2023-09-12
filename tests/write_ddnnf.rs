@@ -13,8 +13,7 @@ use std::fs::File;
 fn card_of_features_normal_and_reloaded_test() {
     // default way to compute card of features with a d-DNNF in d4 standard
     let d4_out = "./tests/data/auto1_d4_fs.csv";
-    let mut ddnnf: Ddnnf =
-        parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
+    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
     ddnnf.card_of_each_feature(d4_out).unwrap_or_default();
 
     // save nnf in c2d format

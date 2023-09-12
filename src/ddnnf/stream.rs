@@ -42,21 +42,27 @@ impl Ddnnf {
             let mut ddnnf: Ddnnf = self.clone();
 
             // spawn a worker thread with its shared and exclusive data
-            let handle = thread::spawn(move || loop {
-                if t_stop.load(Ordering::SeqCst) {
-                    break;
-                }
-                if let Some((id, buffer)) = t_queue.pull_work() {
-                    let response = ddnnf.handle_stream_msg(&buffer);
-                    match t_results_tx.send((id, response)) {
-                        Ok(_) => (),
-                        Err(err) => {
-                            eprintln!(
-                                "Error while worker thread tried to sent \
+            let handle = thread::spawn(move || {
+                loop {
+                    if t_stop.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    if let Some((id, buffer)) = t_queue.pull_work() {
+                        let response = ddnnf.handle_stream_msg(&buffer);
+                        match t_results_tx.send((id, response)) {
+                            Ok(_) => (),
+                            Err(err) => {
+                                eprintln!(
+                                    "Error while worker thread tried to sent \
                                 a result to the master: {err}"
-                            );
-                            break;
+                                );
+                                break;
+                            }
                         }
+                    } else {
+                        // If there isn't any more work left, we can stop the busy waiting
+                        // and sleep til unparked again by the main thread.
+                        std::thread::park();
                     }
                 }
             });
@@ -74,18 +80,17 @@ impl Ddnnf {
 
         // Check whether next result/s to print is/are already in the result heap.
         // If thats the case, we print it/them. Anotherwise, we do nothing.
-        let mut print_result =
-            |results: &mut BinaryHeap<Reverse<(u32, String)>>| {
-                while let Some(Reverse((id, res))) = results.peek() {
-                    if *id == output_id {
-                        println!("{res}");
-                        results.pop();
-                        output_id += 1;
-                    } else {
-                        break;
-                    }
+        let mut print_result = |results: &mut BinaryHeap<Reverse<(u32, String)>>| {
+            while let Some(Reverse((id, res))) = results.peek() {
+                if *id == output_id {
+                    println!("{res}");
+                    results.pop();
+                    output_id += 1;
+                } else {
+                    break;
                 }
-            };
+            }
+        };
 
         // loop til there are no more tasks to do
         loop {
@@ -124,6 +129,11 @@ impl Ddnnf {
                     }
                 }
             }
+
+            // Wake up all worker if there is work left todo
+            if remaining_answers > 0 {
+                threads.iter().for_each(|worker| worker.thread().unpark());
+            }
         }
 
         // After all tasks are distributed, we wait for the remaining results and print them.
@@ -149,6 +159,7 @@ impl Ddnnf {
 
         // join threads
         for handle in threads {
+            handle.thread().unpark(); // unpark once more to terminate threads
             handle.join().unwrap();
         }
     }
@@ -178,53 +189,59 @@ impl Ddnnf {
         // either there are no more or we can't parse anymore
         while param_index < args.len() {
             param_index += 1;
-            match args[param_index-1] {
+            match args[param_index - 1] {
                 "a" | "assumptions" => {
                     params = match get_numbers(&args[param_index..], self.number_of_variables) {
                         Ok(v) => {
                             param_index += v.1;
                             v.0
-                        },
+                        }
                         Err(e) => return e,
                     };
-                },
+                }
                 "v" | "variables" => {
                     values = match get_numbers(&args[param_index..], self.number_of_variables) {
                         Ok(v) => {
                             param_index += v.1;
                             v.0
-                        },
+                        }
                         Err(e) => return e,
                     };
-                },
+                }
                 "seed" | "s" | "limit" | "l" | "path" | "p" => {
                     if param_index < args.len() {
-                        match args[param_index-1] {
-                            "seed" | "s" => { seed = match args[param_index].parse::<u64>() {
+                        match args[param_index - 1] {
+                            "seed" | "s" => {
+                                seed = match args[param_index].parse::<u64>() {
                                     Ok(x) => x,
                                     Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
-                            },
+                            }
                             "limit" | "l" => {
                                 limit = match args[param_index].parse::<usize>() {
                                     Ok(x) => Some(x),
                                     Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
-                            },
+                            }
                             _ => {
                                 // has to be path because of the outer patter match
                                 // we use a wildcard to satisfy the rust compiler
                                 path = Path::new(args[param_index]);
                                 param_index += 1;
-                            },
+                            }
                         }
                     } else {
-                        return format!("E4 error: param \"{}\" was used, but no value supplied", args[param_index-1]);
+                        return format!(
+                            "E4 error: param \"{}\" was used, but no value supplied",
+                            args[param_index - 1]
+                        );
                     }
-                },
-                other => return format!("E4 error: the option \"{other}\" is not valid in this context"),
+                }
+                other => {
+                    return format!("E4 error: the option \"{other}\" is not valid in this context")
+                }
             }
         }
 
@@ -298,28 +315,23 @@ impl Ddnnf {
             }
             "random" => {
                 let limit_interpretation = limit.unwrap_or(1);
-                let samples = self.uniform_random_sampling(
-                    &params,
-                    limit_interpretation,
-                    seed,
-                );
+                let samples = self.uniform_random_sampling(&params, limit_interpretation, seed);
                 match samples {
                     Some(s) => format_vec_vec(s.iter()),
                     None => String::from("E5 error: with the assumptions, the ddnnf is not satisfiable. Hence, there exist no valid sample configurations"),
                 }
             }
-            "atomic" => {
+            "atomic" | "atomic-cross" => {
                 if values.iter().any(|&f| f.is_negative()) {
-                    return String::from(
-                        "E5 error: candidates must be positive",
-                    );
+                    return String::from("E5 error: candidates must be positive");
                 }
                 let candidates = if !values.is_empty() {
                     Some(values.iter().map(|&f| f as u32).collect_vec())
                 } else {
                     None
                 };
-                format_vec_vec(self.get_atomic_sets(candidates, &params).iter())
+                let cross = args[0] == "atomic-cross";
+                format_vec_vec(self.get_atomic_sets(candidates, &params, cross).iter())
             }
             "exit" => String::from("exit"),
             "save" => {
@@ -327,9 +339,7 @@ impl Ddnnf {
                     return String::from("E6 error: no file path was supplied");
                 }
                 if !path.is_absolute() {
-                    return String::from(
-                        "E6 error: file path is not absolute, but has to be",
-                    );
+                    return String::from("E6 error: file path is not absolute, but has to be");
                 }
                 match write_ddnnf(self, path.to_str().unwrap()) {
                     Ok(_) => String::from(""),
@@ -376,10 +386,7 @@ fn op_with_assumptions_and_vars<T: ToString>(
 }
 
 // parses numbers and ranges of the form START..[STOP] into a vector of i32
-fn get_numbers(
-    params: &[&str],
-    boundary: u32,
-) -> Result<(Vec<i32>, usize), String> {
+fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), String> {
     let mut numbers = Vec::new();
     let mut parsed_str_count = 0;
 
@@ -407,12 +414,11 @@ fn get_numbers(
                 },
             ),
             // unlimited range
-            map_res(pair(signed_number, tag("..")), |s: (&str, &str)| match s
-                .0
-                .parse::<i32>(
-            ) {
-                Ok(start) => Ok((start..=boundary as i32).collect()),
-                Err(e) => Err(e),
+            map_res(pair(signed_number, tag("..")), |s: (&str, &str)| {
+                match s.0.parse::<i32>() {
+                    Ok(start) => Ok((start..=boundary as i32).collect()),
+                    Err(e) => Err(e),
+                }
             }),
             // single number
             map_res(signed_number, |s: &str| match s.parse::<i32>() {
@@ -472,14 +478,14 @@ mod test {
 
     use assert_cmd::Command;
     use itertools::Itertools;
+    use serial_test::serial;
 
     use super::*;
     use crate::parser::build_ddnnf;
 
     #[test]
     fn handle_stream_msg_core() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = auto1.handle_stream_msg("core");
@@ -526,8 +532,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_count() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from(
@@ -540,9 +545,7 @@ mod test {
         );
         assert_eq!(
             String::from("0;0"),
-            auto1.handle_stream_msg(
-                "count assumptions -1469 -1114 939 1551 variables 1 1529"
-            )
+            auto1.handle_stream_msg("count assumptions -1469 -1114 939 1551 variables 1 1529")
         );
 
         assert_eq!(auto1.rc().to_string(), auto1.handle_stream_msg("count"));
@@ -558,8 +561,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_sat() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("true;true;false"),
@@ -569,10 +571,7 @@ mod test {
             String::from("false;false"),
             auto1.handle_stream_msg("sat a -1469 -1114 939 1551 v 1 1529")
         );
-        assert_eq!(
-            (auto1.rc() > 0).to_string(),
-            auto1.handle_stream_msg("sat")
-        );
+        assert_eq!((auto1.rc() > 0).to_string(), auto1.handle_stream_msg("sat"));
         assert_eq!(
             auto1.handle_stream_msg("sat v 1 58"),
             vec![
@@ -585,8 +584,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum() {
-        let mut _auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut _auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
@@ -600,7 +598,9 @@ mod test {
         );
         assert_eq!(res.len(), 2, "there should be only 2 configs although we wanted 10, because there are only 2 individual and valid configs");
 
-        let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 l 80");
+        let binding = vp9.handle_stream_msg(
+            "enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 l 80",
+        );
         let res: Vec<&str> = binding.split(";").collect();
         assert_eq!(80, res.len());
 
@@ -645,8 +645,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_random() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         assert_eq!(
@@ -679,9 +678,7 @@ mod test {
         assert_eq!(1, vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());
 
-        binding = auto1.handle_stream_msg(
-            "random assumptions 1 3 -4 270 122 -2000 limit 135",
-        );
+        binding = auto1.handle_stream_msg("random assumptions 1 3 -4 270 122 -2000 limit 135");
         let results = binding
             .split(";")
             .map(|v| {
@@ -711,15 +708,11 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         assert_eq!(
-            String::from(
-                "E4 error: the option \"sets\" is not valid in this context"
-            ),
+            String::from("E4 error: the option \"sets\" is not valid in this context"),
             vp9.handle_stream_msg("atomic sets")
         );
         assert_eq!(
-            String::from(
-                "E2 error: the operation \"atomic_sets\" is not supported"
-            ),
+            String::from("E2 error: the operation \"atomic_sets\" is not supported"),
             vp9.handle_stream_msg("atomic_sets")
         );
 
@@ -771,15 +764,11 @@ mod test {
             vp9.handle_stream_msg(format!("save {}", &working_dir).as_str())
         );
         assert_eq!(
-            String::from(
-                "E4 error: param \"path\" was used, but no value supplied"
-            ),
+            String::from("E4 error: param \"path\" was used, but no value supplied"),
             vp9.handle_stream_msg("save path")
         );
         assert_eq!(
-            String::from(
-                "E4 error: param \"p\" was used, but no value supplied"
-            ),
+            String::from("E4 error: param \"p\" was used, but no value supplied"),
             vp9.handle_stream_msg("save p")
         );
 
@@ -799,18 +788,15 @@ mod test {
         assert_eq!(
             String::from(""),
             vp9.handle_stream_msg(
-                format!("save path {}/tests/data/out.nnf", &working_dir)
-                    .as_str()
+                format!("save path {}/tests/data/out.nnf", &working_dir).as_str()
             )
         );
-        let _res =
-            fs::remove_file(format!("{}/tests/data/out.nnf", &working_dir));
+        let _res = fs::remove_file(format!("{}/tests/data/out.nnf", &working_dir));
     }
 
     #[test]
     fn handle_stream_msg_other() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
             String::from("exit"),
@@ -820,48 +806,35 @@ mod test {
 
     #[test]
     fn handle_stream_msg_error() {
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         assert_eq!(
             String::from("E4 error: got an empty msg"),
             auto1.handle_stream_msg("")
         );
         assert_eq!(
-            String::from(
-                "E4 error: the option \"5\" is not valid in this context"
-            ),
+            String::from("E4 error: the option \"5\" is not valid in this context"),
             auto1.handle_stream_msg("random a 1 2 s 13 5")
         );
 
         assert_eq!(
-            String::from(
-                "E4 error: option used but there was no value supplied"
-            ),
+            String::from("E4 error: option used but there was no value supplied"),
             auto1.handle_stream_msg("random a")
         );
         assert_eq!(
-            String::from(
-                "E4 error: option used but there was no value supplied"
-            ),
+            String::from("E4 error: option used but there was no value supplied"),
             auto1.handle_stream_msg("count a 1 2 3 v")
         );
 
         assert_eq!(
-            String::from(
-                "E2 error: the operation \"t-wise_sampling\" is not supported"
-            ),
+            String::from("E2 error: the operation \"t-wise_sampling\" is not supported"),
             auto1.handle_stream_msg("t-wise_sampling a 1 v 2")
         );
         assert_eq!(
-            String::from(
-                "E2 error: the operation \"revive_dinosaurs\" is not supported"
-            ),
+            String::from("E2 error: the operation \"revive_dinosaurs\" is not supported"),
             auto1.handle_stream_msg("revive_dinosaurs a 1 v 2")
         );
         assert_eq!(
-            String::from(
-                "E4 error: the option \"params\" is not valid in this context"
-            ),
+            String::from("E4 error: the option \"params\" is not valid in this context"),
             auto1.handle_stream_msg("count assumptions 1 v 2 params 3")
         );
         assert_eq!(
@@ -869,9 +842,7 @@ mod test {
             auto1.handle_stream_msg("count assumptions 1 v 2 god_mode 3")
         );
         assert_eq!(
-            String::from(
-                "E4 error: the option \"BDDs\" is not valid in this context"
-            ),
+            String::from("E4 error: the option \"BDDs\" is not valid in this context"),
             auto1.handle_stream_msg("count a 1 2 BDDs 3")
         );
     }
@@ -920,7 +891,9 @@ mod test {
         );
 
         assert_eq!(
-            Err(String::from("E3 error: not all parameters are within the boundary of -10 to 10")),
+            Err(String::from(
+                "E3 error: not all parameters are within the boundary of -10 to 10"
+            )),
             get_numbers(vec!["1", "-2", "-300", "4"].as_ref(), 10)
         );
         assert_eq!(
@@ -949,17 +922,14 @@ mod test {
         );
         assert_eq!(
             Ok((vec![1, 2, 3, 4, 5], 1)),
-            get_numbers(
-                vec!["1..5", "a", "6", "7", "3", "4", "5"].as_ref(),
-                20
-            )
+            get_numbers(vec!["1..5", "a", "6", "7", "3", "4", "5"].as_ref(), 20)
         );
     }
 
     #[test]
+    #[serial]
     fn parallel_stream() {
-        let mut ddnnf: Ddnnf =
-            build_ddnnf("example_input/auto1_d4_2513.nnf", Some(2513));
+        let mut ddnnf: Ddnnf = build_ddnnf("example_input/auto1_d4_2513.nnf", Some(2513));
 
         let mut card_of_features_input = String::new();
         let mut should_be = String::new();
@@ -986,14 +956,7 @@ mod test {
         // do the same when using a CNF
         let cmd_cnf = Command::cargo_bin("ddnnife")
             .unwrap()
-            .args([
-                "example_input/auto1.cnf",
-                "-t",
-                "2513",
-                "stream",
-                "-j",
-                "4",
-            ])
+            .args(["example_input/auto1.cnf", "-t", "2513", "stream", "-j", "4"])
             .write_stdin(card_of_features_input.clone())
             .unwrap();
 

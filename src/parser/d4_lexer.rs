@@ -72,9 +72,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
 }
 
 // lexes multiple sequences of signed numbers
-pub(super) fn parse_signed_alt_space1_number1(
-    line: &str,
-) -> IResult<&str, (&str, &str)> {
+pub(super) fn parse_signed_alt_space1_number1(line: &str) -> IResult<&str, (&str, &str)> {
     alt((pair(digit1, space1), pair(neg_digit1, space1)))(line)
 }
 
@@ -148,12 +146,10 @@ mod test {
             },
         );
 
-        let result =
-            std::panic::catch_unwind(|| lex_edge(failed_edge)).unwrap();
+        let result = std::panic::catch_unwind(|| lex_edge(failed_edge)).unwrap();
         assert!(result.is_err());
 
-        let result =
-            std::panic::catch_unwind(|| lex_line_d4(failed_edge)).unwrap();
+        let result = std::panic::catch_unwind(|| lex_line_d4(failed_edge)).unwrap();
         assert!(result.is_err());
     }
 }

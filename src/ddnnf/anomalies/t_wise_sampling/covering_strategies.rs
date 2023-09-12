@@ -1,6 +1,4 @@
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{
-    Config, Sample,
-};
+use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 
 /// Covering strategy that uses the sat state caching.
@@ -16,11 +14,7 @@ pub(super) fn cover_with_caching(
         return; // already covered
     }
     let mut interaction_sat_state = sat_solver.new_state();
-    if !sat_solver.is_sat_in_subgraph_cached(
-        interaction,
-        node_id,
-        &mut interaction_sat_state,
-    ) {
+    if !sat_solver.is_sat_in_subgraph_cached(interaction, node_id, &mut interaction_sat_state) {
         return; // interaction invalid
     }
 
@@ -33,15 +27,12 @@ pub(super) fn cover_with_caching(
         config.update_sat_state(sat_solver, node_id);
 
         // clone sat state so that we don't change the state that is cached in the config
-        let mut sat_state = config.get_sat_state()
+        let mut sat_state = config
+            .get_sat_state()
             .cloned()
             .expect("sat state should exist because update_sat_state() was called before");
 
-        if sat_solver.is_sat_in_subgraph_cached(
-            interaction,
-            node_id,
-            &mut sat_state,
-        ) {
+        if sat_solver.is_sat_in_subgraph_cached(interaction, node_id, &mut sat_state) {
             // we found a config - extend config with interaction and update sat state
             config.extend(interaction.iter().cloned());
             config.set_sat_state(sat_state);

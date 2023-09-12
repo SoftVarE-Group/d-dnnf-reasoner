@@ -62,11 +62,7 @@ impl Node {
 
     #[inline]
     /// Creates a new Or node
-    pub fn new_or(
-        _decision_var: u32,
-        count: Integer,
-        children: Vec<usize>,
-    ) -> Node {
+    pub fn new_or(_decision_var: u32, count: Integer, children: Vec<usize>) -> Node {
         Node::new_node(count, Or { children })
     }
 

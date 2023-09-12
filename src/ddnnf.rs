@@ -1,9 +1,9 @@
 pub mod anomalies;
-mod counting;
-mod heuristics;
-mod multiple_queries;
+pub mod counting;
+pub mod heuristics;
+pub mod multiple_queries;
 pub mod node;
-mod stream;
+pub mod stream;
 
 use std::{
     cmp::max,
@@ -14,9 +14,7 @@ use rug::Integer;
 
 use crate::parser::{
     from_cnf::reduce_clause,
-    intermediate_representation::{
-        ClauseApplication, IncrementalStrategy, IntermediateGraph,
-    },
+    intermediate_representation::{ClauseApplication, IncrementalStrategy, IntermediateGraph},
 };
 
 use self::node::Node;
@@ -58,10 +56,7 @@ impl Default for Ddnnf {
 
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
-    pub fn new(
-        mut inter_graph: IntermediateGraph,
-        number_of_variables: u32,
-    ) -> Ddnnf {
+    pub fn new(mut inter_graph: IntermediateGraph, number_of_variables: u32) -> Ddnnf {
         let dfs_ig = inter_graph.rebuild(None);
         let mut ddnnf = Ddnnf {
             inter_graph,
@@ -92,7 +87,7 @@ impl Ddnnf {
         self.number_of_variables = self
             .literals
             .keys()
-            .fold(0, |acc, x| max(acc, x.abs() as u32));
+            .fold(0, |acc, x| max(acc, x.unsigned_abs()));
     }
 
     /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
@@ -109,9 +104,7 @@ impl Ddnnf {
                     if clause.is_empty() {
                         strategies.push(IncrementalStrategy::Tautology);
                     } else {
-                        strategies.push(
-                            self.inter_graph.apply_clause(clause, *application),
-                        );
+                        strategies.push(self.inter_graph.apply_clause(clause, *application));
                     }
                 }
                 None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
@@ -135,10 +128,7 @@ impl Ddnnf {
     }
 
     /// Determines the positions of the inverted featueres
-    pub fn map_features_opposing_indexes(
-        &self,
-        features: &[i32],
-    ) -> Vec<usize> {
+    pub fn map_features_opposing_indexes(&self, features: &[i32]) -> Vec<usize> {
         let mut indexes = Vec::with_capacity(features.len());
         for number in features {
             if let Some(i) = self.literals.get(&-number).cloned() {
@@ -168,12 +158,10 @@ impl Ddnnf {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]),
-            2..=20 => self.operate_on_partial_config_marker(
-                features,
-                Ddnnf::calc_count_marked_node,
-            ),
-            _ => self
-                .operate_on_partial_config_default(features, Ddnnf::calc_count),
+            2..=20 => {
+                self.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node)
+            }
+            _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count),
         }
     }
 }
@@ -182,9 +170,7 @@ impl Ddnnf {
 mod test {
     use serial_test::serial;
 
-    use crate::parser::{
-        build_ddnnf, intermediate_representation::ClauseApplication,
-    };
+    use crate::parser::{build_ddnnf, intermediate_representation::ClauseApplication};
 
     #[test]
     #[serial]
@@ -223,10 +209,7 @@ mod test {
             assert_eq!(ddnnf.literals, rebuild_clone.literals);
             assert_eq!(ddnnf.core, rebuild_clone.core);
             assert_eq!(ddnnf.true_nodes, rebuild_clone.true_nodes);
-            assert_eq!(
-                ddnnf.number_of_variables,
-                rebuild_clone.number_of_variables
-            );
+            assert_eq!(ddnnf.number_of_variables, rebuild_clone.number_of_variables);
         }
     }
 

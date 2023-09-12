@@ -25,16 +25,8 @@ impl<'a> SatWrapper<'a> {
     /// Calculates if the given config is SAT. This is the variant with cached state.
     ///
     /// See [SatWrapper] for more details
-    pub(super) fn is_sat_cached(
-        &self,
-        config: &[i32],
-        cached_state: &mut Vec<bool>,
-    ) -> bool {
-        self.is_sat_in_subgraph_cached(
-            config,
-            self.ddnnf.nodes.len() - 1,
-            cached_state,
-        )
+    pub(super) fn is_sat_cached(&self, config: &[i32], cached_state: &mut Vec<bool>) -> bool {
+        self.is_sat_in_subgraph_cached(config, self.ddnnf.nodes.len() - 1, cached_state)
     }
 
     /// Calculates if the given config is SAT. This is the subgraph variant with cached state.

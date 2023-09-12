@@ -52,8 +52,7 @@ impl Ddnnf {
                 .iter()
                 .fold(String::new(), |acc, &num| acc + &num.to_string() + " ");
             features_str.pop();
-            let data =
-                &format!("{},{}\n", features_str, cardinality.to_string());
+            let data = &format!("{},{}\n", features_str, cardinality.to_string());
             wtr.write_all(data.as_bytes())?;
         }
 
@@ -96,11 +95,7 @@ impl Ddnnf {
                     // Sending could fail. If so, there's no use in
                     // doing any more work, so abort.
                     let work_c = work.clone();
-                    match t_results_tx.send((
-                        index,
-                        work_c,
-                        operation(&mut ddnnf, &work),
-                    )) {
+                    match t_results_tx.send((index, work_c, operation(&mut ddnnf, &work))) {
                         Ok(_) => (),
                         Err(_) => {
                             break;
@@ -202,7 +197,10 @@ mod test {
         let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
 
         // diff_files is true if the files are identical
-        assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
+        assert!(
+            diff_files(&mut is_single, &mut is_multi),
+            "partial config results of single und multi variant have differences"
+        );
         is_single = File::open("./tests/data/pcs.csv").unwrap();
         assert!(
             diff_files(&mut is_single, &mut should_be),
@@ -283,10 +281,16 @@ mod test {
         let mut should_be = File::open("./tests/data/VP9_sb_pc.csv").unwrap();
 
         // diff_files is true if the files are identical
-        assert!(diff_files(&mut is_single, &mut is_multi), "partial config results of single und multi variant have differences");
+        assert!(
+            diff_files(&mut is_single, &mut is_multi),
+            "partial config results of single und multi variant have differences"
+        );
         is_single = File::open("./tests/data/pcs1.csv").unwrap();
         is_multi = File::open("./tests/data/pcm1.csv").unwrap();
-        assert!(diff_files(&mut is_multi, &mut is_multi4), "partial config for multiple threads differs when using multiple threads");
+        assert!(
+            diff_files(&mut is_multi, &mut is_multi4),
+            "partial config for multiple threads differs when using multiple threads"
+        );
         assert!(
             diff_files(&mut is_single, &mut should_be),
             "partial config results differ from the expected results"

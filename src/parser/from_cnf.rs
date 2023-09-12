@@ -86,11 +86,9 @@ pub fn add_clause_cnf(path: &str, clause: &[i32]) {
             Header { features, clauses } => {
                 let max_feature_number = max(
                     features,
-                    clause.iter().map(|f| f.unsigned_abs()).max().unwrap()
-                        as usize,
+                    clause.iter().map(|f| f.unsigned_abs()).max().unwrap() as usize,
                 );
-                manipulated_cnf
-                    .push(format!("p cnf {max_feature_number} {}", clauses + 1))
+                manipulated_cnf.push(format!("p cnf {max_feature_number} {}", clauses + 1))
             }
             Comment | Clause => manipulated_cnf.push(line),
         }
@@ -105,11 +103,7 @@ pub fn add_clause_cnf(path: &str, clause: &[i32]) {
 
 /// Removes the last amount many clauses from the CNF. The header gets also updated.
 /// The number of clauses automatically, the total number of features if supplied.
-pub fn remove_tail_clauses_cnf(
-    path: &str,
-    total_features: Option<usize>,
-    amount: usize,
-) {
+pub fn remove_tail_clauses_cnf(path: &str, total_features: Option<usize>, amount: usize) {
     let mut file = File::open(path).unwrap();
     let lines = BufReader::new(file).lines();
     let mut manipulated_cnf = Vec::new();
@@ -133,11 +127,7 @@ pub fn remove_tail_clauses_cnf(
 }
 
 /// Removes a specific clause from the CNF. Also removes duplicates. Does update the Header accordingly.
-pub fn remove_clause_cnf(
-    path: &str,
-    clause: &[i32],
-    total_features: Option<usize>,
-) {
+pub fn remove_clause_cnf(path: &str, clause: &[i32], total_features: Option<usize>) {
     let mut file = File::open(path).unwrap();
     let lines = BufReader::new(file).lines();
     let mut manipulated_cnf = Vec::new();
@@ -172,23 +162,20 @@ pub fn get_all_clauses_cnf(path: &str) -> Vec<Vec<i32>> {
 
     for line in lines {
         let line = line.expect("Unable to read line");
-        match check_for_cnf_header(line.as_str()).unwrap().1 {
-            Clause => {
-                let mut clause: Vec<i32> = line.split(" ")
-                    .filter(|split| !split.is_empty())
-                    .map(|num| {
-                        match num.parse::<i32>() {
-                            Ok(v) => v,
-                            Err(e) => {
-                                eprintln!("Error: {e} while trying to parse num: {num}, in line: {line}");
-                                exit(1)
-                            }
-                        }
-                    }).collect();
-                clause.remove(clause.len() - 1); // remove the trailing 0
-                clauses.push(clause);
-            }
-            _ => (),
+        if check_for_cnf_header(line.as_str()).unwrap().1 == Clause {
+            let mut clause: Vec<i32> = line
+                .split(' ')
+                .filter(|split| !split.is_empty())
+                .map(|num| match num.parse::<i32>() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error: {e} while trying to parse num: {num}, in line: {line}");
+                        exit(1)
+                    }
+                })
+                .collect();
+            clause.remove(clause.len() - 1); // remove the trailing 0
+            clauses.push(clause);
         }
     }
     clauses
@@ -206,8 +193,7 @@ pub fn simplify_clauses(mut clauses: Vec<Vec<i32>>) -> Vec<Vec<i32>> {
     }
 
     // Remove clauses that are always SAT as in 2) (tautologies)
-    clause_set
-        .retain(|clause| clause.iter().all(|elem| !clause.contains(&-elem)));
+    clause_set.retain(|clause| clause.iter().all(|elem| !clause.contains(&-elem)));
 
     let mut decisions = HashSet::new();
     clause_set.iter().for_each(|clause| {
@@ -221,8 +207,7 @@ pub fn simplify_clauses(mut clauses: Vec<Vec<i32>>) -> Vec<Vec<i32>> {
         simplified_clauses.push(clause.into_iter().collect());
     }
 
-    (simplified_clauses, decisions) =
-        apply_decisions(simplified_clauses, decisions);
+    (simplified_clauses, decisions) = apply_decisions(simplified_clauses, decisions);
     decisions
         .into_iter()
         .for_each(|decision| simplified_clauses.push(vec![decision]));
@@ -266,10 +251,7 @@ pub fn apply_decisions(
 /// Performs the same simplifications as [simplify_clauses],
 /// but only on one clause.
 /// Returns None if the clause is UNSAT and Some(empty vector) if the clause is SAT.
-pub fn reduce_clause(
-    clause: &[i32],
-    decisions: &HashSet<i32>,
-) -> Option<Vec<i32>> {
+pub fn reduce_clause(clause: &[i32], decisions: &HashSet<i32>) -> Option<Vec<i32>> {
     if clause.is_empty() {
         return Some(vec![]);
     }
@@ -377,19 +359,18 @@ mod test {
 
     #[test]
     fn clause_reduction() {
-        let contains_same_elements =
-            |fst: Option<Vec<i32>>, snd: Option<Vec<i32>>| {
-                if fst.is_none() || snd.is_none() {
-                    return fst == snd;
-                }
+        let contains_same_elements = |fst: Option<Vec<i32>>, snd: Option<Vec<i32>>| {
+            if fst.is_none() || snd.is_none() {
+                return fst == snd;
+            }
 
-                let fst = fst.unwrap();
-                let snd = snd.unwrap();
+            let fst = fst.unwrap();
+            let snd = snd.unwrap();
 
-                fst.len() == snd.len()
-                    && fst.iter().all(|elem| snd.contains(elem))
-                    && snd.iter().all(|elem| fst.contains(elem))
-            };
+            fst.len() == snd.len()
+                && fst.iter().all(|elem| snd.contains(elem))
+                && snd.iter().all(|elem| fst.contains(elem))
+        };
 
         assert!(contains_same_elements(
             Some(vec![1, 2, 3]),
@@ -413,10 +394,7 @@ mod test {
 
         assert!(contains_same_elements(
             None,
-            reduce_clause(
-                &vec![1, 2, 3],
-                &vec![-1, -2, -3].into_iter().collect()
-            )
+            reduce_clause(&vec![1, 2, 3], &vec![-1, -2, -3].into_iter().collect())
         ));
     }
 

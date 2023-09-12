@@ -36,12 +36,8 @@ pub fn write_ddnnf(ddnnf: &Ddnnf, path_out: &str) -> std::io::Result<()> {
 /// We use an adjusted version of the c2d format: Or nodes can have multiple children, there are no decision nodes
 fn deconstruct_node(node: &Node) -> String {
     let mut str = match &node.ntype {
-        NodeType::And { children } => {
-            deconstruct_children(String::from("A "), children)
-        }
-        NodeType::Or { children } => {
-            deconstruct_children(String::from("O 0 "), children)
-        }
+        NodeType::And { children } => deconstruct_children(String::from("A "), children),
+        NodeType::Or { children } => deconstruct_children(String::from("O 0 "), children),
         NodeType::Literal { literal } => format!("L {literal}"),
         NodeType::True => String::from("A 0"),
         NodeType::False => String::from("O 0 0"),
@@ -80,15 +76,13 @@ pub fn write_as_mermaid_md(
         node.temp.assign(&node.count);
     }
 
-    ddnnf.operate_on_partial_config_marker(
-        features,
-        Ddnnf::calc_count_marked_node,
-    );
+    ddnnf.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node);
 
     let file = File::create(path_out)?;
     let mut lw = LineWriter::with_capacity(1000, file);
 
-    let config = format!("```mermaid\n\t\
+    let config = format!(
+        "```mermaid\n\t\
     graph TD
         subgraph pad1 [ ]
             subgraph pad2 [ ]
@@ -102,18 +96,15 @@ pub fn write_as_mermaid_md(
             end
             style pad1 fill:none, stroke:none
         end
-        classDef marked stroke:#d90000, stroke-width:4px\n\n");
+        classDef marked stroke:#d90000, stroke-width:4px\n\n"
+    );
     lw.write_all(config.as_bytes()).unwrap();
     let marking = ddnnf.get_marked_nodes_clone(features);
-    match alternative_start {
-        Some((start, depth)) => {
-            ddnnf.inter_graph =
-                ddnnf.inter_graph.get_partial_graph_til_depth(start, depth);
-            ddnnf.rebuild();
-        }
-        None => (),
+    if let Some((start, depth)) = alternative_start {
+        ddnnf.inter_graph = ddnnf.inter_graph.get_partial_graph_til_depth(start, depth);
+        ddnnf.rebuild();
     };
-    lw.write_all(mermaidify_nodes(&mut ddnnf, &marking).as_bytes())?;
+    lw.write_all(mermaidify_nodes(&ddnnf, &marking).as_bytes())?;
     lw.write_all(b"```").unwrap();
 
     Ok(())
@@ -225,12 +216,6 @@ mod test {
         let mut ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
         let root = ddnnf.inter_graph.root;
         write_as_mermaid_md(&mut ddnnf, &[], "whole.md", None).unwrap();
-        write_as_mermaid_md(
-            &mut ddnnf,
-            &[],
-            "partial_root.md",
-            Some((root, 5)),
-        )
-        .unwrap();
+        write_as_mermaid_md(&mut ddnnf, &[], "partial_root.md", Some((root, 5))).unwrap();
     }
 }

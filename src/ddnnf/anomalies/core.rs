@@ -12,12 +12,8 @@ impl Ddnnf {
     /// A feature is a core feature iff there exists only the positiv occurence of that feature.
     /// A feature is a dead feature iff there exists only the negativ occurence of that feature.
     pub(crate) fn get_core(&mut self) {
-        self.core = (-(self.number_of_variables as i32)
-            ..=self.number_of_variables as i32)
-            .filter(|f| {
-                self.literals.get(f).is_some()
-                    && self.literals.get(&-f).is_none()
-            })
+        self.core = (-(self.number_of_variables as i32)..=self.number_of_variables as i32)
+            .filter(|f| self.literals.get(f).is_some() && self.literals.get(&-f).is_none())
             .collect::<HashSet<i32>>()
     }
 

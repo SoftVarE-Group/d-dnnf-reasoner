@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{
-    Config, Sample,
-};
+use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::Ddnnf;
 use rand::prelude::StdRng;
 
@@ -12,13 +10,7 @@ pub(crate) mod zipping_merger;
 pub(super) trait SampleMerger {
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
-    fn merge(
-        &self,
-        node_id: usize,
-        left: &Sample,
-        right: &Sample,
-        rng: &mut StdRng,
-    ) -> Sample;
+    fn merge(&self, node_id: usize, left: &Sample, right: &Sample, rng: &mut StdRng) -> Sample;
 
     /// Creates a new sample by merging two samples.
     /// The merging follows the behaviour defined by the merger.
@@ -38,12 +30,7 @@ pub(super) trait SampleMerger {
     /// Creates a new sample by merging all given samples.
     /// The merging follows the behaviour defined by the merger.
     /// Returns [Sample::empty] if the given slice is empty.
-    fn merge_all(
-        &self,
-        node_id: usize,
-        samples: &[&Sample],
-        rng: &mut StdRng,
-    ) -> Sample {
+    fn merge_all(&self, node_id: usize, samples: &[&Sample], rng: &mut StdRng) -> Sample {
         samples.iter().fold(Sample::default(), |acc, &sample| {
             self.merge_in_place(node_id, acc, sample, rng)
         })
@@ -65,13 +52,7 @@ pub(super) struct DummyAndMerger<'a> {
 }
 
 impl SampleMerger for DummyAndMerger<'_> {
-    fn merge(
-        &self,
-        _node_id: usize,
-        left: &Sample,
-        right: &Sample,
-        _rng: &mut StdRng,
-    ) -> Sample {
+    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample, _rng: &mut StdRng) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -102,13 +83,7 @@ impl AndMerger for DummyAndMerger<'_> {}
 pub(super) struct DummyOrMerger {}
 
 impl SampleMerger for DummyOrMerger {
-    fn merge(
-        &self,
-        _node_id: usize,
-        left: &Sample,
-        right: &Sample,
-        _rng: &mut StdRng,
-    ) -> Sample {
+    fn merge(&self, _node_id: usize, left: &Sample, right: &Sample, _rng: &mut StdRng) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -140,8 +115,7 @@ fn _new_sample_from_configs(configs: Vec<Config>) -> Sample {
     literals.sort_unstable();
     literals.dedup();
 
-    let vars: HashSet<u32> =
-        literals.iter().map(|x| x.unsigned_abs()).collect();
+    let vars: HashSet<u32> = literals.iter().map(|x| x.unsigned_abs()).collect();
 
     let mut sample = Sample {
         complete_configs: vec![],

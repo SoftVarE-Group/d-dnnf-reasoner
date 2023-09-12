@@ -7,7 +7,7 @@
 //! reducing the overall number of combinations to consider while still ensuring coverage of important interactions.
 
 mod covering_strategies;
-mod data_structure;
+pub mod data_structure;
 mod sample_merger;
 mod sat_wrapper;
 mod t_iterator;
@@ -17,9 +17,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::{fmt, fs, io, iter};
 
-use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{
-    AndMerger, OrMerger,
-};
+use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, OrMerger};
 use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
@@ -119,8 +117,7 @@ impl fmt::Display for SamplingResult {
     }
 }
 
-const EXPECT_SAMPLE: &str =
-    "children should have a sampling result when sampling their parent";
+const EXPECT_SAMPLE: &str = "children should have a sampling result when sampling their parent";
 
 impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     /// Constructs a new sampler
@@ -140,11 +137,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     ///
     /// # Panics
     /// Panics if one child does not have a [SamplingResult] in [TWiseSampler::partial_samples].
-    fn make_partial_sample(
-        &mut self,
-        node_id: usize,
-        rng: &mut StdRng,
-    ) -> SamplingResult {
+    fn make_partial_sample(&mut self, node_id: usize, rng: &mut StdRng) -> SamplingResult {
         let node = self.ddnnf.nodes.get(node_id).expect("Node does not exist!");
 
         match &node.ntype {
@@ -153,20 +146,12 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 self.ddnnf.number_of_variables as usize,
             )),
             And { children } => {
-                let sample = self.sample_and(
-                    node_id,
-                    self.get_child_results(children),
-                    rng,
-                );
+                let sample = self.sample_and(node_id, self.get_child_results(children), rng);
                 self.remove_not_needed_samples(node_id, children);
                 sample
             }
             Or { children } => {
-                let sample = self.sample_or(
-                    node_id,
-                    self.get_child_results(children),
-                    rng,
-                );
+                let sample = self.sample_or(node_id, self.get_child_results(children), rng);
                 self.remove_not_needed_samples(node_id, children);
                 sample
             }
@@ -177,11 +162,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
 
     /// Remove samples that are no longer needed to reduce memory usage. A sample is no
     /// longer needed if all it's parent nodes have a sample.
-    fn remove_not_needed_samples(
-        &mut self,
-        node_id: usize,
-        children: &[usize],
-    ) {
+    fn remove_not_needed_samples(&mut self, node_id: usize, children: &[usize]) {
         for child in children {
             let node = self.ddnnf.nodes.get(*child).expect(EXPECT_SAMPLE);
             if node.parents.iter().all(|parent| *parent <= node_id) {
@@ -255,14 +236,8 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         }
     }
 
-    fn complete_partial_configs(
-        &self,
-        sample: &mut Sample,
-        root: usize,
-        sat_solver: &SatWrapper,
-    ) {
-        let vars: Vec<i32> =
-            (1..=self.ddnnf.number_of_variables as i32).collect();
+    fn complete_partial_configs(&self, sample: &mut Sample, root: usize, sat_solver: &SatWrapper) {
+        let vars: Vec<i32> = (1..=self.ddnnf.number_of_variables as i32).collect();
         for config in sample.partial_configs.iter_mut() {
             for &var in vars.iter() {
                 if config.contains(var) || config.contains(-var) {
@@ -272,9 +247,10 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 config.update_sat_state(sat_solver, root);
 
                 // clone sat state so that we don't change the state that is cached in the config
-                let mut sat_state = config.get_sat_state().cloned().expect(
-                    "sat state should exist after calling update_sat_state()",
-                );
+                let mut sat_state = config
+                    .get_sat_state()
+                    .cloned()
+                    .expect("sat state should exist after calling update_sat_state()");
 
                 if sat_solver.is_sat_cached(&[var], &mut sat_state) {
                     config.add(var);
@@ -306,11 +282,9 @@ fn trim_and_resample(
     let t = min(sample.get_vars().len(), t);
     let (ranks, avg_rank) = calc_stats(&sample, t);
 
-    let (mut new_sample, literals_to_resample) =
-        trim_sample(&sample, &ranks, avg_rank);
+    let (mut new_sample, literals_to_resample) = trim_sample(&sample, &ranks, avg_rank);
 
-    let mut literals_to_resample: Vec<i32> =
-        literals_to_resample.into_iter().collect();
+    let mut literals_to_resample: Vec<i32> = literals_to_resample.into_iter().collect();
     literals_to_resample.sort_unstable();
     literals_to_resample.shuffle(rng);
 
@@ -333,12 +307,8 @@ fn trim_and_resample(
 }
 
 #[inline]
-fn trim_sample(
-    sample: &Sample,
-    ranks: &[f64],
-    avg_rank: f64,
-) -> (Sample, HashSet<i32>) {
-    let mut literals_to_resample: HashSet<i32> = HashSet::default();
+fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, HashSet<i32>) {
+    let mut literals_to_resample: HashSet<i32> = HashSet::new();
     let mut new_sample = Sample::new_from_samples(&[sample]);
     let complete_len = sample.complete_configs.len();
 
@@ -359,8 +329,7 @@ fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
     let mut unique_coverage = vec![0; sample.len()];
     let mut iter = TInteractionIter::new(sample.get_literals(), t);
     while let Some(interaction) = iter.next() {
-        if let Some(conf_index) = find_unique_covering_conf(sample, interaction)
-        {
+        if let Some(conf_index) = find_unique_covering_conf(sample, interaction) {
             unique_coverage[conf_index] += 1;
         }
     }
@@ -370,8 +339,7 @@ fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
 
     for (index, config) in sample.iter().enumerate() {
         let config_size = config.get_decided_literals().count();
-        ranks[index] =
-            unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
+        ranks[index] = unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
         sum += ranks[index];
     }
 
@@ -380,10 +348,7 @@ fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
 }
 
 #[inline]
-fn find_unique_covering_conf(
-    sample: &Sample,
-    interaction: &[i32],
-) -> Option<usize> {
+fn find_unique_covering_conf(sample: &Sample, interaction: &[i32]) -> Option<usize> {
     let mut result = None;
 
     for (index, config) in sample.iter().enumerate() {
@@ -399,11 +364,8 @@ fn find_unique_covering_conf(
     result
 }
 
-/// Saves a [SamplingResult] to file.
-pub fn save_sample_to_file(
-    sampling_result: &SamplingResult,
-    file_path: &str,
-) -> io::Result<()> {
+/// Saves the atomic set in an apropriate format to a file.
+pub fn save_sample_to_file(sampling_result: &SamplingResult, file_path: &str) -> io::Result<()> {
     let file_path = Path::new(file_path);
     if let Some(dir) = file_path.parent() {
         fs::create_dir_all(dir)?;
@@ -422,10 +384,7 @@ pub fn save_sample_to_file(
         SamplingResult::Void => wtr.write_record(iter::once("false"))?,
         ResultWithSample(sample) => {
             for (index, config) in sample.iter().enumerate() {
-                wtr.write_record([
-                    index.to_string(),
-                    format_vec(config.get_literals().iter()),
-                ])?;
+                wtr.write_record([index.to_string(), format_vec(config.get_literals().iter())])?;
             }
         }
     }
@@ -442,8 +401,7 @@ mod test {
     #[test]
     fn t_wise_sampling_validity() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf =
-            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         check_validity_samplingresult(&mut vp9, 1);
         check_validity_samplingresult(&mut vp9, 2);
@@ -477,12 +435,16 @@ mod test {
             for combi in possible_features.into_iter().combinations(t) {
                 // checks if the pair can be found in at least one of the samples
                 let combi_exists = |combi: &[i32]| -> bool {
-                    configs.iter().any(|config| {
-                        combi.iter().all(|&f| config[f.abs() as usize - 1] == f)
-                    })
+                    configs
+                        .iter()
+                        .any(|config| combi.iter().all(|&f| config[f.abs() as usize - 1] == f))
                 };
 
-                assert!(combi_exists(&combi) || !ddnnf.sat(&combi), "combination: {:?} can neither be convered with samples nor is it unsat", combi)
+                assert!(
+                    combi_exists(&combi) || !ddnnf.sat(&combi),
+                    "combination: {:?} can neither be convered with samples nor is it unsat",
+                    combi
+                )
             }
         }
     }

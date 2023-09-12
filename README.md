@@ -176,6 +176,7 @@ From here on, we can use the following types of queries:
 - ```enum```: lists complete satisfiable configurations
 - ```random```: gives uniform random samples (which are complete and satisfiable)
 - ```atomic```: computes atomic sets
+- ```atomic-cross```: computes atomic sets; a set can contain included and excluded features
 - ```save```: saves the d-DNNF for future use
 - ```exit```: leaves the stream mode
 
@@ -196,6 +197,7 @@ The table below depicts the possible combinations of a query type with the param
 | enum                   |     ✘     |      ✔      |   ✔   |   ✔  |   ✘  |
 | random                 |     ✘     |      ✔      |   ✔   |   ✔  |   ✘  |
 | atomic                 |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
+| atomic-cross           |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
 | save                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✔  |
 | exit                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✘  |
 

@@ -62,8 +62,7 @@ use self::util::open_file_savely;
 #[inline]
 pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
     let mut cnf_path = None;
-    if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str)
-    {
+    if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
             let file = open_file_savely(path);
             let lines = BufReader::new(file).lines();
@@ -177,16 +176,13 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
                 from
             }
             Literal { feature } => {
-                let literal_node =
-                    ddnnf_graph.add_node(TId::Literal { feature });
+                let literal_node = ddnnf_graph.add_node(TId::Literal { feature });
                 literals_nx.insert(feature, literal_node);
                 literal_node
             }
             True => ddnnf_graph.add_node(TId::True),
             False => ddnnf_graph.add_node(TId::False),
-            _ => panic!(
-                "Tried to parse the header of the .nnf at the wrong time"
-            ),
+            _ => panic!("Tried to parse the header of the .nnf at the wrong time"),
         });
     }
 
@@ -225,29 +221,26 @@ fn build_d4_ddnnf(
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> =
-        Rc::new(RefCell::new(HashMap::new()));
+    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> = Rc::new(RefCell::new(HashMap::new()));
 
-    let get_literal_indices =
-        |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
-         literals: Vec<i32>|
-         -> Vec<NodeIndex> {
-            let mut lit_nx = literals_nx.borrow_mut();
-            let mut literal_nodes = Vec::new();
+    let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
+                               literals: Vec<i32>|
+     -> Vec<NodeIndex> {
+        let mut lit_nx = literals_nx.borrow_mut();
+        let mut literal_nodes = Vec::new();
 
-            for literal in literals {
-                literal_nodes.push(match lit_nx.get(&literal) {
-                    Some(x) => *x,
-                    None => {
-                        let nx = ddnnf_graph
-                            .add_node(TId::Literal { feature: literal });
-                        lit_nx.insert(literal, nx);
-                        nx
-                    }
-                })
-            }
-            literal_nodes
-        };
+        for literal in literals {
+            literal_nodes.push(match lit_nx.get(&literal) {
+                Some(x) => *x,
+                None => {
+                    let nx = ddnnf_graph.add_node(TId::Literal { feature: literal });
+                    lit_nx.insert(literal, nx);
+                    nx
+                }
+            })
+        }
+        literal_nodes
+    };
 
     // while parsing:
     // remove the weighted edges and substitute it with the corresponding
@@ -259,23 +252,22 @@ fn build_d4_ddnnf(
     //                \   /                 /  |  \
     //                 n2                 Ln  n2  Lm
     //
-    let resolve_weighted_edge =
-        |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
-         from: NodeIndex,
-         to: NodeIndex,
-         edge: EdgeIndex,
-         weights: Vec<i32>| {
-            let and_node = ddnnf_graph.add_node(TId::And);
-            let literal_nodes = get_literal_indices(ddnnf_graph, weights);
+    let resolve_weighted_edge = |ddnnf_graph: &mut StableGraph<TId, Option<_>>,
+                                 from: NodeIndex,
+                                 to: NodeIndex,
+                                 edge: EdgeIndex,
+                                 weights: Vec<i32>| {
+        let and_node = ddnnf_graph.add_node(TId::And);
+        let literal_nodes = get_literal_indices(ddnnf_graph, weights);
 
-            ddnnf_graph.remove_edge(edge);
+        ddnnf_graph.remove_edge(edge);
 
-            ddnnf_graph.add_edge(from, and_node, None);
-            for node in literal_nodes {
-                ddnnf_graph.add_edge(and_node, node, None);
-            }
-            ddnnf_graph.add_edge(and_node, to, None);
-        };
+        ddnnf_graph.add_edge(from, and_node, None);
+        for node in literal_nodes {
+            ddnnf_graph.add_edge(and_node, node, None);
+        }
+        ddnnf_graph.add_edge(and_node, to, None);
+    };
 
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
@@ -286,20 +278,13 @@ fn build_d4_ddnnf(
         match next {
             Edge { from, to, features } => {
                 for f in &features {
-                    literal_occurences.borrow_mut()
-                        [f.unsigned_abs() as usize] = true;
+                    literal_occurences.borrow_mut()[f.unsigned_abs() as usize] = true;
                     total_features = max(total_features, f.unsigned_abs());
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
                 let edge = ddnnf_graph.add_edge(from_n, to_n, None);
-                resolve_weighted_edge(
-                    &mut ddnnf_graph,
-                    from_n,
-                    to_n,
-                    edge,
-                    features,
-                );
+                resolve_weighted_edge(&mut ddnnf_graph, from_n, to_n, edge, features);
             }
             And => indices.push(ddnnf_graph.add_node(TId::And)),
             Or => indices.push(ddnnf_graph.add_node(TId::Or)),
@@ -311,29 +296,25 @@ fn build_d4_ddnnf(
     let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
         Rc::new(RefCell::new(vec![None; (total_features + 1) as usize]));
 
-    let add_literal_node = |ddnnf_graph: &mut StableGraph<
-        TId,
-        Option<Vec<i32>>,
-    >,
-                            f_u32: u32,
-                            attach: NodeIndex| {
-        let f = f_u32 as i32;
-        let mut ort = or_triangles.borrow_mut();
+    let add_literal_node =
+        |ddnnf_graph: &mut StableGraph<TId, Option<_>>, f_u32: u32, attach: NodeIndex| {
+            let f = f_u32 as i32;
+            let mut ort = or_triangles.borrow_mut();
 
-        if ort[f_u32 as usize].is_some() {
-            ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), None);
-        } else {
-            let or = ddnnf_graph.add_node(TId::Or);
-            ort[f_u32 as usize] = Some(or);
+            if ort[f_u32 as usize].is_some() {
+                ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), None);
+            } else {
+                let or = ddnnf_graph.add_node(TId::Or);
+                ort[f_u32 as usize] = Some(or);
 
-            let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
-            let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
+                let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
+                let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
 
-            ddnnf_graph.add_edge(attach, or, None);
-            ddnnf_graph.add_edge(or, pos_lit, None);
-            ddnnf_graph.add_edge(or, neg_lit, None);
-        }
-    };
+                ddnnf_graph.add_edge(attach, or, None);
+                ddnnf_graph.add_edge(or, pos_lit, None);
+                ddnnf_graph.add_edge(or, neg_lit, None);
+            }
+        };
 
     let balance_or_children =
         |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
@@ -343,9 +324,7 @@ fn build_d4_ddnnf(
                 let and_node = ddnnf_graph.add_node(TId::And);
 
                 // place the newly created and node between the or node and its child
-                ddnnf_graph.remove_edge(
-                    ddnnf_graph.find_edge(from, child_nx).unwrap(),
-                );
+                ddnnf_graph.remove_edge(ddnnf_graph.find_edge(from, child_nx).unwrap());
                 ddnnf_graph.add_edge(from, and_node, None);
                 ddnnf_graph.add_edge(and_node, child_nx, None);
 
@@ -368,29 +347,26 @@ fn build_d4_ddnnf(
 
     // Starting from an initial AND node, we delete all parent AND nodes.
     // We can do this because the start node has a FALSE node as children. Hence, it count is 0!
-    let delete_parent_and_chain =
-        |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
-         start: NodeIndex| {
-            let mut current_vec = Vec::new();
-            let mut current = start;
-            loop {
-                if ddnnf_graph[current] == TId::And {
-                    // remove the AND node and all parent nodes that are also AND nodes
-                    let mut parents = ddnnf_graph
-                        .neighbors_directed(current, Incoming)
-                        .detach();
-                    while let Some(parent) = parents.next_node(ddnnf_graph) {
-                        current_vec.push(parent);
-                    }
-                    ddnnf_graph.remove_node(current);
+    let delete_parent_and_chain = |ddnnf_graph: &mut StableGraph<TId, Option<_>>,
+                                   start: NodeIndex| {
+        let mut current_vec = Vec::new();
+        let mut current = start;
+        loop {
+            if ddnnf_graph[current] == TId::And {
+                // remove the AND node and all parent nodes that are also AND nodes
+                let mut parents = ddnnf_graph.neighbors_directed(current, Incoming).detach();
+                while let Some(parent) = parents.next_node(ddnnf_graph) {
+                    current_vec.push(parent);
                 }
-
-                match current_vec.pop() {
-                    Some(head) => current = head,
-                    None => break,
-                }
+                ddnnf_graph.remove_node(current);
             }
-        };
+
+            match current_vec.pop() {
+                Some(head) => current = head,
+                None => break,
+            }
+        }
+    };
 
     // second dfs:
     // Remove the True and False node if any is part of the dDNNF.
@@ -399,8 +375,7 @@ fn build_d4_ddnnf(
     // Further, we decrease the size and complexity of the dDNNF.
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
-        let mut neighbours =
-            ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
+        let mut neighbours = ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
         loop {
             let next = neighbours.next(&ddnnf_graph);
             match next {
@@ -428,9 +403,7 @@ fn build_d4_ddnnf(
                             TId::Or => {
                                 ddnnf_graph.remove_edge(n_edge).unwrap();
                             }
-                            TId::And => {
-                                delete_parent_and_chain(&mut ddnnf_graph, nx)
-                            }
+                            TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
                             _ => {
                                 eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
                                 process::exit(1);
@@ -459,8 +432,7 @@ fn build_d4_ddnnf(
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut literal_diff: HashMap<NodeIndex, HashSet<i32>> =
-        get_literal_diffs(&ddnnf_graph, root);
+    let mut literal_diff: HashMap<NodeIndex, HashSet<i32>> = get_literal_diffs(&ddnnf_graph, root);
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         // edges between going from an and node to another node do not
@@ -477,7 +449,7 @@ fn build_d4_ddnnf(
                                 .unwrap()
                                 .clone()
                                 .drain()
-                                .map(|l| l.unsigned_abs() as u32),
+                                .map(|l| l.unsigned_abs()),
                         ),
                     )
                 })
@@ -500,9 +472,7 @@ fn build_d4_ddnnf(
 }
 
 // Computes the difference between the children of a Node
-fn diff(
-    literals: Vec<(NodeIndex, HashSet<u32>)>,
-) -> Vec<(NodeIndex, HashSet<u32>)> {
+fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32>)> {
     let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
     for i in 0..literals.len() {
         let mut val: HashSet<u32> = HashSet::default();

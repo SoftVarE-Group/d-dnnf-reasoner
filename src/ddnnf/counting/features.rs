@@ -27,10 +27,7 @@ impl Ddnnf {
     /// let _rm = fs::remove_file("./tests/data/smt_out.csv");
     ///
     /// ```
-    pub fn card_of_each_feature(
-        &mut self,
-        file_path: &str,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn card_of_each_feature(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         if self.max_worker == 1 {
             self.card_of_each_feature_single(file_path)
         } else {
@@ -40,10 +37,7 @@ impl Ddnnf {
 
     /// Computes the cardinality of features for all features in a model
     /// in a single threaded environment
-    fn card_of_each_feature_single(
-        &mut self,
-        file_path: &str,
-    ) -> Result<(), Box<dyn Error>> {
+    fn card_of_each_feature_single(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         // start the csv writer with the file_path
         let mut wtr = csv::Writer::from_path(file_path)?;
 
@@ -52,10 +46,7 @@ impl Ddnnf {
             wtr.write_record(vec![
                 work.to_string(),
                 cardinality.to_string(),
-                format!(
-                    "{:.20}",
-                    Float::with_val(200, cardinality) / self.rc()
-                ),
+                format!("{:.20}", Float::with_val(200, cardinality) / self.rc()),
             ])?;
         }
 
@@ -68,12 +59,8 @@ impl Ddnnf {
     ///     1) using channels for communication
     ///     2) cloning the ddnnf
     ///     3) sorting our results
-    fn card_of_each_feature_multi(
-        &mut self,
-        file_path: &str,
-    ) -> Result<(), Box<dyn Error>> {
-        let mut queue: WorkQueue<i32> =
-            WorkQueue::with_capacity(self.number_of_variables as usize);
+    fn card_of_each_feature_multi(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        let mut queue: WorkQueue<i32> = WorkQueue::with_capacity(self.number_of_variables as usize);
 
         // Create a MPSC (Multiple Producer, Single Consumer) channel. Every worker
         // is a producer, the main thread is a consumer; the producers put their
@@ -133,10 +120,7 @@ impl Ddnnf {
                     results.push((
                         feature,
                         cardinality.to_string(),
-                        format!(
-                            "{:.20}",
-                            Float::with_val(200, cardinality) / self.rc()
-                        ),
+                        format!("{:.20}", Float::with_val(200, cardinality) / self.rc()),
                     ));
                 }
                 Err(_) => {
@@ -155,11 +139,7 @@ impl Ddnnf {
         let mut wtr = csv::Writer::from_path(file_path)?;
 
         for element in results {
-            wtr.write_record(vec![
-                element.0.to_string(),
-                element.1,
-                element.2,
-            ])?;
+            wtr.write_record(vec![element.0.to_string(), element.1, element.2])?;
         }
 
         // Flush everything into the file that is still in a buffer
@@ -195,7 +175,10 @@ mod test {
         let mut should_be = File::open("./tests/data/VP9_sb_fs.csv").unwrap();
 
         // diff_files is true if the files are identical
-        assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
+        assert!(
+            diff_files(&mut is_single, &mut is_multi),
+            "card of features results of single und multi variant have differences"
+        );
         is_single = File::open("./tests/data/fcs.csv").unwrap();
         assert!(
             diff_files(&mut is_single, &mut should_be),
@@ -229,10 +212,16 @@ mod test {
         let mut should_be = File::open("./tests/data/VP9_sb_fs.csv").unwrap();
 
         // diff_files is true if the files are identical
-        assert!(diff_files(&mut is_single, &mut is_multi), "card of features results of single und multi variant have differences");
+        assert!(
+            diff_files(&mut is_single, &mut is_multi),
+            "card of features results of single und multi variant have differences"
+        );
         is_single = File::open("./tests/data/fcs1.csv").unwrap();
         is_multi = File::open("./tests/data/fcm1.csv").unwrap();
-        assert!(diff_files(&mut is_multi, &mut is_multi4), "card of features for multiple threads differs when using multiple threads");
+        assert!(
+            diff_files(&mut is_multi, &mut is_multi4),
+            "card of features for multiple threads differs when using multiple threads"
+        );
         assert!(
             diff_files(&mut is_single, &mut should_be),
             "card of features results differ from the expected results"

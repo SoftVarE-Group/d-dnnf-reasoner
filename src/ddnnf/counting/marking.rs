@@ -15,34 +15,19 @@ impl Ddnnf {
                     .iter()
                     .filter(|&&child| self.nodes[child].marker)
                     .collect::<Vec<&usize>>();
-                self.nodes[i].temp =
-                    if marked_children.len() <= children.len() / 2 {
-                        marked_children.iter().fold(
-                            self.nodes[i].count.clone(),
-                            |mut acc, &&index| {
-                                let node = &self.nodes[index];
-                                if node.count != 0 {
-                                    acc /= &node.count;
-                                }
-                                acc *= &node.temp;
-                                acc
-                            },
-                        )
-                    } else {
-                        Integer::product(children.iter().map(|&index| {
+                self.nodes[i].temp = if marked_children.len() <= children.len() / 2 {
+                    marked_children
+                        .iter()
+                        .fold(self.nodes[i].count.clone(), |mut acc, &&index| {
                             let node = &self.nodes[index];
-                            if node.marker {
-                                &node.temp
-                            } else {
-                                &node.count
+                            if node.count != 0 {
+                                acc /= &node.count;
                             }
-                        }))
-                        .complete()
-                    }
-            }
-            Or { children } => {
-                self.nodes[i].temp =
-                    Integer::sum(children.iter().map(|&index| {
+                            acc *= &node.temp;
+                            acc
+                        })
+                } else {
+                    Integer::product(children.iter().map(|&index| {
                         let node = &self.nodes[index];
                         if node.marker {
                             &node.temp
@@ -51,6 +36,18 @@ impl Ddnnf {
                         }
                     }))
                     .complete()
+                }
+            }
+            Or { children } => {
+                self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
+                    let node = &self.nodes[index];
+                    if node.marker {
+                        &node.temp
+                    } else {
+                        &node.count
+                    }
+                }))
+                .complete()
             }
             False => self.nodes[i].temp.assign(0),
             _ => self.nodes[i].temp.assign(1), // True and Literal
@@ -89,19 +86,14 @@ impl Ddnnf {
     /// The marking algorithm differs to the standard variation by only reomputing the
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
-    pub(crate) fn card_of_feature_with_marker(
-        &mut self,
-        feature: i32,
-    ) -> Integer {
+    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
         if self.has_no_effect_on_query(&feature) {
             self.rc()
         } else if self.makes_query_unsat(&feature) {
             Integer::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
-                Some(i) => {
-                    self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node)
-                }
+                Some(i) => self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node),
                 // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
                 None => self.rc(),
             }
@@ -120,8 +112,7 @@ impl Ddnnf {
             Integer::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
-            let indexes: Vec<usize> =
-                self.map_features_opposing_indexes(&features);
+            let indexes: Vec<usize> = self.map_features_opposing_indexes(&features);
             if indexes.is_empty() {
                 return self.rc();
             }

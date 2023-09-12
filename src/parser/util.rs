@@ -13,8 +13,7 @@ use crate::Node;
 // multiplies the count of all child Nodes of an And Node
 #[inline]
 pub(super) fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
-    Integer::product(indices.iter().map(|&index| &nodes[index].count))
-        .complete()
+    Integer::product(indices.iter().map(|&index| &nodes[index].count)).complete()
 }
 
 // adds up the count of all child Nodes of an And Node
