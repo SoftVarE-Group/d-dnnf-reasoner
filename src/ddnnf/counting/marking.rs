@@ -5,6 +5,55 @@ use crate::Ddnnf;
 
 impl Ddnnf {
     #[inline]
+    pub(crate) fn annotate_partial_derivatives(&mut self) {
+        for node in self.nodes.iter_mut() {
+            node.partial_derivative.assign(Integer::ZERO);
+        }
+        
+        let total_nodes = self.nodes.len();
+        self.nodes[total_nodes - 1].partial_derivative.assign(Integer::ONE);
+        for i in (0..total_nodes).rev() {
+            self.annotate_single_partial_derivative(i);
+        }
+    }
+
+    #[inline]
+    fn annotate_single_partial_derivative(&mut self, i: usize) {
+        match &self.nodes[i].ntype {
+            And { children } => {
+                let children_c = children.clone();
+                for &child in children_c.iter() {
+                    let mut current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
+                    
+                    for &other_child in children_c.iter() {
+                        if child != other_child {
+                            current_node_partial_derivative *= &self.nodes[other_child].count;
+                        }
+                    }
+                    
+                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
+                }
+            }
+            Or { children } => {
+                let current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
+                for child in children.clone() {
+                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
+                }
+            }
+            _ => (), // True, False, and Literal
+        }
+    }
+
+    #[inline]
+    pub(crate) fn card_of_feature_with_partial_derivatives(&mut self, feature: i32) -> Integer {
+        match self.literals.get(&-feature).cloned() {
+            Some(i) => self.rc() - &self.nodes[i].partial_derivative,
+            // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
+            None => self.rc(),
+        }
+    }
+
+    #[inline]
     // Computes the cardinality of a node using the marking algorithm:
     // And and Or nodes that base the computation on their child nodes use the
     // .temp value if the child node is marked and the .count value if not

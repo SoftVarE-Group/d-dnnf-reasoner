@@ -512,6 +512,11 @@ fn main() {
             path
         );
     }
+
+    // prints heuristics
+    if cli.heuristics {
+        ddnnf.print_all_heuristics();
+    }
 }
 
 fn compute_queries<T: ToString + Ord + Send + 'static>(

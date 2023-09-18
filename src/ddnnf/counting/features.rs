@@ -29,7 +29,7 @@ impl Ddnnf {
     /// ```
     pub fn card_of_each_feature(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         if self.max_worker == 1 {
-            self.card_of_each_feature_single(file_path)
+            self.card_of_each_feature_single_partial_derivatives(file_path)
         } else {
             self.card_of_each_feature_multi(file_path)
         }
@@ -37,12 +37,32 @@ impl Ddnnf {
 
     /// Computes the cardinality of features for all features in a model
     /// in a single threaded environment
-    fn card_of_each_feature_single(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
+    fn _card_of_each_feature_single(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         // start the csv writer with the file_path
         let mut wtr = csv::Writer::from_path(file_path)?;
 
         for work in 1_i32..self.number_of_variables as i32 + 1 {
             let cardinality = self.card_of_feature_with_marker(work);
+            wtr.write_record(vec![
+                work.to_string(),
+                cardinality.to_string(),
+                format!("{:.20}", Float::with_val(200, cardinality) / self.rc()),
+            ])?;
+        }
+
+        Ok(())
+    }
+
+    /// Computes the cardinality of features for all features in a model
+    /// in a single threaded environment. Uses partial derivatives as proposed by Darwich.
+    fn card_of_each_feature_single_partial_derivatives(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        self.annotate_partial_derivatives();
+ 
+        // start the csv writer with the file_path
+        let mut wtr = csv::Writer::from_path(file_path)?;
+
+        for work in 1_i32..self.number_of_variables as i32 + 1 {
+            let cardinality = self.card_of_feature_with_partial_derivatives(work);
             wtr.write_record(vec![
                 work.to_string(),
                 cardinality.to_string(),
@@ -195,10 +215,10 @@ mod test {
         ddnnf.max_worker = 1;
 
         ddnnf
-            .card_of_each_feature_single("./tests/data/fcs1.csv")
+            ._card_of_each_feature_single("./tests/data/fcs1.csv")
             .unwrap();
         ddnnf
-            .card_of_each_feature_single("./tests/data/fcm1.csv")
+            ._card_of_each_feature_single("./tests/data/fcm1.csv")
             .unwrap();
 
         ddnnf.max_worker = 4;
