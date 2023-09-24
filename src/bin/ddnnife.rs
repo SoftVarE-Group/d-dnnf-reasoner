@@ -551,6 +551,7 @@ fn main() {
                             "scount_unit_clause",
                             "scount_sub-dag_recompile",
                             "scount_recompile",
+                            "scount_undo",
                             "scount_error",
                         ])
                         .unwrap();
@@ -570,7 +571,7 @@ fn main() {
                 let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                 use rand::prelude::SliceRandom;
                 clauses.shuffle(&mut rng);
-                let total_clauses = cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100);
+                let total_clauses = cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100_000);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses {
                         break;
@@ -641,16 +642,17 @@ fn main() {
                 println!("Total time naive method:     {total_naive:.10}");
                 println!("Total time recompile method: {total_recompile:.10}");
                 use IncrementalStrategy::*;
-                let flattend_strategies: (u32, u32, u32, u32, u32) = strategy
+                let flattend_strategies: (u32, u32, u32, u32, u32, u32) = strategy
                     .into_iter()
                     .flatten()
-                    .fold((0, 0, 0, 0, 0), |mut acc, next| {
+                    .fold((0, 0, 0, 0, 0, 0), |mut acc, next| {
                         match next {
                             Tautology => acc.0 += 1,
                             UnitClause => acc.1 += 1,
                             SubDAGReplacement => acc.2 += 1,
                             Recompile => acc.3 += 1,
-                            Error => acc.4 += 1,
+                            Undo => acc.4 += 1,
+                            Error => acc.5 += 1,
                         };
                         acc
                     });
@@ -661,12 +663,14 @@ fn main() {
                     \n\tUnit Clause:         {}\
                     \n\tSub-DAG Replacement: {}\
                     \n\tRecompile:           {}\
+                    \n\tUndo:                {}\
                     \n\tError:               {}",
                     flattend_strategies.0,
                     flattend_strategies.1,
                     flattend_strategies.2,
                     flattend_strategies.3,
-                    flattend_strategies.4
+                    flattend_strategies.4,
+                    flattend_strategies.5
                 );
 
                 let stdev_base = if base_raw.len() >= 2 {
@@ -705,6 +709,7 @@ fn main() {
                         flattend_strategies.2.to_string(),
                         flattend_strategies.3.to_string(),
                         flattend_strategies.4.to_string(),
+                        flattend_strategies.5.to_string(),
                     ])
                     .unwrap();
                 raw_wtr.flush().unwrap();

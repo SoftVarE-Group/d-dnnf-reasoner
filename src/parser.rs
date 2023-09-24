@@ -41,6 +41,8 @@ use petgraph::{
 
 use self::util::open_file_savely;
 
+type DdnnfGraph = StableGraph<TId, Option<Vec<i32>>>;
+
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
 ///
@@ -148,8 +150,7 @@ pub fn distribute_building(
 #[inline]
 fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     use C2DToken::*;
-
-    let mut ddnnf_graph = StableGraph::<TId, Option<Vec<i32>>>::new();
+    let mut ddnnf_graph = DdnnfGraph::new();
     let mut node_indices = Vec::with_capacity(lines.len());
     let mut literals_nx: HashMap<i32, NodeIndex> = HashMap::new();
 
@@ -208,7 +209,7 @@ fn build_d4_ddnnf(
     total_features_opt: Option<u32>,
     cnf_path: Option<&str>,
 ) -> Ddnnf {
-    let mut ddnnf_graph = StableGraph::<TId, Option<Vec<i32>>>::new();
+    let mut ddnnf_graph = DdnnfGraph::new();
 
     let mut total_features = total_features_opt.unwrap_or(0);
     let literal_occurences: Rc<RefCell<Vec<bool>>> =
@@ -223,24 +224,23 @@ fn build_d4_ddnnf(
     // for the balancing of the or nodes to archieve smoothness
     let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> = Rc::new(RefCell::new(HashMap::new()));
 
-    let get_literal_indices = |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
-                               literals: Vec<i32>|
-     -> Vec<NodeIndex> {
-        let mut lit_nx = literals_nx.borrow_mut();
-        let mut literal_nodes = Vec::new();
+    let get_literal_indices =
+        |ddnnf_graph: &mut DdnnfGraph, literals: Vec<i32>| -> Vec<NodeIndex> {
+            let mut lit_nx = literals_nx.borrow_mut();
+            let mut literal_nodes = Vec::new();
 
-        for literal in literals {
-            literal_nodes.push(match lit_nx.get(&literal) {
-                Some(x) => *x,
-                None => {
-                    let nx = ddnnf_graph.add_node(TId::Literal { feature: literal });
-                    lit_nx.insert(literal, nx);
-                    nx
-                }
-            })
-        }
-        literal_nodes
-    };
+            for literal in literals {
+                literal_nodes.push(match lit_nx.get(&literal) {
+                    Some(x) => *x,
+                    None => {
+                        let nx = ddnnf_graph.add_node(TId::Literal { feature: literal });
+                        lit_nx.insert(literal, nx);
+                        nx
+                    }
+                })
+            }
+            literal_nodes
+        };
 
     // while parsing:
     // remove the weighted edges and substitute it with the corresponding
@@ -252,7 +252,7 @@ fn build_d4_ddnnf(
     //                \   /                 /  |  \
     //                 n2                 Ln  n2  Lm
     //
-    let resolve_weighted_edge = |ddnnf_graph: &mut StableGraph<TId, Option<_>>,
+    let resolve_weighted_edge = |ddnnf_graph: &mut DdnnfGraph,
                                  from: NodeIndex,
                                  to: NodeIndex,
                                  edge: EdgeIndex,
@@ -296,28 +296,27 @@ fn build_d4_ddnnf(
     let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
         Rc::new(RefCell::new(vec![None; (total_features + 1) as usize]));
 
-    let add_literal_node =
-        |ddnnf_graph: &mut StableGraph<TId, Option<_>>, f_u32: u32, attach: NodeIndex| {
-            let f = f_u32 as i32;
-            let mut ort = or_triangles.borrow_mut();
+    let add_literal_node = |ddnnf_graph: &mut DdnnfGraph, f_u32: u32, attach: NodeIndex| {
+        let f = f_u32 as i32;
+        let mut ort = or_triangles.borrow_mut();
 
-            if ort[f_u32 as usize].is_some() {
-                ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), None);
-            } else {
-                let or = ddnnf_graph.add_node(TId::Or);
-                ort[f_u32 as usize] = Some(or);
+        if ort[f_u32 as usize].is_some() {
+            ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), None);
+        } else {
+            let or = ddnnf_graph.add_node(TId::Or);
+            ort[f_u32 as usize] = Some(or);
 
-                let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
-                let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
+            let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
+            let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
 
-                ddnnf_graph.add_edge(attach, or, None);
-                ddnnf_graph.add_edge(or, pos_lit, None);
-                ddnnf_graph.add_edge(or, neg_lit, None);
-            }
-        };
+            ddnnf_graph.add_edge(attach, or, None);
+            ddnnf_graph.add_edge(or, pos_lit, None);
+            ddnnf_graph.add_edge(or, neg_lit, None);
+        }
+    };
 
     let balance_or_children =
-        |ddnnf_graph: &mut StableGraph<TId, Option<Vec<i32>>>,
+        |ddnnf_graph: &mut DdnnfGraph,
          from: NodeIndex,
          children: Vec<(NodeIndex, HashSet<u32>)>| {
             for (child_nx, child_literals) in children {
@@ -347,8 +346,7 @@ fn build_d4_ddnnf(
 
     // Starting from an initial AND node, we delete all parent AND nodes.
     // We can do this because the start node has a FALSE node as children. Hence, it count is 0!
-    let delete_parent_and_chain = |ddnnf_graph: &mut StableGraph<TId, Option<_>>,
-                                   start: NodeIndex| {
+    let delete_parent_and_chain = |ddnnf_graph: &mut DdnnfGraph, start: NodeIndex| {
         let mut current_vec = Vec::new();
         let mut current = start;
         loop {
@@ -491,7 +489,7 @@ fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32
 
 /// Computes the combined literals used in its children
 pub fn get_literal_diffs(
-    di_graph: &StableGraph<TId, Option<Vec<i32>>>,
+    di_graph: &DdnnfGraph,
     root: NodeIndex,
 ) -> HashMap<NodeIndex, HashSet<i32>> {
     let mut safe: HashMap<NodeIndex, HashSet<i32>> = HashMap::new();
@@ -504,7 +502,7 @@ pub fn get_literal_diffs(
 
 /// Computes the combined literals used in its children
 pub fn extend_literal_diffs(
-    di_graph: &StableGraph<TId, Option<Vec<i32>>>,
+    di_graph: &DdnnfGraph,
     current_safe: &mut HashMap<NodeIndex, HashSet<i32>>,
     root: NodeIndex,
 ) {
@@ -518,7 +516,7 @@ pub fn extend_literal_diffs(
 
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
-    di_graph: &StableGraph<TId, Option<Vec<i32>>>,
+    di_graph: &DdnnfGraph,
     safe: &mut HashMap<NodeIndex, HashSet<i32>>,
     deciding_node_child: NodeIndex,
 ) -> HashSet<i32> {
