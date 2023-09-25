@@ -121,10 +121,50 @@ impl Ddnnf {
         self.nodes[self.nodes.len() - 1].count.clone()
     }
 
-    // returns the current temp count of the root node in the ddnnf
+    // Returns the current temp count of the root node in the ddnnf
     // that value is changed during computations
     fn rt(&self) -> Integer {
         self.nodes[self.nodes.len() - 1].temp.clone()
+    }
+
+    /// Computes the total number of nodes in the dDNNF
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Computes the total number of edges in the dDNNF
+    pub fn edge_count(&self) -> usize {
+        use crate::NodeType::*;
+        let mut total_edges = 0;
+
+        for node in self.nodes.iter() {
+            match &node.ntype {
+                And { children } | Or { children } => {
+                    total_edges += children.len();
+                },
+                _ => ()
+            }
+        }
+        total_edges
+    }
+
+    /// Computes the sharing of nodes in the dDNNF.
+    /// We define sharing as #nodes / #nodes as tree
+    pub fn sharing(&self) -> f64 {
+        use crate::NodeType::*;
+        let mut sub_nodes = vec![0_u64; self.node_count()];
+
+        for (index, node) in self.nodes.iter().enumerate() {
+            match &node.ntype {
+                And { children } | Or { children } => {
+                    sub_nodes[index] = children.iter().fold(0, |acc, &i| acc + sub_nodes[i]) + 1
+                },
+                _ => {
+                    sub_nodes[index] = 1
+                }
+            }
+        }
+        self.node_count() as f64 / sub_nodes.last().unwrap().to_owned() as f64
     }
 
     /// Determines the positions of the inverted featueres
@@ -171,6 +211,20 @@ mod test {
     use serial_test::serial;
 
     use crate::parser::{build_ddnnf, intermediate_representation::ClauseApplication};
+
+    #[test]
+    #[serial]
+    fn metrics() {
+        let ddnnf_small_ex = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        assert_eq!(12, ddnnf_small_ex.node_count());
+        assert_eq!(11, ddnnf_small_ex.edge_count());
+        assert!((1.0 - ddnnf_small_ex.sharing()).abs() < 1e-7);
+
+        let ddnnf_x264 = build_ddnnf("tests/data/VP9.cnf", None);
+        assert_eq!(156, ddnnf_x264.node_count());
+        assert_eq!(193, ddnnf_x264.edge_count());
+        assert!((156.0/(193.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
+    }
 
     #[test]
     #[serial]

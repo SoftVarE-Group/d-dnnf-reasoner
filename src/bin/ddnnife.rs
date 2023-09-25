@@ -502,6 +502,7 @@ fn main() {
                 let mut diff_naive;
                 let mut total_recompile = 0.0;
                 let mut diff_recompile;
+                let mut diffs_nodes = 0; let mut diffs_edges = 0; let mut diffs_share = 0;
                 let cnf_s = cli.file_path.unwrap();
                 let mut start;
 
@@ -517,7 +518,19 @@ fn main() {
                     .len();
                 if file_size == 0 {
                     raw_wtr
-                        .write_record(["model", "base", "optimized", "benefit", "strategy"])
+                        .write_record([
+                            "model",
+                            "base",
+                            "optimized",
+                            "benefit",
+                            "strategy",
+                            "nodes_base",
+                            "nodes_opt",
+                            "edges_base",
+                            "edges_opt",
+                            "sharing_base",
+                            "sharing_opt",
+                        ])
                         .unwrap();
                 }
 
@@ -535,6 +548,7 @@ fn main() {
                     total_wtr
                         .write_record([
                             "model",
+                            "total_operations",
                             "base_total",
                             "base_avg",
                             "base_med",
@@ -553,6 +567,9 @@ fn main() {
                             "scount_recompile",
                             "scount_undo",
                             "scount_error",
+                            "diff_nodes",
+                            "diff_edges",
+                            "diff_share"
                         ])
                         .unwrap();
                 }
@@ -608,6 +625,16 @@ fn main() {
                         );
                     }
 
+                    if (base_ddnnf.node_count() as i64 - inter_ddnnf.node_count() as i64).abs() > 10 {
+                        diffs_nodes += 1;
+                    }
+                    if (base_ddnnf.edge_count() as i64 - inter_ddnnf.edge_count() as i64).abs() > 10 {
+                        diffs_edges += 1;
+                    }
+                    if (base_ddnnf.sharing() - inter_ddnnf.sharing()).abs() > 1e-3 {
+                        diffs_share += 1;
+                    }
+
                     raw_wtr
                         .write_record(&[
                             input_file_path.clone(),
@@ -615,6 +642,12 @@ fn main() {
                             diff_recompile.to_string(),
                             benefit.to_string(),
                             format!("{:?}", current_strategy[0]),
+                            base_ddnnf.node_count().to_string(),
+                            inter_ddnnf.node_count().to_string(),
+                            base_ddnnf.edge_count().to_string(),
+                            inter_ddnnf.edge_count().to_string(),
+                            base_ddnnf.sharing().to_string(),
+                            inter_ddnnf.sharing().to_string(),
                         ])
                         .unwrap();
 
@@ -692,6 +725,7 @@ fn main() {
                 total_wtr
                     .write_record(&[
                         input_file_path.clone(),
+                        total_clauses.to_string(),
                         total_naive.to_string(),
                         mean(&base_raw).to_string(),
                         median(&base_raw).to_string(),
@@ -710,6 +744,9 @@ fn main() {
                         flattend_strategies.3.to_string(),
                         flattend_strategies.4.to_string(),
                         flattend_strategies.5.to_string(),
+                        diffs_nodes.to_string(),
+                        diffs_edges.to_string(),
+                        diffs_share.to_string(),
                     ])
                     .unwrap();
                 raw_wtr.flush().unwrap();
