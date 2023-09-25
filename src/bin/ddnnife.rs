@@ -502,7 +502,9 @@ fn main() {
                 let mut diff_naive;
                 let mut total_recompile = 0.0;
                 let mut diff_recompile;
-                let mut diffs_nodes = 0; let mut diffs_edges = 0; let mut diffs_share = 0;
+                let mut diffs_nodes = 0;
+                let mut diffs_edges = 0;
+                let mut diffs_share = 0;
                 let cnf_s = cli.file_path.unwrap();
                 let mut start;
 
@@ -569,7 +571,7 @@ fn main() {
                             "scount_error",
                             "diff_nodes",
                             "diff_edges",
-                            "diff_share"
+                            "diff_share",
                         ])
                         .unwrap();
                 }
@@ -625,10 +627,12 @@ fn main() {
                         );
                     }
 
-                    if (base_ddnnf.node_count() as i64 - inter_ddnnf.node_count() as i64).abs() > 10 {
+                    if (base_ddnnf.node_count() as i64 - inter_ddnnf.node_count() as i64).abs() > 10
+                    {
                         diffs_nodes += 1;
                     }
-                    if (base_ddnnf.edge_count() as i64 - inter_ddnnf.edge_count() as i64).abs() > 10 {
+                    if (base_ddnnf.edge_count() as i64 - inter_ddnnf.edge_count() as i64).abs() > 10
+                    {
                         diffs_edges += 1;
                     }
                     if (base_ddnnf.sharing() - inter_ddnnf.sharing()).abs() > 1e-3 {

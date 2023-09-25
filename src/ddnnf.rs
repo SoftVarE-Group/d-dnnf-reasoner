@@ -141,8 +141,8 @@ impl Ddnnf {
             match &node.ntype {
                 And { children } | Or { children } => {
                     total_edges += children.len();
-                },
-                _ => ()
+                }
+                _ => (),
             }
         }
         total_edges
@@ -158,10 +158,8 @@ impl Ddnnf {
             match &node.ntype {
                 And { children } | Or { children } => {
                     sub_nodes[index] = children.iter().fold(0, |acc, &i| acc + sub_nodes[i]) + 1
-                },
-                _ => {
-                    sub_nodes[index] = 1
                 }
+                _ => sub_nodes[index] = 1,
             }
         }
         self.node_count() as f64 / sub_nodes.last().unwrap().to_owned() as f64
@@ -223,7 +221,7 @@ mod test {
         let ddnnf_x264 = build_ddnnf("tests/data/VP9.cnf", None);
         assert_eq!(156, ddnnf_x264.node_count());
         assert_eq!(193, ddnnf_x264.edge_count());
-        assert!((156.0/(193.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
+        assert!((156.0 / (193.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
     }
 
     #[test]

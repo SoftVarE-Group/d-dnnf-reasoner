@@ -1,15 +1,56 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::{Debug, self}, rc::Rc};
 
-#[derive(Clone, Debug)]
 pub(crate) struct FixedFifo<T> {
     buffer: VecDeque<T>,
+    conflict_fn: Rc<dyn Fn(&T) -> bool>,
     max_size: usize,
 }
 
+// Manually implement Clone for FixedFifo because it cannot be derived automatically
+impl<T> Clone for FixedFifo<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        FixedFifo {
+            buffer: self.buffer.clone(),
+            conflict_fn: self.conflict_fn.clone(),
+            max_size: self.max_size,
+        }
+    }
+}
+
+impl<T> Debug for FixedFifo<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("FixedFifo")
+            .field("buffer", &self.buffer)
+            .field("max_size", &self.max_size)
+            .finish()
+    }
+}
+
+unsafe impl<T> Send for FixedFifo<T>
+where
+    T: Send,
+{
+}
+
 impl<T> FixedFifo<T> {
-    pub(crate) fn new(max_size: usize) -> Self {
+    pub(crate) fn new(max_size: usize, conflict_fn: Rc<dyn Fn(&T) -> bool>) -> Self {
         FixedFifo {
             buffer: VecDeque::with_capacity(max_size),
+            conflict_fn,
+            max_size,
+        }
+    }
+
+    pub(crate) fn _new_wo_conflict(max_size: usize) -> Self {
+        FixedFifo {
+            buffer: VecDeque::with_capacity(max_size),
+            conflict_fn: Rc::new(|_| true),
             max_size,
         }
     }
@@ -21,20 +62,17 @@ impl<T> FixedFifo<T> {
         self.buffer.push_back(item);
     }
 
-    pub(crate) fn conflicting_push<F>(&mut self, item: T, _conflict: F)
-    where
-        F: Fn(&T) -> bool,
-    {
-        self.buffer.retain(|item| !_conflict(item));
+    pub(crate) fn conflicting_push(&mut self, item: T) {
+        self.buffer.retain(|item| !(self.conflict_fn)(item));
         if self.buffer.len() >= self.max_size {
             self.buffer.pop_front();
         }
         self.buffer.push_back(item);
     }
 
-    pub(crate) fn find_and_remove<F>(&mut self, predicate: F) -> Option<T>
+    pub(crate) fn find_and_remove<FR>(&mut self, predicate: FR) -> Option<T>
     where
-        F: Fn(&T) -> bool,
+        FR: Fn(&T) -> bool,
     {
         if let Some(index) = self.buffer.iter().position(|item| predicate(item)) {
             // Use drain to remove and return the matching item.
@@ -47,6 +85,10 @@ impl<T> FixedFifo<T> {
 
     pub(crate) fn len(&mut self) -> usize {
         return self.buffer.len();
+    }
+
+    fn _switch_conflict_fn(&mut self, conflict_fn_replacement: Rc<dyn Fn(&T) -> bool>) {
+        self.conflict_fn = conflict_fn_replacement
     }
 
     pub(crate) fn _get(&self, index: usize) -> Option<&T> {
@@ -63,12 +105,14 @@ impl<T> FixedFifo<T> {
 
 #[cfg(test)]
 mod test {
+    use std::rc::Rc;
+
     use super::FixedFifo;
 
     #[test]
     fn size_restriction() {
         const MAX_SIZE: usize = 3;
-        let mut fsb = FixedFifo::new(MAX_SIZE);
+        let mut fsb = FixedFifo::_new_wo_conflict(MAX_SIZE);
 
         let mut vec: Vec<i32> = vec![];
         assert_eq!(vec, fsb._get_buffer());
@@ -85,13 +129,14 @@ mod test {
 
     #[test]
     fn push_with_conflicts() {
-        let mut fsb = FixedFifo::new(10);
+        let mut fsb = FixedFifo::new(10, Rc::new(|other| other % 2 != 0));
         for i in 1..=10 {
-            fsb.conflicting_push(i, |other| other % 2 != 0);
+            fsb.conflicting_push(i);
         }
         assert_eq!(vec![2, 4, 6, 8, 10], fsb._get_buffer());
 
-        fsb.conflicting_push(20, |other| 20 % other == 0);
+        fsb._switch_conflict_fn(Rc::new(|other| 20 % other == 0));
+        fsb.conflicting_push(20);
         assert_eq!(vec![6, 8, 20], fsb._get_buffer());
     }
 }

@@ -7,10 +7,10 @@ use std::{
     io::Write,
     ops::Not,
     panic,
-    time::Instant,
+    time::Instant, rc::Rc,
 };
 
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use petgraph::{
     algo::is_cyclic_directed,
     stable_graph::{NodeIndex, StableGraph},
@@ -33,14 +33,13 @@ use self::fixed_fifo::FixedFifo;
 
 use super::{calc_and_count, calc_or_count, from_cnf::apply_decisions, DdnnfGraph};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 const MERMAID_DEBUG: bool = false;
 const MAX_CACHED_SUB_DAGS: usize = 10;
+type SubDAGInfo = (NodeIndex, DdnnfGraph, NodeIndex);
 type CachedSubDag = (
     (Vec<i32>, ClauseApplication),
-    NodeIndex,
-    DdnnfGraph,
-    NodeIndex,
+    Either<SubDAGInfo, IntermediateGraph>,
 );
 
 /// The IntermediateGraph enables us to modify the dDNNF. The structure of a vector of nodes does not allow
@@ -60,7 +59,7 @@ impl Default for IntermediateGraph {
     fn default() -> Self {
         IntermediateGraph {
             graph: DdnnfGraph::default(),
-            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS),
+            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, Rc::new(|_| true)),
             root: NodeIndex::default(),
             number_of_variables: 0,
             literals_nx: HashMap::default(),
@@ -124,7 +123,7 @@ impl IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
             graph,
-            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS),
+            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, Rc::new(|_| true)),
             root,
             number_of_variables,
             literals_nx,
@@ -592,17 +591,8 @@ impl IntermediateGraph {
         cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
         let sup = build_ddnnf(INTER_CNF, None);
-        self.cache.conflicting_push(
-            (
-                (clause.clone(), application),
-                sup.inter_graph.root,
-                self.graph.clone(),
-                self.root,
-            ),
-            |_| true,
-        );
+        self.switch_sub_dag(clause.clone(), application, Either::Right(sup.inter_graph));
 
-        self.move_inter_graph(sup.inter_graph);
         self.rebuild(None);
         println!("For clause: {:?}, Recompiled everything", clause);
     }
@@ -618,18 +608,18 @@ impl IntermediateGraph {
 
         if DEBUG {
             println!("Cache entries: {}", self.cache.len());
-            for (clause, _, _, _) in self.cache._get_buffer() {
+            for (clause, _) in self.cache._get_buffer() {
                 println!("Clause: {:?}", clause);
             }
         }
 
         match self
             .cache
-            .find_and_remove(|item: &((Vec<i32>, ClauseApplication), _, _, _)| {
+            .find_and_remove(|item: &((Vec<i32>, ClauseApplication), _)| {
                 item.0 == (clause.clone(), !application)
             }) {
-            Some(((clause, application), switch, graph, root)) => {
-                self.switch_sub_dag(switch, &graph, root);
+            Some(((clause, application), replacement)) => {
+                self.switch_sub_dag(clause.clone(), !application, replacement);
                 if application == ClauseApplication::Add {
                     let clause_set = clause.iter().cloned().collect::<HashSet<_>>();
                     self.cnf_clauses.retain(|cnf_clause| {
@@ -725,18 +715,13 @@ impl IntermediateGraph {
         }
 
         self.switch_sub_dag(
-            adjusted_replace,
-            &sup.inter_graph.graph,
-            sup.inter_graph.root,
-        );
-        self.cache.conflicting_push(
-            (
-                (clause, application),
+            clause,
+            application,
+            Either::Left((
                 adjusted_replace,
                 sup.inter_graph.graph,
                 sup.inter_graph.root,
-            ),
-            |_| true,
+            )),
         );
 
         IncrementalStrategy::SubDAGReplacement
@@ -744,77 +729,124 @@ impl IntermediateGraph {
 
     fn switch_sub_dag(
         &mut self,
-        switching_node: NodeIndex,
-        other: &DdnnfGraph,
-        other_root: NodeIndex,
+        clause: Vec<i32>,
+        application: ClauseApplication,
+        replacement: Either<SubDAGInfo, IntermediateGraph>,
     ) {
         println!("START SWITCHING");
-        // remove all edges and nodes of the current sub DAG
-        let mut dfs = DfsPostOrder::new(&self.graph, switching_node);
-        while let Some(nx) = dfs.next(&self.graph) {
-            let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
-            while let Some((child_edge, child_node)) = children.next(&self.graph) {
-                self.graph.remove_edge(child_edge);
-                if self.graph.neighbors_directed(nx, Incoming).count() == 0 {
-                    self.graph.remove_node(child_node);
+        match replacement {
+            Either::Left((switching_node, other, other_root)) => {
+                // extract sub DAG that we want to cache
+                let mut rep_ddnnf_graph = DdnnfGraph::new();
+                let mut dfs = DfsPostOrder::new(&self.graph, switching_node);
+                let mut rep_cache = HashMap::new();
+                let mut lit_cache = HashMap::new();
+                while let Some(nx) = dfs.next(&self.graph) {
+                    let new_nx = match self.graph[nx] {
+                        // map literal nodes to already existing nodes
+                        TId::Literal { feature } => match lit_cache.get(&feature) {
+                            Some(self_nx) => *self_nx,
+                            None => {
+                                let lit_nx = rep_ddnnf_graph.add_node(TId::Literal { feature });
+                                lit_cache.insert(feature, lit_nx);
+                                lit_nx
+                            }
+                        },
+                        // everything else can just be added
+                        _ => rep_ddnnf_graph.add_node(self.graph[nx]),
+                    };
+                    rep_cache.insert(nx, new_nx);
+
+                    let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+                    while let Some((child_ex, child_nx)) = children.next(&self.graph) {
+                        rep_ddnnf_graph.add_edge(
+                            new_nx,
+                            *rep_cache.get(&child_nx).unwrap(),
+                            self.graph[child_ex].clone(),
+                        );
+                    }
+
+                    // remove all edges and nodes of the current sub DAG
+                    let mut children = self.graph.neighbors_directed(nx, Outgoing).detach();
+                    while let Some((child_edge, child_node)) = children.next(&self.graph) {
+                        self.graph.remove_edge(child_edge);
+                        if self.graph.neighbors_directed(nx, Incoming).count() == 0 {
+                            self.graph.remove_node(child_node);
+                        }
+                    }
+                }
+                self.cache.conflicting_push((
+                    (clause, application),
+                    Either::Left((
+                        switching_node,
+                        rep_ddnnf_graph,
+                        *rep_cache.get(&switching_node).unwrap(),
+                    )),
+                ));
+
+                println!("FINISHED REMOVING - START SWITCHING");
+
+                if MERMAID_DEBUG {
+                    let mut sup = Ddnnf::default();
+                    sup.inter_graph.graph = other.clone();
+                    sup.rebuild();
+                    write_as_mermaid_md(&sup, &[], "sub.md", None).unwrap();
+                }
+
+                // add edges and nodes of the replacement
+                let mut dfs = DfsPostOrder::new(&other, other_root);
+                let mut cache = HashMap::new();
+                while let Some(nx) = dfs.next(&other) {
+                    let new_nx = match other[nx] {
+                        // map literal nodes to already existing nodes
+                        TId::Literal { feature } => match self.literals_nx.get(&feature) {
+                            Some(self_nx) => *self_nx,
+                            None => self.graph.add_node(TId::Literal { feature }),
+                        },
+                        // everything else can just be added
+                        _ => self.graph.add_node(other[nx]),
+                    };
+                    cache.insert(nx, new_nx);
+
+                    let mut children = other.neighbors_directed(nx, Outgoing).detach();
+                    while let Some((child_ex, child_nx)) = children.next(&other) {
+                        self.graph.add_edge(
+                            new_nx,
+                            *cache.get(&child_nx).unwrap(),
+                            other[child_ex].clone(),
+                        );
+                    }
+                }
+
+                println!("FINISHED ADDING - START SWITCHING");
+
+                if MERMAID_DEBUG {
+                    let mut ddnnf_after_add = Ddnnf::default();
+                    ddnnf_after_add.inter_graph = self.clone();
+                    ddnnf_after_add.rebuild();
+                    write_as_mermaid_md(&ddnnf_after_add, &[], "after_adding.md", None).unwrap();
+                }
+
+                // replace the reference to the starting node with the new subgraph
+                let new_sub_root = *cache.get(&other_root).unwrap();
+                self.graph.add_edge(switching_node, new_sub_root, None);
+
+                // add the literal_children of the newly created ddnnf
+                extend_literal_diffs(&self.graph, &mut self.literal_children, new_sub_root);
+
+                if MERMAID_DEBUG {
+                    let mut ddnnf_at_end = Ddnnf::default();
+                    ddnnf_at_end.inter_graph = self.clone();
+                    ddnnf_at_end.rebuild();
+                    write_as_mermaid_md(&ddnnf_at_end, &[], "at_end.md", None).unwrap();
                 }
             }
-        }
-        println!("FINISHED REMOVING - START SWITCHING");
+            Either::Right(other_ig) => {
+                self.cache
+                    .conflicting_push(((clause.clone(), application), Either::Right(self.clone())));
 
-        if MERMAID_DEBUG {
-            let mut sup = Ddnnf::default();
-            sup.inter_graph.graph = other.clone();
-            sup.rebuild();
-            write_as_mermaid_md(&sup, &[], "sub.md", None).unwrap();
-        }
-
-        // add edges and nodes of the replacement
-        let mut dfs = DfsPostOrder::new(&other, other_root);
-        let mut cache = HashMap::new();
-        while let Some(nx) = dfs.next(&other) {
-            let new_nx = match other[nx] {
-                // map literal nodes to already existing nodes
-                TId::Literal { feature } => match self.literals_nx.get(&feature) {
-                    Some(self_nx) => *self_nx,
-                    None => self.graph.add_node(TId::Literal { feature }),
-                },
-                // everything else can just be added
-                _ => self.graph.add_node(other[nx]),
-            };
-            cache.insert(nx, new_nx);
-
-            let mut children = other.neighbors_directed(nx, Outgoing).detach();
-            while let Some((child_ex, child_nx)) = children.next(&other) {
-                self.graph.add_edge(
-                    new_nx,
-                    *cache.get(&child_nx).unwrap(),
-                    other[child_ex].clone(),
-                );
+                self.move_inter_graph(other_ig)
             }
-        }
-
-        println!("FINISHED ADDING - START SWITCHING");
-
-        if MERMAID_DEBUG {
-            let mut ddnnf_after_add = Ddnnf::default();
-            ddnnf_after_add.inter_graph = self.clone();
-            ddnnf_after_add.rebuild();
-            write_as_mermaid_md(&ddnnf_after_add, &[], "after_adding.md", None).unwrap();
-        }
-
-        // replace the reference to the starting node with the new subgraph
-        let new_sub_root = *cache.get(&other_root).unwrap();
-        self.graph.add_edge(switching_node, new_sub_root, None);
-
-        // add the literal_children of the newly created ddnnf
-        extend_literal_diffs(&self.graph, &mut self.literal_children, new_sub_root);
-
-        if MERMAID_DEBUG {
-            let mut ddnnf_at_end = Ddnnf::default();
-            ddnnf_at_end.inter_graph = self.clone();
-            ddnnf_at_end.rebuild();
-            write_as_mermaid_md(&ddnnf_at_end, &[], "at_end.md", None).unwrap();
         }
     }
 
