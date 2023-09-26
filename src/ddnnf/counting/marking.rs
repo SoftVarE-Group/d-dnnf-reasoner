@@ -9,9 +9,11 @@ impl Ddnnf {
         for node in self.nodes.iter_mut() {
             node.partial_derivative.assign(Integer::ZERO);
         }
-        
+
         let total_nodes = self.nodes.len();
-        self.nodes[total_nodes - 1].partial_derivative.assign(Integer::ONE);
+        self.nodes[total_nodes - 1]
+            .partial_derivative
+            .assign(Integer::ONE);
         for i in (0..total_nodes).rev() {
             self.annotate_single_partial_derivative(i);
         }
@@ -23,14 +25,15 @@ impl Ddnnf {
             And { children } => {
                 let children_c = children.clone();
                 for &child in children_c.iter() {
-                    let mut current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
-                    
+                    let mut current_node_partial_derivative =
+                        self.nodes[i].partial_derivative.clone();
+
                     for &other_child in children_c.iter() {
                         if child != other_child {
                             current_node_partial_derivative *= &self.nodes[other_child].count;
                         }
                     }
-                    
+
                     self.nodes[child].partial_derivative += &current_node_partial_derivative;
                 }
             }

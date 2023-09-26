@@ -79,7 +79,7 @@ enum Operation {
         #[arg(num_args = 0.., allow_negative_numbers = true, verbatim_doc_comment)]
         features: Option<Vec<i32>>,
     },
-    /// Computes the cardinality of a single feature for all features.
+    /// Computes the cardinality of a single feature for all features. Is single threaded.
     #[clap(short_flag = 'c')]
     CountFeatures {
         /// Computes the cardinality of features for the feature model,
@@ -87,10 +87,6 @@ enum Operation {
         /// Default output file is '{FILE_NAME}-features.csv'.
         #[arg(verbatim_doc_comment)]
         custom_output_file: Option<String>,
-        /// Specify how many threads should be used.
-        /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4, verbatim_doc_comment)]
-        jobs: u16,
     },
     /// Computes the cardinality of multiple (partial) configurations.
     #[clap(short_flag = 'q')]
@@ -298,10 +294,7 @@ fn main() {
 
         // change the number of threads used for cardinality of features and partial configurations
         match operation {
-            CountFeatures { jobs, .. }
-            | CountQueries { jobs, .. }
-            | Stream { jobs }
-            | Sat { jobs, .. } => {
+            CountQueries { jobs, .. } | Stream { jobs } | Sat { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             }
             _ => (),
