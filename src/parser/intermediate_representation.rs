@@ -7,7 +7,8 @@ use std::{
     io::Write,
     ops::Not,
     panic,
-    time::Instant, rc::Rc,
+    rc::Rc,
+    time::Instant,
 };
 
 use itertools::{Either, Itertools};
@@ -33,7 +34,7 @@ use self::fixed_fifo::FixedFifo;
 
 use super::{calc_and_count, calc_or_count, from_cnf::apply_decisions, DdnnfGraph};
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 const MERMAID_DEBUG: bool = false;
 const MAX_CACHED_SUB_DAGS: usize = 10;
 type SubDAGInfo = (NodeIndex, DdnnfGraph, NodeIndex);
@@ -41,6 +42,12 @@ type CachedSubDag = (
     (Vec<i32>, ClauseApplication),
     Either<SubDAGInfo, IntermediateGraph>,
 );
+
+fn get_push_retain_fn_for_cachedsubdag() -> Rc<dyn Fn(&CachedSubDag, &CachedSubDag) -> bool> {
+    Rc::new(|((elem, _), _), ((add, _), _)| {
+        elem.iter().filter(|&item| add.contains(item)).count() == 0
+    })
+}
 
 /// The IntermediateGraph enables us to modify the dDNNF. The structure of a vector of nodes does not allow
 /// for that because deleting or removing nodes would mess up the indices.
@@ -59,7 +66,7 @@ impl Default for IntermediateGraph {
     fn default() -> Self {
         IntermediateGraph {
             graph: DdnnfGraph::default(),
-            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, Rc::new(|_| true)),
+            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, get_push_retain_fn_for_cachedsubdag()),
             root: NodeIndex::default(),
             number_of_variables: 0,
             literals_nx: HashMap::default(),
@@ -123,7 +130,7 @@ impl IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
             graph,
-            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, Rc::new(|_| true)),
+            cache: FixedFifo::new(MAX_CACHED_SUB_DAGS, get_push_retain_fn_for_cachedsubdag()),
             root,
             number_of_variables,
             literals_nx,
@@ -564,7 +571,9 @@ impl IntermediateGraph {
     }
 
     fn recompile_everything(&mut self, clause: Vec<i32>, application: ClauseApplication) {
-        println!("START RECOMPILE EVERYTHING");
+        if DEBUG {
+            println!("START RECOMPILE EVERYTHING");
+        }
         const INTER_CNF: &str = ".sub.cnf";
 
         let mut cnf = vec![format!(
@@ -733,7 +742,9 @@ impl IntermediateGraph {
         application: ClauseApplication,
         replacement: Either<SubDAGInfo, IntermediateGraph>,
     ) {
-        println!("START SWITCHING");
+        if DEBUG {
+            println!("START SWITCHING");
+        }
         match replacement {
             Either::Left((switching_node, other, other_root)) => {
                 // extract sub DAG that we want to cache
@@ -775,7 +786,7 @@ impl IntermediateGraph {
                         }
                     }
                 }
-                self.cache.conflicting_push((
+                self.cache.retain_push((
                     (clause, application),
                     Either::Left((
                         switching_node,
@@ -784,7 +795,9 @@ impl IntermediateGraph {
                     )),
                 ));
 
-                println!("FINISHED REMOVING - START SWITCHING");
+                if DEBUG {
+                    println!("FINISHED REMOVING - START SWITCHING");
+                }
 
                 if MERMAID_DEBUG {
                     let mut sup = Ddnnf::default();
@@ -818,7 +831,9 @@ impl IntermediateGraph {
                     }
                 }
 
-                println!("FINISHED ADDING - START SWITCHING");
+                if DEBUG {
+                    println!("FINISHED ADDING - START SWITCHING");
+                }
 
                 if MERMAID_DEBUG {
                     let mut ddnnf_after_add = Ddnnf::default();
@@ -843,7 +858,7 @@ impl IntermediateGraph {
             }
             Either::Right(other_ig) => {
                 self.cache
-                    .conflicting_push(((clause.clone(), application), Either::Right(self.clone())));
+                    .retain_push(((clause.clone(), application), Either::Right(self.clone())));
 
                 self.move_inter_graph(other_ig)
             }
@@ -1214,6 +1229,16 @@ mod test {
         check_for_cardinality_correctness("tests/data/auto1.cnf", 10);
     }
 
+    fn assert_cardinalities(ddnnf: &mut Ddnnf, temp_file_path: &str) {
+        let mut ddnnf_control = build_ddnnf(temp_file_path, None);
+        for feature in 1_i32..ddnnf.number_of_variables as i32 {
+            assert_eq!(
+                ddnnf_control.execute_query(&[feature]),
+                ddnnf.execute_query(&[feature])
+            );
+        }
+    }
+
     #[test]
     #[serial]
     fn undo_clause_remove() {
@@ -1237,17 +1262,10 @@ mod test {
                 expected_card_of_features.push(ddnnf.execute_query(&[feature]));
             }
 
-            let assert_cardinalities = |ddnnf: &mut Ddnnf| {
-                for feature in 1_i32..ddnnf.number_of_variables as i32 {
-                    assert_eq!(
-                        ddnnf.execute_query(&[feature]),
-                        expected_card_of_features[feature as usize - 1]
-                    );
-                }
-            };
-
             for clause in get_all_clauses_cnf(temp_file_path).into_iter() {
-                println!("node count: {}", ddnnf.inter_graph.graph.node_count());
+                if clause.len() == 1 {
+                    continue;
+                } // skip unit clause
                 let strat_remove = ddnnf
                     .inter_graph
                     .apply_clause(clause.clone(), ClauseApplication::Remove);
@@ -1256,7 +1274,7 @@ mod test {
                     .apply_clause(clause.clone(), ClauseApplication::Add);
                 if strat_remove == IncrementalStrategy::SubDAGReplacement {
                     assert_eq!(IncrementalStrategy::Undo, strat_add);
-                    assert_cardinalities(&mut ddnnf);
+                    assert_cardinalities(&mut ddnnf, temp_file_path);
                 }
             }
         }
@@ -1279,31 +1297,23 @@ mod test {
             let temp_file_path = temp_file_path_buf.to_str().unwrap();
             fs::copy(path, temp_file_path).unwrap();
 
-            let assert_cardinalities = |ddnnf: &mut Ddnnf| {
-                let mut ddnnf_control = build_ddnnf(temp_file_path, None);
-                for feature in 1_i32..ddnnf.number_of_variables as i32 {
-                    assert_eq!(
-                        ddnnf_control.execute_query(&[feature]),
-                        ddnnf.execute_query(&[feature])
-                    );
-                }
-            };
-
             for clause in get_all_clauses_cnf(temp_file_path).into_iter() {
+                if clause.len() == 1 {
+                    continue;
+                } // skip unit clause
                 remove_clause_cnf(temp_file_path, &clause, None);
 
                 let mut ddnnf = build_ddnnf(temp_file_path, None);
-                println!("node count: {}", ddnnf.inter_graph.graph.node_count());
-                let strat_remove = ddnnf
+                ddnnf
                     .inter_graph
                     .apply_clause(clause.clone(), ClauseApplication::Add);
-                let strat_add = ddnnf
-                    .inter_graph
-                    .apply_clause(clause.clone(), ClauseApplication::Remove);
-                if strat_remove != IncrementalStrategy::UnitClause {
-                    assert_eq!(IncrementalStrategy::Undo, strat_add);
-                    assert_cardinalities(&mut ddnnf);
-                }
+                assert_eq!(
+                    IncrementalStrategy::Undo,
+                    ddnnf
+                        .inter_graph
+                        .apply_clause(clause.clone(), ClauseApplication::Remove)
+                );
+                assert_cardinalities(&mut ddnnf, temp_file_path);
 
                 add_clause_cnf(temp_file_path, &clause);
             }

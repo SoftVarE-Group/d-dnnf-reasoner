@@ -590,7 +590,7 @@ fn main() {
                 let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                 use rand::prelude::SliceRandom;
                 clauses.shuffle(&mut rng);
-                let total_clauses = cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100_000);
+                let total_clauses = cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100);
                 for (index, clause) in clauses.into_iter().enumerate() {
                     if index == total_clauses {
                         break;

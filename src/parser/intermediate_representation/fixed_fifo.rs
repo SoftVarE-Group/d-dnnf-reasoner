@@ -1,8 +1,12 @@
-use std::{collections::VecDeque, fmt::{Debug, self}, rc::Rc};
+use std::{
+    collections::VecDeque,
+    fmt::{self, Debug},
+    rc::Rc,
+};
 
 pub(crate) struct FixedFifo<T> {
     buffer: VecDeque<T>,
-    conflict_fn: Rc<dyn Fn(&T) -> bool>,
+    conflict_fn: Rc<dyn Fn(&T, &T) -> bool>,
     max_size: usize,
 }
 
@@ -32,14 +36,10 @@ where
     }
 }
 
-unsafe impl<T> Send for FixedFifo<T>
-where
-    T: Send,
-{
-}
+unsafe impl<T> Send for FixedFifo<T> where T: Send {}
 
 impl<T> FixedFifo<T> {
-    pub(crate) fn new(max_size: usize, conflict_fn: Rc<dyn Fn(&T) -> bool>) -> Self {
+    pub(crate) fn new(max_size: usize, conflict_fn: Rc<dyn Fn(&T, &T) -> bool>) -> Self {
         FixedFifo {
             buffer: VecDeque::with_capacity(max_size),
             conflict_fn,
@@ -50,7 +50,7 @@ impl<T> FixedFifo<T> {
     pub(crate) fn _new_wo_conflict(max_size: usize) -> Self {
         FixedFifo {
             buffer: VecDeque::with_capacity(max_size),
-            conflict_fn: Rc::new(|_| true),
+            conflict_fn: Rc::new(|_, _| true),
             max_size,
         }
     }
@@ -62,8 +62,9 @@ impl<T> FixedFifo<T> {
         self.buffer.push_back(item);
     }
 
-    pub(crate) fn conflicting_push(&mut self, item: T) {
-        self.buffer.retain(|item| !(self.conflict_fn)(item));
+    pub(crate) fn retain_push(&mut self, item: T) {
+        self.buffer.retain(|elem| (self.conflict_fn)(&item, elem));
+
         if self.buffer.len() >= self.max_size {
             self.buffer.pop_front();
         }
@@ -87,7 +88,7 @@ impl<T> FixedFifo<T> {
         return self.buffer.len();
     }
 
-    fn _switch_conflict_fn(&mut self, conflict_fn_replacement: Rc<dyn Fn(&T) -> bool>) {
+    fn _switch_conflict_fn(&mut self, conflict_fn_replacement: Rc<dyn Fn(&T, &T) -> bool>) {
         self.conflict_fn = conflict_fn_replacement
     }
 
@@ -129,14 +130,14 @@ mod test {
 
     #[test]
     fn push_with_conflicts() {
-        let mut fsb = FixedFifo::new(10, Rc::new(|other| other % 2 != 0));
+        let mut fsb = FixedFifo::new(10, Rc::new(|_, &add| add % 2 == 0));
         for i in 1..=10 {
-            fsb.conflicting_push(i);
+            fsb.retain_push(i);
         }
         assert_eq!(vec![2, 4, 6, 8, 10], fsb._get_buffer());
 
-        fsb._switch_conflict_fn(Rc::new(|other| 20 % other == 0));
-        fsb.conflicting_push(20);
-        assert_eq!(vec![6, 8, 20], fsb._get_buffer());
+        fsb._switch_conflict_fn(Rc::new(|add, elem| add + elem < 25));
+        fsb.retain_push(20);
+        assert_eq!(vec![2, 4, 20], fsb._get_buffer());
     }
 }
