@@ -255,16 +255,18 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
                                  to: NodeIndex,
                                  edge: EdgeIndex,
                                  weights: Vec<i32>| {
-        let and_node = ddnnf_graph.add_node(TId::And);
         let literal_nodes = get_literal_indices(ddnnf_graph, weights);
+        if literal_nodes.len() != 0 {
+            let and_node = ddnnf_graph.add_node(TId::And);
 
-        ddnnf_graph.remove_edge(edge);
+            ddnnf_graph.remove_edge(edge);
 
-        ddnnf_graph.add_edge(from, and_node, ());
-        for node in literal_nodes {
-            ddnnf_graph.add_edge(and_node, node, ());
+            ddnnf_graph.add_edge(from, and_node, ());
+            for node in literal_nodes {
+                ddnnf_graph.add_edge(and_node, node, ());
+            }
+            ddnnf_graph.add_edge(and_node, to, ());
         }
-        ddnnf_graph.add_edge(and_node, to, ());
     };
 
     // opens the file with a BufReader and
@@ -373,38 +375,32 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     while let Some(nx) = dfs.next(&ddnnf_graph) {
         let mut neighbours = ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
-        loop {
-            let next = neighbours.next(&ddnnf_graph);
-            match next {
-                Some((n_edge, n_node)) => {
-                    if !ddnnf_graph.contains_node(n_node) {
-                        continue;
-                    }
+        while let Some((n_edge, n_node)) = neighbours.next(&ddnnf_graph) {
+            if !ddnnf_graph.contains_node(n_node) {
+                continue;
+            }
 
-                    if ddnnf_graph[n_node] == TId::True {
-                        match ddnnf_graph[nx] {
-                            TId::And => ddnnf_graph.remove_edge(n_edge).unwrap(),
-                            TId::Or => (), // should never happen
-                            _ => {
-                                // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting...");
-                                process::exit(1);
-                            }
-                        };
+            if ddnnf_graph[n_node] == TId::True {
+                match ddnnf_graph[nx] {
+                    TId::And => ddnnf_graph.remove_edge(n_edge).unwrap(),
+                    TId::Or => (), // should never happen
+                    _ => {
+                        // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+                        eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting...");
+                        process::exit(1);
                     }
+                };
+            }
 
-                    if ddnnf_graph[n_node] == TId::False {
-                        match ddnnf_graph[nx] {
-                            TId::Or => ddnnf_graph.remove_edge(n_edge).unwrap(),
-                            TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
-                            _ => {
-                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
-                                process::exit(1);
-                            }
-                        };
+            if ddnnf_graph[n_node] == TId::False {
+                match ddnnf_graph[nx] {
+                    TId::Or => ddnnf_graph.remove_edge(n_edge).unwrap(),
+                    TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
+                    _ => {
+                        eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
+                        process::exit(1);
                     }
-                }
-                None => break,
+                };
             }
         }
     }
@@ -436,10 +432,56 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         }
     }
 
+    // fourth dfs:
+    // Minimize the d-DNNF on two opportunities
+    // 1. Remove nodes with only one child and adjust the incoming edges
+    // 2. Combine sub groups of children
+    //      (e.g. an AND node contains Literal nodes and another AND node
+    //      => Remove the lower AND node and add its children to the higher one)
+    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
+    while let Some(nx) = dfs.next(&ddnnf_graph) {
+        //  1.
+        //          OR
+        //        /    \                 OR
+        //     AND    -Ln     into     /   \
+        //      |                    Ln    -Ln
+        //     Ln
+        //
+        let mut outgoing_neighbours = ddnnf_graph.neighbors_directed(nx, Outgoing);
+        if outgoing_neighbours.clone().count() == 1 {
+            let out_nx = outgoing_neighbours.next().unwrap();
+            let mut incoming_neighbours = ddnnf_graph.neighbors_directed(nx, Incoming).detach();
+            while let Some(in_nx) = incoming_neighbours.next_node(&ddnnf_graph) {
+                ddnnf_graph.add_edge(in_nx, out_nx, ());
+            }
+            if nx != root {
+                ddnnf_graph.remove_node(nx);
+            }
+        }
+        //  2.
+        //           AND                        _  AND   _
+        //       /    |    \                  /   /   \   \
+        //     X_1   X_2   AND     into     X_1  X_2  X_3 X_4
+        //                /   \
+        //              X_3   X_4
+        //
+        let mut outgoing_neighbours = ddnnf_graph.neighbors_directed(nx, Outgoing).detach();
+        while let Some(out_nx) = outgoing_neighbours.next_node(&ddnnf_graph) {
+            if ddnnf_graph[nx] == ddnnf_graph[out_nx] {
+                let mut out_out_neighbours =
+                    ddnnf_graph.neighbors_directed(out_nx, Outgoing).detach();
+                while let Some(out_out_nx) = out_out_neighbours.next_node(&ddnnf_graph) {
+                    ddnnf_graph.add_edge(nx, out_out_nx, ());
+                }
+                ddnnf_graph.remove_node(out_nx);
+            }
+        }
+    }
+
     // perform a depth first search to get the nodes ordered such
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
-    dfs = DfsPostOrder::new(&ddnnf_graph, root);
+    let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
     let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(ddnnf_graph.node_count());
@@ -615,6 +657,31 @@ pub fn open_file_savely(path: &str) -> File {
             // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
             eprintln!("\x1b[1;38;5;196mERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
             process::exit(1);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::build_ddnnf;
+
+    #[test]
+    fn ensure_no_useless_nodes() {
+        let ddnnfs = [
+            build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
+            build_ddnnf("tests/data/toybox.cnf", Some(42)),
+            build_ddnnf("tests/data/small_ex.cnf", None),
+            build_ddnnf("tests/data/auto1_d4.nnf", Some(2513)),
+        ];
+
+        use crate::NodeType::*;
+        for ddnnf in ddnnfs {
+            for node in ddnnf.nodes {
+                match node.ntype {
+                    And { children } | Or { children } => assert!(children.len() > 1),
+                    _ => (),
+                }
+            }
         }
     }
 }
