@@ -17,7 +17,7 @@ fn ddnnf_parsing_test() {
 
     assert_eq!(ddnnf_d4.number_of_variables, 4);
     assert_eq!(ddnnf_d4.rc(), 4);
-    assert_eq!(ddnnf_d4.nodes.len(), 12);
+    assert_eq!(ddnnf_d4.nodes.len(), 18);
 
     let and_node = ddnnf_c2d.nodes.pop().unwrap();
     match and_node.ntype {

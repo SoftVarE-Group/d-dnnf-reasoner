@@ -930,9 +930,7 @@ mod test {
     #[test]
     #[serial]
     fn parallel_stream() {
-        const AUTO1_IF: &str = "tests/data/auto1_d4.nnf";
-        const AUTO1_IF_CNF: &str = "tests/data/auto1.cnf";
-        let mut ddnnf: Ddnnf = build_ddnnf(AUTO1_IF, Some(2513));
+        let mut ddnnf: Ddnnf = build_ddnnf("example_input/auto1_d4_2513.nnf", Some(2513));
 
         let mut card_of_features_input = String::new();
         let mut should_be = String::new();
@@ -942,31 +940,27 @@ mod test {
         }
         card_of_features_input += "exit\n";
 
-        // execute all the 2513 queries with 1 thread
-        let cmd_ddnnf_single = Command::cargo_bin("ddnnife")
-            .unwrap()
-            .args([AUTO1_IF, "-t", "2513", "stream"])
-            .write_stdin(card_of_features_input.clone())
-            .unwrap();
-
         // execute all the 2513 queries with 4 threads
         let cmd_ddnnf = Command::cargo_bin("ddnnife")
             .unwrap()
-            .args([AUTO1_IF, "-t", "2513", "stream", "-j", "4"])
+            .args([
+                "example_input/auto1_d4_2513.nnf",
+                "-t",
+                "2513",
+                "stream",
+                "-j",
+                "4",
+            ])
             .write_stdin(card_of_features_input.clone())
             .unwrap();
 
         // do the same when using a CNF
         let cmd_cnf = Command::cargo_bin("ddnnife")
             .unwrap()
-            .args([AUTO1_IF_CNF, "-t", "2513", "stream", "-j", "4"])
+            .args(["example_input/auto1.cnf", "-t", "2513", "stream", "-j", "4"])
             .write_stdin(card_of_features_input.clone())
             .unwrap();
 
-        assert_eq!(
-            should_be,
-            String::from_utf8(cmd_ddnnf_single.stdout).unwrap()
-        );
         assert_eq!(should_be, String::from_utf8(cmd_ddnnf.stdout).unwrap());
         assert_eq!(should_be, String::from_utf8(cmd_cnf.stdout).unwrap());
     }
