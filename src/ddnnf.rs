@@ -95,24 +95,29 @@ impl Ddnnf {
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4)
     pub fn apply_changes(
         &mut self,
-        clauses: &Vec<(&[i32], ClauseApplication)>,
-    ) -> Vec<IncrementalStrategy> {
-        let mut strategies = Vec::new();
-        for (clause, application) in clauses {
-            match reduce_clause(clause, &HashSet::new()) {
-                Some(clause) => {
-                    if clause.is_empty() {
-                        strategies.push(IncrementalStrategy::Tautology);
-                    } else {
-                        strategies.push(self.inter_graph.apply_clause(clause, *application));
+        edit_operations: Vec<(Vec<i32>, ClauseApplication)>,
+    ) -> IncrementalStrategy {
+        let mut edit_lits = HashSet::new();
+        let mut op_add = Vec::new();
+        let mut op_rmv = Vec::new();
+        for (clause, application) in edit_operations {
+            match reduce_clause(&clause, &HashSet::new()) {
+                Some(reduced_clause) => {
+                    if reduced_clause.is_empty() {
+                        continue;
+                    }
+                    edit_lits.extend(reduced_clause.iter());
+                    match application {
+                        ClauseApplication::Add => op_add.push(reduced_clause),
+                        ClauseApplication::Remove => op_rmv.push(reduced_clause),
                     }
                 }
                 None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
             }
         }
-
+        let strategy = self.inter_graph.apply_clause((edit_lits, (op_add, op_rmv)));
         self.rebuild();
-        strategies
+        strategy
     }
 
     /// Returns the current count of the root node in the ddnnf
@@ -280,7 +285,7 @@ mod test {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
             }
 
-            ddnnf.apply_changes(&vec![(&clause, ClauseApplication::Add)]);
+            ddnnf.apply_changes(vec![(clause, ClauseApplication::Add)]);
             println!("Card of Features after change:");
             for i in 0..ddnnf.number_of_variables {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));

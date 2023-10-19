@@ -37,15 +37,15 @@ use super::{calc_and_count, calc_or_count, from_cnf::apply_decisions, DdnnfGraph
 const DEBUG: bool = false;
 const MERMAID_DEBUG: bool = false;
 const MAX_CACHED_SUB_DAGS: usize = 10;
+
+// (LITERALS, (CLAUSES TO ADD, CLAUSES TO REMOVE))
+type IncrementalEdit = (HashSet<i32>, (Vec<Vec<i32>>, Vec<Vec<i32>>));
 type SubDAGInfo = (NodeIndex, DdnnfGraph, NodeIndex);
-type CachedSubDag = (
-    (Vec<i32>, ClauseApplication),
-    Either<SubDAGInfo, IntermediateGraph>,
-);
+type CachedSubDag = (IncrementalEdit, Either<SubDAGInfo, IntermediateGraph>);
 
 fn get_push_retain_fn_for_cachedsubdag() -> Rc<dyn Fn(&CachedSubDag, &CachedSubDag) -> bool> {
-    Rc::new(|((elem, _), _), ((add, _), _)| {
-        elem.iter().filter(|&item| add.contains(item)).count() == 0
+    Rc::new(|((edit_lits, _), _), ((edit_lits_other, _), _)| {
+        edit_lits.intersection(&edit_lits_other).count() == 0
     })
 }
 
@@ -77,7 +77,7 @@ impl Default for IntermediateGraph {
 }
 
 /// A clause can either be added or removed
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ClauseApplication {
     /// Add a clause to the d-DNNF
     Add,
@@ -223,9 +223,10 @@ impl IntermediateGraph {
     /// Further, the node has to be the endpoint of bridge.
     pub fn closest_unsplitable_bridge(
         &mut self,
-        clause: &[i32],
+        edit: &IncrementalEdit,
     ) -> Option<(NodeIndex, HashSet<i32>)> {
-        if clause.is_empty() {
+        let (edit_lits, (_, _)) = edit;
+        if edit_lits.is_empty() {
             return None;
         }
         let mut closest_node = (self.root, self.literal_children.get(&self.root).unwrap());
@@ -236,7 +237,7 @@ impl IntermediateGraph {
                 TId::And | TId::Or => {
                     let diffs = self.literal_children.get(&bridge_endpoint).unwrap();
                     // we only consider and nodes that include all literals of the clause
-                    if clause
+                    if edit_lits
                         .iter()
                         .all(|e| diffs.contains(e) && diffs.contains(&-e))
                         && closest_node.1.len() > diffs.len()
@@ -249,7 +250,7 @@ impl IntermediateGraph {
             }
         }
 
-        let devided_and = self.divide_bridge(closest_node.0, &bridge_end_point, clause);
+        let devided_and = self.divide_bridge(closest_node.0, &bridge_end_point, edit);
         Some((
             devided_and,
             self.literal_children.get(&devided_and).unwrap().clone(),
@@ -339,9 +340,10 @@ impl IntermediateGraph {
         &mut self,
         initial_start: NodeIndex,
         bridges: &[NodeIndex],
-        clause: &[i32],
+        edit: &IncrementalEdit,
     ) -> NodeIndex {
-        if clause.is_empty() {
+        let (edit_lits, (op_add, op_rmv)) = edit;
+        if op_add.is_empty() && op_rmv.is_empty() {
             return initial_start;
         }
 
@@ -355,7 +357,7 @@ impl IntermediateGraph {
             .detach();
         while let Some(child) = children.next_node(&self.graph) {
             let lits = self.literal_children.get(&child).unwrap();
-            if clause
+            if edit_lits
                 .iter()
                 .any(|f| lits.contains(f) || lits.contains(&-f))
                 || bridges.contains(&child)
@@ -393,22 +395,22 @@ impl IntermediateGraph {
     // Experimental method to use the initial CNF for recompiling
     pub fn transform_to_cnf_from_starting_cnf(
         &mut self,
-        clause: Vec<i32>,
-        application: ClauseApplication,
+        edit: &IncrementalEdit,
     ) -> (Vec<String>, NodeIndex, HashMap<u32, u32>) {
         if DEBUG {
             println!(
-                "starting 'transform_to_cnf_from_starting_cnf' with clause: {:?}",
-                clause
+                "starting 'transform_to_cnf_from_starting_cnf' with edit: {:?}",
+                edit
             );
         }
+        let (_, (op_add, op_rmv)) = edit;
 
         if self.cnf_clauses.is_empty() {
             return (Vec::new(), NodeIndex::new(0), HashMap::new());
         }
 
         // 1) Find the closest node and the decisions to that point
-        let (closest_node, relevant_literals) = match self.closest_unsplitable_bridge(&clause) {
+        let (closest_node, relevant_literals) = match self.closest_unsplitable_bridge(edit) {
             Some((nx, lits)) => (nx, lits),
             None => (self.root, HashSet::new()), // Just do the whole CNF without any adjustments
         };
@@ -448,7 +450,7 @@ impl IntermediateGraph {
 
         // 2) Filter for clauses that contain at least one of the relevant literals
         //    aka the literals that are children of the closest AND node
-        let mut relevant_clauses: Vec<Vec<i32>> = if clause.is_empty() {
+        let mut relevant_clauses: Vec<Vec<i32>> = if op_add.is_empty() && op_rmv.is_empty() {
             self.cnf_clauses.clone()
         } else {
             self.cnf_clauses
@@ -461,7 +463,7 @@ impl IntermediateGraph {
                 })
                 .collect_vec()
         };
-        if application == ClauseApplication::Add {
+        for clause in op_add {
             relevant_clauses.push(clause.clone());
         }
 
@@ -521,7 +523,7 @@ impl IntermediateGraph {
             println!("relevant clause: {:?}", relevant_clauses);
         }
 
-        if application == ClauseApplication::Remove {
+        for clause in op_rmv {
             let clause_set = clause.iter().cloned().collect::<HashSet<_>>();
             relevant_clauses.retain(|rel_clause| {
                 rel_clause.iter().cloned().collect::<HashSet<_>>() != clause_set
@@ -552,8 +554,6 @@ impl IntermediateGraph {
             }
         }
 
-        //if DEBUG { println!("reindex: {:?}", re_index); }
-
         // write the meta information of the header
         let mut cnf = vec![format!("p cnf {} {}\n", index - 1, relevant_clauses.len())];
 
@@ -570,28 +570,51 @@ impl IntermediateGraph {
         (cnf, closest_node, re_index)
     }
 
-    fn recompile_everything(&mut self, clause: Vec<i32>, application: ClauseApplication) {
+    fn adjust_intern_cnf(&mut self, op_add: &Vec<Vec<i32>>, op_rmv: &Vec<Vec<i32>>) {
+        // make adjustments to the clauses
+        if !op_rmv.is_empty() {
+            let mut rmv_clause_set = Vec::new();
+            for clause in op_rmv {
+                rmv_clause_set.push(clause.iter().cloned().collect::<HashSet<_>>());
+            }
+            self.cnf_clauses.retain(|rel_clause| {
+                rmv_clause_set.iter().any(|rmv_clause| {
+                    &rel_clause.iter().cloned().collect::<HashSet<_>>() != rmv_clause
+                })
+            });
+        }
+
+        let mut max_lit_add = 0;
+        for clause in op_add.clone() {
+            max_lit_add = max(
+                max_lit_add,
+                clause.iter().map(|lit| lit.unsigned_abs()).max().unwrap(),
+            );
+            self.cnf_clauses.push(clause);
+        }
+        self.number_of_variables = max(self.number_of_variables, max_lit_add);
+    }
+
+    /// Adjust the clauses according to the edit, write everything to file, compile the new ddnnf,
+    /// replace the whole old ddnnf with the new one, and store the old in the cache.
+    fn recompile_everything(&mut self, edit: IncrementalEdit) {
+        let (edit_lits, (op_add, op_rmv)) = &edit;
+        debug_assert!(!edit_lits.is_empty());
+        debug_assert!(!op_add.is_empty() || !op_rmv.is_empty());
         if DEBUG {
             println!("START RECOMPILE EVERYTHING");
         }
-        const INTER_CNF: &str = ".sub.cnf";
 
+        self.adjust_intern_cnf(&op_add, &op_rmv);
+
+        // write clauses to file
+        const INTER_CNF: &str = ".sub.cnf";
         let mut cnf = vec![format!(
             "p cnf {} {}\n",
             self.number_of_variables,
-            self.cnf_clauses.len() + 1
+            self.cnf_clauses.len()
         )];
-
-        let clause_set = clause.iter().cloned().collect::<HashSet<_>>();
-        for cnf_clause in self.cnf_clauses.iter() {
-            if application == ClauseApplication::Remove
-                && cnf_clause.iter().cloned().collect::<HashSet<_>>() == clause_set
-            {
-                continue;
-            }
-            cnf.push(format!("{} 0\n", format_vec(cnf_clause.iter())));
-        }
-        if application == ClauseApplication::Add {
+        for clause in self.cnf_clauses.iter() {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
 
@@ -600,18 +623,15 @@ impl IntermediateGraph {
         cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
         let sup = build_ddnnf(INTER_CNF, None);
-        self.switch_sub_dag(clause.clone(), application, Either::Right(sup.inter_graph));
+        self.switch_sub_dag(edit, Either::Right(sup.inter_graph));
 
         self.rebuild(None);
-        println!("For clause: {:?}, Recompiled everything", clause);
+        println!("Recompiled everything for edit");
     }
 
-    pub fn apply_clause(
-        &mut self,
-        clause: Vec<i32>,
-        application: ClauseApplication,
-    ) -> IncrementalStrategy {
-        if clause.is_empty() {
+    pub fn apply_clause(&mut self, edit: IncrementalEdit) -> IncrementalStrategy {
+        let (edit_lits, (op_add, op_rmv)) = &edit;
+        if op_add.is_empty() && op_rmv.is_empty() {
             return IncrementalStrategy::Tautology;
         }
 
@@ -622,48 +642,64 @@ impl IntermediateGraph {
             }
         }
 
-        match self
-            .cache
-            .find_and_remove(|item: &((Vec<i32>, ClauseApplication), _)| {
-                item.0 == (clause.clone(), !application)
-            }) {
-            Some(((clause, application), replacement)) => {
-                self.switch_sub_dag(clause.clone(), !application, replacement);
-                if application == ClauseApplication::Add {
-                    let clause_set = clause.iter().cloned().collect::<HashSet<_>>();
-                    self.cnf_clauses.retain(|cnf_clause| {
-                        cnf_clause.iter().cloned().collect::<HashSet<_>>() != clause_set
-                    });
-                } else if application == ClauseApplication::Remove {
-                    self.cnf_clauses.push(clause);
+        match self.cache.find_and_remove(|(item, _)| {
+            let (edit_lits_entry, (op_add_entry, op_rmv_entry)) = item;
+            if edit_lits_entry != edit_lits {
+                return false;
+            }
+            fn vec_value_eq(vec_fst: &Vec<Vec<i32>>, vec_snd: &Vec<Vec<i32>>) -> bool {
+                fn vec_to_hashset(vec: &Vec<i32>) -> HashSet<i32> {
+                    vec.iter().cloned().collect()
                 }
+                vec_fst.iter().all(|inner_list| {
+                    vec_snd.iter().any(|other_inner_list| {
+                        vec_to_hashset(inner_list) == vec_to_hashset(other_inner_list)
+                    })
+                })
+            }
+            // check for identical values cross (ClauseApplication is inverted when finding a suiting cached state)
+            vec_value_eq(op_add, op_rmv_entry) && vec_value_eq(op_rmv, op_add_entry)
+        }) {
+            Some(((edit_lits_cache, (op_add_cache, op_rm_cache)), replacement)) => {
+                self.adjust_intern_cnf(&op_rm_cache, &op_add_cache);
+                self.switch_sub_dag((edit_lits_cache, (op_rm_cache, op_add_cache)), replacement);
                 return IncrementalStrategy::Undo;
             }
             None => (),
         }
 
-        let clause_max_var = clause.iter().map(|f| f.unsigned_abs()).max().unwrap();
-        if self.number_of_variables < clause_max_var {
-            self.number_of_variables = clause_max_var;
-            self.recompile_everything(clause, application);
-            return IncrementalStrategy::Recompile;
+        if !op_add.is_empty() {
+            let clause_max_var = op_add
+                .iter()
+                .flatten()
+                .map(|f| f.unsigned_abs())
+                .max()
+                .unwrap();
+
+            if self.number_of_variables < clause_max_var {
+                self.number_of_variables = clause_max_var;
+                self.recompile_everything(edit);
+                return IncrementalStrategy::Recompile;
+            }
         }
-        //self.cnf_clauses.push(clause.clone());
-        if clause.len() == 1 && application == ClauseApplication::Add {
-            self.add_unit_clause(clause[0]);
-            return IncrementalStrategy::UnitClause;
+
+        // single clause should be added that only contains one feature
+        if op_add.len() == 1 {
+            if op_add[0].len() == 1 {
+                self.add_unit_clause(op_add[0][0]);
+                return IncrementalStrategy::UnitClause;
+            }
         }
 
         let mut _start = Instant::now();
         const INTER_CNF: &str = ".sub.cnf";
 
         _start = Instant::now();
-        let (cnf, adjusted_replace, re_indices) =
-            self.transform_to_cnf_from_starting_cnf(clause.clone(), application);
+        let (cnf, adjusted_replace, re_indices) = self.transform_to_cnf_from_starting_cnf(&edit);
 
         if cnf.is_empty() {
             if adjusted_replace == self.root {
-                self.recompile_everything(clause, application);
+                self.recompile_everything(edit);
                 return IncrementalStrategy::Recompile;
             } else {
                 return IncrementalStrategy::Tautology;
@@ -671,13 +707,10 @@ impl IntermediateGraph {
         }
 
         println!(
-            "For clause: {:?}, Replace CNF clauses: {}",
-            clause,
+            "For edit with {:?} clause changes: Replace CNF clauses: {}",
+            op_add.len() + op_rmv.len(),
             cnf.len()
         );
-        if DEBUG {
-            //println!("CNF clauses: {:?}", cnf);
-        }
 
         _start = Instant::now();
         // persist CNF
@@ -724,8 +757,7 @@ impl IntermediateGraph {
         }
 
         self.switch_sub_dag(
-            clause,
-            application,
+            edit,
             Either::Left((
                 adjusted_replace,
                 sup.inter_graph.graph,
@@ -738,8 +770,7 @@ impl IntermediateGraph {
 
     fn switch_sub_dag(
         &mut self,
-        clause: Vec<i32>,
-        application: ClauseApplication,
+        edit: IncrementalEdit,
         replacement: Either<SubDAGInfo, IntermediateGraph>,
     ) {
         if DEBUG {
@@ -787,7 +818,7 @@ impl IntermediateGraph {
                     }
                 }
                 self.cache.retain_push((
-                    (clause, application),
+                    edit,
                     Either::Left((
                         switching_node,
                         rep_ddnnf_graph,
@@ -857,8 +888,7 @@ impl IntermediateGraph {
                 }
             }
             Either::Right(other_ig) => {
-                self.cache
-                    .retain_push(((clause.clone(), application), Either::Right(self.clone())));
+                self.cache.retain_push((edit, Either::Right(self.clone())));
 
                 self.move_inter_graph(other_ig)
             }
@@ -1075,6 +1105,36 @@ mod test {
         Ddnnf, IncrementalStrategy,
     };
 
+    use super::IncrementalEdit;
+
+    fn build_edit_from_single(clause: Vec<i32>, app: ClauseApplication) -> IncrementalEdit {
+        build_edit(vec![(clause, app)])
+    }
+
+    fn build_edit(clause_apps: Vec<(Vec<i32>, ClauseApplication)>) -> IncrementalEdit {
+        let mut edit_lits = HashSet::new();
+        let mut op_add = Vec::new();
+        let mut op_rmv = Vec::new();
+        for (clause, application) in clause_apps {
+            if clause.is_empty() {
+                continue;
+            }
+            edit_lits.extend(clause.iter());
+            match application {
+                ClauseApplication::Add => op_add.push(clause),
+                ClauseApplication::Remove => op_rmv.push(clause),
+            }
+        }
+        (edit_lits, (op_add, op_rmv))
+    }
+
+    fn wrap_build_edit(clause: &[i32]) -> IncrementalEdit {
+        (
+            HashSet::from_iter(clause.iter().cloned()),
+            (Vec::new(), Vec::new()),
+        )
+    }
+
     #[test]
     #[serial]
     fn closest_unsplittable_and() {
@@ -1082,7 +1142,10 @@ mod test {
                                  input: Vec<Vec<i32>>,
                                  output: Vec<Option<Vec<i32>>>| {
             for (index, inp) in input.iter().enumerate() {
-                match ddnnf.inter_graph.closest_unsplitable_bridge(inp) {
+                match ddnnf
+                    .inter_graph
+                    .closest_unsplitable_bridge(&wrap_build_edit(inp))
+                {
                     Some((_replace_and_node, literals)) => {
                         let mut literals_as_vec = HashSet::<_>::from_iter(literals.iter().copied())
                             .into_iter()
@@ -1161,9 +1224,10 @@ mod test {
                 card_of_features_wo.push(ddnnf_w.execute_query(&[feature]));
             }
 
-            ddnnf_wo
-                .inter_graph
-                .apply_clause(clause.clone(), ClauseApplication::Add);
+            ddnnf_wo.inter_graph.apply_clause(build_edit_from_single(
+                clause.clone(),
+                ClauseApplication::Add,
+            ));
             ddnnf_wo.rebuild();
             if MERMAID_DEBUG {
                 write_as_mermaid_md(&ddnnf_wo, &[], "adding_to_without.md", None).unwrap();
@@ -1179,9 +1243,10 @@ mod test {
 
             /************************** Removing the clause **************************/
             let mut ddnnf_w_c = ddnnf_wo.clone();
-            ddnnf_w_c
-                .inter_graph
-                .apply_clause(clause.clone(), ClauseApplication::Remove);
+            ddnnf_w_c.inter_graph.apply_clause(build_edit_from_single(
+                clause.clone(),
+                ClauseApplication::Remove,
+            ));
             ddnnf_wo.rebuild();
             if MERMAID_DEBUG {
                 write_as_mermaid_md(&ddnnf_w_c, &[], "removing_from_with.md", None).unwrap();
@@ -1266,12 +1331,14 @@ mod test {
                 if clause.len() == 1 {
                     continue;
                 } // skip unit clause
-                let strat_remove = ddnnf
-                    .inter_graph
-                    .apply_clause(clause.clone(), ClauseApplication::Remove);
-                let strat_add = ddnnf
-                    .inter_graph
-                    .apply_clause(clause.clone(), ClauseApplication::Add);
+                let strat_remove = ddnnf.inter_graph.apply_clause(build_edit_from_single(
+                    clause.clone(),
+                    ClauseApplication::Remove,
+                ));
+                let strat_add = ddnnf.inter_graph.apply_clause(build_edit_from_single(
+                    clause.clone(),
+                    ClauseApplication::Add,
+                ));
                 if strat_remove == IncrementalStrategy::SubDAGReplacement {
                     assert_eq!(IncrementalStrategy::Undo, strat_add);
                     assert_cardinalities(&mut ddnnf, temp_file_path);
@@ -1304,14 +1371,16 @@ mod test {
                 remove_clause_cnf(temp_file_path, &clause, None);
 
                 let mut ddnnf = build_ddnnf(temp_file_path, None);
-                ddnnf
-                    .inter_graph
-                    .apply_clause(clause.clone(), ClauseApplication::Add);
+                ddnnf.inter_graph.apply_clause(build_edit_from_single(
+                    clause.clone(),
+                    ClauseApplication::Add,
+                ));
                 assert_eq!(
                     IncrementalStrategy::Undo,
-                    ddnnf
-                        .inter_graph
-                        .apply_clause(clause.clone(), ClauseApplication::Remove)
+                    ddnnf.inter_graph.apply_clause(build_edit_from_single(
+                        clause.clone(),
+                        ClauseApplication::Remove
+                    ))
                 );
                 assert_cardinalities(&mut ddnnf, temp_file_path);
 
@@ -1344,7 +1413,7 @@ mod test {
             }
             ddnnf_wo
                 .inter_graph
-                .apply_clause(clause, ClauseApplication::Add);
+                .apply_clause(build_edit_from_single(clause, ClauseApplication::Add));
             ddnnf_wo.rebuild();
             if MERMAID_DEBUG {
                 write_as_mermaid_md(&mut ddnnf_wo, &[], "after.md", None).unwrap();
@@ -1369,14 +1438,14 @@ mod test {
 
         ddnnf
             .inter_graph
-            .apply_clause(vec![6, -6], ClauseApplication::Add);
+            .apply_clause(build_edit_from_single(vec![6, -6], ClauseApplication::Add));
         ddnnf.rebuild();
         assert_eq!(6, ddnnf.number_of_variables);
         assert_eq!(16, ddnnf.rc());
 
         ddnnf
             .inter_graph
-            .apply_clause(vec![-5, -6], ClauseApplication::Add);
+            .apply_clause(build_edit_from_single(vec![-5, -6], ClauseApplication::Add));
         ddnnf.rebuild();
         assert_eq!(6, ddnnf.number_of_variables);
         assert_eq!(12, ddnnf.rc());
@@ -1398,7 +1467,7 @@ mod test {
         ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
         ddnnf_missing_clause2
             .inter_graph
-            .apply_clause(vec![1], ClauseApplication::Add); // indirectly via adding a clause
+            .apply_clause(build_edit_from_single(vec![1], ClauseApplication::Add)); // indirectly via adding a clause
         ddnnf_missing_clause1.rebuild();
         ddnnf_missing_clause2.rebuild();
 
