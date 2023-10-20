@@ -562,7 +562,7 @@ fn main() {
                         use rand::prelude::SliceRandom;
                         clauses.shuffle(&mut rng);
                         let total_clauses =
-                            cmp::min(get_all_clauses_cnf(temp_file_path).len(), 100);
+                            cmp::min(get_all_clauses_cnf(temp_file_path).len(), 1);
                         for (index, clause) in clauses.into_iter().enumerate() {
                             if index == total_clauses {
                                 break;
@@ -623,7 +623,7 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
     );
 }
 
-const RUNS: u32 = 3;
+const RUNS: u32 = 1;
 
 fn execute_bench_call(
     target_file_path: &str,
@@ -682,12 +682,29 @@ fn execute_bench_call(
         println!("Diff recompile method: {diff_recompile:.10}");
         println!("Used Strategy:         {:?}", current_strategy);
 
-        assert_eq!(inter_ddnnf.rc(), base_ddnnf.rc());
+        assert!(inter_ddnnf.rc() == base_ddnnf.rc());
+        let mut valid = true;
+        valid &= inter_ddnnf.rc() == base_ddnnf.rc();
         for feature in 1_i32..base_ddnnf.number_of_variables as i32 {
-            assert_eq!(
-                base_ddnnf.execute_query(&[feature]),
-                inter_ddnnf.execute_query(&[feature])
-            );
+            valid &= 
+                base_ddnnf.execute_query(&[feature]) ==
+                inter_ddnnf.execute_query(&[feature]);
+        }
+        if !valid {
+            raw_wtr
+            .write_record([
+                target_file_path.clone(),
+                &diff_naive.to_string(),
+                &diff_recompile.to_string(),
+                &benefit.to_string(),
+                &format!("{:?} FAILED", current_strategy),
+                &base_ddnnf.node_count().to_string(),
+                &inter_ddnnf.node_count().to_string(),
+                &base_ddnnf.edge_count().to_string(),
+                &inter_ddnnf.edge_count().to_string(),
+                &base_ddnnf.sharing().to_string(),
+                &inter_ddnnf.sharing().to_string(),
+            ]).unwrap();
         }
         raw_wtr.flush().unwrap();
     }

@@ -448,7 +448,7 @@ impl IntermediateGraph {
 
         // Recompile the whole dDNNF if at least 80% are children of the closest_node we could replace
         if relevant_literals.len() as f32
-            > self.literal_children.get(&self.root).unwrap().len() as f32 * 0.8
+            > self.literal_children.get(&self.root).unwrap().len() as f32 * 0.75
         {
             return (Vec::new(), self.root, HashMap::new());
         }
@@ -472,19 +472,6 @@ impl IntermediateGraph {
             println!("accumulated decisions: {:?}", accumlated_decisions.len());
         }
 
-        //let mut accumlated_decisions = HashSet::new();
-        // Add unit clauses. Those decisions are implicit in the dDNNF.
-        // Hence, we have to search for them
-        self.cnf_clauses.iter().for_each(|cnf_clause| {
-            if cnf_clause.len() == 1 {
-                accumlated_decisions.insert(cnf_clause[0]);
-            }
-        });
-
-        if DEBUG {
-            println!("accumulated decisions: {:?}", accumlated_decisions);
-        }
-
         if DEBUG {
             println!(
                 "lits count: {} lits: {:?}",
@@ -504,7 +491,7 @@ impl IntermediateGraph {
                 .filter(|initial_clause| {
                     initial_clause.iter().any(|elem| {
                         relevant_literals.contains(elem) || relevant_literals.contains(&-elem)
-                    })
+                    } || initial_clause.len() == 1) // Add unit clauses. Those decisions are implicit in the dDNNF.
                 })
                 .collect_vec()
         };
@@ -528,7 +515,7 @@ impl IntermediateGraph {
                 relevant_clauses, accumlated_decisions
             );
         }
-        // 3) Repeatedly apply the summed up decions to the remaining clauses
+        // 2.5) Repeatedly apply the summed up decions to the remaining clauses
         (relevant_clauses, accumlated_decisions) =
             apply_decisions(relevant_clauses, accumlated_decisions);
         if DEBUG {
@@ -538,7 +525,7 @@ impl IntermediateGraph {
             );
         }
 
-        // Continue 2.5
+        // 3) Handle consequences of decisions
         let mut red_variables = HashSet::new();
         for clause in relevant_clauses.iter() {
             for variable in clause {
@@ -605,12 +592,18 @@ impl IntermediateGraph {
             cnf.push(format!("{} 0\n", format_vec(clause.iter())));
         }
 
+        //println!("{:?}", cnf); // -154 679
         // Swaps key with value in the key value pairs
         let pairs: Vec<(u32, u32)> = re_index.drain().collect();
         for (key, value) in pairs {
             re_index.insert(value, key);
         }
-
+        //let mut vec_re: Vec<(u32, u32)> = re_index.drain().collect();
+        //for (fst, snd) in vec_re.iter_mut() {
+        //    std::mem::swap(fst, snd);
+        //}
+        //vec_re.sort();
+        //println!("\n\n{:?}", vec_re); // 109 -> 154, 224 -> 679
         (cnf, closest_node, re_index)
     }
 
