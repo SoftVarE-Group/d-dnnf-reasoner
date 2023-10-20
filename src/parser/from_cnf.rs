@@ -416,5 +416,16 @@ mod test {
             decisions
         );
         assert_eq!(Vec::<Vec<i32>>::new(), clauses);
+
+        let clauses = vec![
+            vec![6, -7],
+            vec![6, -8],
+            vec![-9, 6],
+            vec![8, 7, 9, -6],
+            vec![-7, -8],
+        ];
+        let decisions = vec![1].into_iter().collect();
+        let (clauses_after, _) = apply_decisions(clauses.clone(), decisions);
+        assert_eq!(clauses, clauses_after);
     }
 }

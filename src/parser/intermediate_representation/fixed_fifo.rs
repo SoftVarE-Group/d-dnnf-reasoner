@@ -75,7 +75,7 @@ impl<T> FixedFifo<T> {
     where
         FR: Fn(&T) -> bool,
     {
-        if let Some(index) = self.buffer.iter().position(|item| predicate(item)) {
+        if let Some(index) = self.buffer.iter().position(predicate) {
             // Use drain to remove and return the matching item.
             let matching_item = self.buffer.drain(index..index + 1).next();
             matching_item
@@ -85,7 +85,7 @@ impl<T> FixedFifo<T> {
     }
 
     pub(crate) fn len(&mut self) -> usize {
-        return self.buffer.len();
+        self.buffer.len()
     }
 
     fn _switch_conflict_fn(&mut self, conflict_fn_replacement: Rc<dyn Fn(&T, &T) -> bool>) {
@@ -106,7 +106,7 @@ impl<T> FixedFifo<T> {
 
 #[cfg(test)]
 mod test {
-    use std::rc::Rc;
+    use std::{collections::HashSet, rc::Rc};
 
     use super::FixedFifo;
 
@@ -139,5 +139,20 @@ mod test {
         fsb._switch_conflict_fn(Rc::new(|add, elem| add + elem < 25));
         fsb.retain_push(20);
         assert_eq!(vec![2, 4, 20], fsb._get_buffer());
+
+        let mut fsb_ir_cache: FixedFifo<((HashSet<i32>, (i32, i32)), i32)> = FixedFifo::new(
+            10,
+            Rc::new(|((edit_lits, _), _), ((edit_lits_other, _), _)| {
+                edit_lits.intersection(&edit_lits_other).count() == 0
+            }),
+        );
+        fsb_ir_cache.retain_push(((vec![1, 2, -3].into_iter().collect(), (0, 0)), 0));
+        fsb_ir_cache.retain_push(((vec![-1].into_iter().collect(), (0, 0)), 0));
+        fsb_ir_cache.retain_push(((vec![4, -4].into_iter().collect(), (0, 0)), 0));
+        assert_eq!(3, fsb_ir_cache.len());
+
+        fsb_ir_cache.retain_push(((vec![1, -1].into_iter().collect(), (0, 0)), 0));
+        fsb_ir_cache.retain_push(((vec![5, 1].into_iter().collect(), (0, 0)), 0));
+        assert_eq!(2, fsb_ir_cache.len());
     }
 }

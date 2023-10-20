@@ -93,7 +93,7 @@ impl Ddnnf {
     /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
     /// The clauses are disjuncted.
     /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4)
-    pub fn apply_changes(
+    pub fn prepare_and_apply_incremental_edit(
         &mut self,
         edit_operations: Vec<(Vec<i32>, ClauseApplication)>,
     ) -> IncrementalStrategy {
@@ -115,7 +115,9 @@ impl Ddnnf {
                 None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
             }
         }
-        let strategy = self.inter_graph.apply_clause((edit_lits, (op_add, op_rmv)));
+        let strategy = self
+            .inter_graph
+            .apply_incremental_edit((edit_lits, (op_add, op_rmv)));
         self.rebuild();
         strategy
     }
@@ -224,9 +226,9 @@ mod test {
         assert!((1.0 - ddnnf_small_ex.sharing()).abs() < 1e-7);
 
         let ddnnf_x264 = build_ddnnf("tests/data/VP9.cnf", None);
-        assert_eq!(156, ddnnf_x264.node_count());
-        assert_eq!(193, ddnnf_x264.edge_count());
-        assert!((156.0 / (193.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
+        assert_eq!(148, ddnnf_x264.node_count());
+        assert_eq!(185, ddnnf_x264.edge_count());
+        assert!((148.0 / (185.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
     }
 
     #[test]
@@ -285,7 +287,7 @@ mod test {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));
             }
 
-            ddnnf.apply_changes(vec![(clause, ClauseApplication::Add)]);
+            ddnnf.prepare_and_apply_incremental_edit(vec![(clause, ClauseApplication::Add)]);
             println!("Card of Features after change:");
             for i in 0..ddnnf.number_of_variables {
                 println!("{i}: {:?}", ddnnf.execute_query(&[i as i32]));

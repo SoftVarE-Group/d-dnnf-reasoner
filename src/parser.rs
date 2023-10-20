@@ -41,7 +41,7 @@ use petgraph::{
 
 use self::util::open_file_savely;
 
-type DdnnfGraph = StableGraph<TId, Option<Vec<i32>>>;
+type DdnnfGraph = StableGraph<TId, ()>;
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -162,7 +162,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
             And { children } => {
                 let from = ddnnf_graph.add_node(TId::And);
                 for child in children {
-                    ddnnf_graph.add_edge(from, node_indices[child], None);
+                    ddnnf_graph.add_edge(from, node_indices[child], ());
                 }
                 from
             }
@@ -172,7 +172,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
             } => {
                 let from = ddnnf_graph.add_node(TId::Or);
                 for child in children {
-                    ddnnf_graph.add_edge(from, node_indices[child], None);
+                    ddnnf_graph.add_edge(from, node_indices[child], ());
                 }
                 from
             }
@@ -257,16 +257,17 @@ fn build_d4_ddnnf(
                                  to: NodeIndex,
                                  edge: EdgeIndex,
                                  weights: Vec<i32>| {
-        let and_node = ddnnf_graph.add_node(TId::And);
         let literal_nodes = get_literal_indices(ddnnf_graph, weights);
+        if !literal_nodes.is_empty() {
+            let and_node = ddnnf_graph.add_node(TId::And);
+            ddnnf_graph.remove_edge(edge);
 
-        ddnnf_graph.remove_edge(edge);
-
-        ddnnf_graph.add_edge(from, and_node, None);
-        for node in literal_nodes {
-            ddnnf_graph.add_edge(and_node, node, None);
+            ddnnf_graph.add_edge(from, and_node, ());
+            for node in literal_nodes {
+                ddnnf_graph.add_edge(and_node, node, ());
+            }
+            ddnnf_graph.add_edge(and_node, to, ());
         }
-        ddnnf_graph.add_edge(and_node, to, None);
     };
 
     // opens the file with a BufReader and
@@ -283,7 +284,7 @@ fn build_d4_ddnnf(
                 }
                 let from_n = indices[from as usize - 1];
                 let to_n = indices[to as usize - 1];
-                let edge = ddnnf_graph.add_edge(from_n, to_n, None);
+                let edge = ddnnf_graph.add_edge(from_n, to_n, ());
                 resolve_weighted_edge(&mut ddnnf_graph, from_n, to_n, edge, features);
             }
             And => indices.push(ddnnf_graph.add_node(TId::And)),
@@ -301,7 +302,7 @@ fn build_d4_ddnnf(
         let mut ort = or_triangles.borrow_mut();
 
         if ort[f_u32 as usize].is_some() {
-            ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), None);
+            ddnnf_graph.add_edge(attach, ort[f_u32 as usize].unwrap(), ());
         } else {
             let or = ddnnf_graph.add_node(TId::Or);
             ort[f_u32 as usize] = Some(or);
@@ -309,9 +310,9 @@ fn build_d4_ddnnf(
             let pos_lit = get_literal_indices(ddnnf_graph, vec![f])[0];
             let neg_lit = get_literal_indices(ddnnf_graph, vec![-f])[0];
 
-            ddnnf_graph.add_edge(attach, or, None);
-            ddnnf_graph.add_edge(or, pos_lit, None);
-            ddnnf_graph.add_edge(or, neg_lit, None);
+            ddnnf_graph.add_edge(attach, or, ());
+            ddnnf_graph.add_edge(or, pos_lit, ());
+            ddnnf_graph.add_edge(or, neg_lit, ());
         }
     };
 
@@ -324,8 +325,8 @@ fn build_d4_ddnnf(
 
                 // place the newly created and node between the or node and its child
                 ddnnf_graph.remove_edge(ddnnf_graph.find_edge(from, child_nx).unwrap());
-                ddnnf_graph.add_edge(from, and_node, None);
-                ddnnf_graph.add_edge(and_node, child_nx, None);
+                ddnnf_graph.add_edge(from, and_node, ());
+                ddnnf_graph.add_edge(and_node, child_nx, ());
 
                 for literal in child_literals {
                     add_literal_node(ddnnf_graph, literal, and_node);
@@ -333,13 +334,18 @@ fn build_d4_ddnnf(
             }
         };
 
-    // add a new root which hold the unmentioned variables within the total_features range
-    let root = ddnnf_graph.add_node(TId::And);
-    ddnnf_graph.add_edge(root, NodeIndex::new(0), None);
+    // the root node is per default the first node
+    let mut root = NodeIndex::new(0);
 
     // add literals that are not mentioned in the ddnnf to the new root node
     for i in 1..=total_features {
         if !literal_occurences.borrow()[i as usize] {
+            // add a new root which holds the unmentioned variables within the total_features range
+            if root == NodeIndex::new(0) {
+                root = ddnnf_graph.add_node(TId::And);
+                ddnnf_graph.add_edge(root, NodeIndex::new(0), ());
+            }
+
             add_literal_node(&mut ddnnf_graph, i, root);
         }
     }

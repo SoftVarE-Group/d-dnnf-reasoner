@@ -639,10 +639,10 @@ fn execute_bench_call(
         let run_op = operation.clone();
 
         if pre_operation.is_some() {
-            inter_ddnnf.apply_changes(pre_operation.clone().unwrap());
+            inter_ddnnf.prepare_and_apply_incremental_edit(pre_operation.clone().unwrap());
         }
         start = Instant::now();
-        let current_strategy = inter_ddnnf.apply_changes(run_op);
+        let current_strategy = inter_ddnnf.prepare_and_apply_incremental_edit(run_op);
         let diff_recompile = start.elapsed().as_secs_f64();
 
         start = Instant::now();
@@ -663,7 +663,7 @@ fn execute_bench_call(
         }
 
         raw_wtr
-            .write_record(&[
+            .write_record([
                 target_file_path.clone(),
                 &diff_naive.to_string(),
                 &diff_recompile.to_string(),
@@ -731,30 +731,28 @@ fn parse_bench_queries(file_path: &str) -> Vec<(Vec<i32>, ClauseApplication)> {
     let reader = BufReader::new(file);
 
     // Iterate over each line
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            let parts: Vec<&str> = line.split_whitespace().collect();
+    for line in reader.lines().flatten() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
 
-            if let Some((&s, ints)) = parts.split_first() {
-                let capp = match s {
-                    "REMOVE" => ClauseApplication::Remove,
-                    "ADD" => ClauseApplication::Add,
-                    _ => {
-                        eprintln!("Invalid enum value: {}", s);
-                        continue;
-                    }
-                };
+        if let Some((&s, ints)) = parts.split_first() {
+            let capp = match s {
+                "REMOVE" => ClauseApplication::Remove,
+                "ADD" => ClauseApplication::Add,
+                _ => {
+                    eprintln!("Invalid enum value: {}", s);
+                    continue;
+                }
+            };
 
-                // Parse the integers into a vector of i32
-                let integers: Vec<i32> = ints
-                    .into_iter()
-                    .map(|&int_str| int_str.parse::<i32>().unwrap())
-                    .collect();
+            // Parse the integers into a vector of i32
+            let integers: Vec<i32> = ints
+                .iter()
+                .map(|&int_str| int_str.parse::<i32>().unwrap())
+                .collect();
 
-                query.push((integers, capp));
-            } else {
-                eprintln!("Invalid line format: {}", line);
-            }
+            query.push((integers, capp));
+        } else {
+            eprintln!("Invalid line format: {}", line);
         }
     }
     query
