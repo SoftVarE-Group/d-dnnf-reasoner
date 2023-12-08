@@ -84,7 +84,7 @@ impl<T> FixedFifo<T> {
         }
     }
 
-    pub(crate) fn len(&mut self) -> usize {
+    pub(crate) fn _len(&mut self) -> usize {
         self.buffer.len()
     }
 
@@ -149,10 +149,10 @@ mod test {
         fsb_ir_cache.retain_push(((vec![1, 2, -3].into_iter().collect(), (0, 0)), 0));
         fsb_ir_cache.retain_push(((vec![-1].into_iter().collect(), (0, 0)), 0));
         fsb_ir_cache.retain_push(((vec![4, -4].into_iter().collect(), (0, 0)), 0));
-        assert_eq!(3, fsb_ir_cache.len());
+        assert_eq!(3, fsb_ir_cache._len());
 
         fsb_ir_cache.retain_push(((vec![1, -1].into_iter().collect(), (0, 0)), 0));
         fsb_ir_cache.retain_push(((vec![5, 1].into_iter().collect(), (0, 0)), 0));
-        assert_eq!(2, fsb_ir_cache.len());
+        assert_eq!(2, fsb_ir_cache._len());
     }
 }

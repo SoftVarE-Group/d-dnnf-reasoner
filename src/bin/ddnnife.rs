@@ -243,8 +243,6 @@ enum Operation {
         query_path: Option<String>,
         #[arg(long)]
         flip: bool,
-        #[arg(long)]
-        undo: bool,
     },
 }
 
@@ -297,8 +295,9 @@ fn main() {
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
             println!(
-                "Ddnnf overall count: {:#?}\nElapsed time for parsing, and overall count in seconds: {:.3}s. \
+                "Ddnnf overall count:\nscientific: {:.2e}\nconcrete count: {:#?}\nElapsed time for parsing, and overall count in seconds: {:.3}s. \
                 (This includes compiling to dDNNF if needed)",
+                ddnnf.rc(),
                 ddnnf.rc(),
                 elapsed_time
             );
@@ -507,7 +506,6 @@ fn main() {
                 start_path,
                 query_path,
                 flip,
-                undo,
             } => {
                 let mut writer = init_raw_writer();
                 let mut target = cli.file_path.unwrap();
@@ -515,6 +513,7 @@ fn main() {
                     Some(query_path) => {
                         let mut start = start_path.clone().unwrap();
                         let mut plain_query = parse_bench_queries(query_path);
+                        if plain_query.is_empty() { return }
                         let mut flipped_query = plain_query
                             .clone()
                             .into_iter()
@@ -526,28 +525,13 @@ fn main() {
                             std::mem::swap(&mut plain_query, &mut flipped_query);
                             std::mem::swap(&mut target, &mut start);
                         }
-                        let pre_operation = {
-                            if *undo {
-                                // without undo:     no precond
-                                // with undo:        from start with query to target as precond
-                                //                   followed by from target with flipped query to start
-                                // with flip + undo: from target with flipped query to start
-                                //                   followed by from start with query to target
-                                std::mem::swap(&mut plain_query, &mut flipped_query);
-                                target = start.clone();
-                                Some(flipped_query)
-                            } else {
-                                None
-                            }
-                        };
-
                         execute_bench_call(
                             &target,
                             &start,
                             &mut writer,
                             ddnnf.number_of_variables,
-                            pre_operation,
                             plain_query,
+                            true
                         );
                     }
                     None => {
@@ -561,13 +545,14 @@ fn main() {
                         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
                         use rand::prelude::SliceRandom;
                         clauses.shuffle(&mut rng);
+                        
                         let total_clauses =
                             cmp::min(get_all_clauses_cnf(temp_file_path).len(), 1);
                         for (index, clause) in clauses.into_iter().enumerate() {
                             if index == total_clauses {
                                 break;
                             }
-
+                            fs::copy(&target, temp_file_path).unwrap();
                             remove_clause_cnf(temp_file_path, &clause, None);
 
                             println!("{index}/{total_clauses} clause: {clause:?}");
@@ -576,8 +561,8 @@ fn main() {
                                 temp_file_path,
                                 &mut writer,
                                 ddnnf.number_of_variables,
-                                None,
                                 vec![(clause.clone(), ClauseApplication::Add)],
+                                false
                             );
 
                             add_clause_cnf(temp_file_path, &clause);
@@ -630,17 +615,14 @@ fn execute_bench_call(
     start_file_path: &str,
     raw_wtr: &mut csv::Writer<File>,
     total_features: u32,
-    pre_operation: Option<Vec<(Vec<i32>, ClauseApplication)>>,
     operation: Vec<(Vec<i32>, ClauseApplication)>,
+    undo: bool
 ) {
     for _ in 0..RUNS {
         let mut start;
         let mut inter_ddnnf = build_ddnnf(start_file_path, Some(total_features));
         let run_op = operation.clone();
 
-        if pre_operation.is_some() {
-            inter_ddnnf.prepare_and_apply_incremental_edit(pre_operation.clone().unwrap());
-        }
         start = Instant::now();
         let current_strategy = inter_ddnnf.prepare_and_apply_incremental_edit(run_op);
         let diff_recompile = start.elapsed().as_secs_f64();
@@ -662,27 +644,10 @@ fn execute_bench_call(
             );
         }
 
-        raw_wtr
-            .write_record([
-                target_file_path.clone(),
-                &diff_naive.to_string(),
-                &diff_recompile.to_string(),
-                &benefit.to_string(),
-                &format!("{:?}", current_strategy),
-                &base_ddnnf.node_count().to_string(),
-                &inter_ddnnf.node_count().to_string(),
-                &base_ddnnf.edge_count().to_string(),
-                &inter_ddnnf.edge_count().to_string(),
-                &base_ddnnf.sharing().to_string(),
-                &inter_ddnnf.sharing().to_string(),
-            ])
-            .unwrap();
-
         println!("Diff naive method:     {diff_naive:.10}");
         println!("Diff recompile method: {diff_recompile:.10}");
         println!("Used Strategy:         {:?}", current_strategy);
 
-        assert!(inter_ddnnf.rc() == base_ddnnf.rc());
         let mut valid = true;
         valid &= inter_ddnnf.rc() == base_ddnnf.rc();
         for feature in 1_i32..base_ddnnf.number_of_variables as i32 {
@@ -690,14 +655,18 @@ fn execute_bench_call(
                 base_ddnnf.execute_query(&[feature]) ==
                 inter_ddnnf.execute_query(&[feature]);
         }
-        if !valid {
-            raw_wtr
+        let strat = if valid {
+            format!("{:?}", current_strategy)
+        } else {
+            format!("{:?} FAILED", current_strategy)
+        };
+        raw_wtr
             .write_record([
-                target_file_path.clone(),
+                target_file_path,
                 &diff_naive.to_string(),
                 &diff_recompile.to_string(),
                 &benefit.to_string(),
-                &format!("{:?} FAILED", current_strategy),
+                &strat,
                 &base_ddnnf.node_count().to_string(),
                 &inter_ddnnf.node_count().to_string(),
                 &base_ddnnf.edge_count().to_string(),
@@ -705,8 +674,70 @@ fn execute_bench_call(
                 &base_ddnnf.sharing().to_string(),
                 &inter_ddnnf.sharing().to_string(),
             ]).unwrap();
-        }
+
         raw_wtr.flush().unwrap();
+
+        if undo {
+            let flipped_query = operation
+                .clone()
+                .into_iter()
+                .map(|(clause, app)| (clause, !app))
+                .collect_vec(); 
+
+            start = Instant::now();
+            let current_strategy = inter_ddnnf.prepare_and_apply_incremental_edit(flipped_query);
+            let diff_recompile = start.elapsed().as_secs_f64();
+    
+            start = Instant::now();
+            let mut base_ddnnf = build_ddnnf(start_file_path, Some(total_features));
+            let diff_naive = start.elapsed().as_secs_f64();
+    
+            let benefit = diff_naive - diff_recompile;
+            if benefit.is_sign_positive() {
+                println!(
+                    "\x1b[1;38;5;46m(+)\x1b[0m SUB-Recompile is {}s BETTER",
+                    benefit
+                );
+            } else {
+                println!(
+                    "\x1b[1;38;5;196m(-)\x1b[0m SUB-Recompile is {}s WORSE",
+                    benefit
+                );
+            }
+    
+            println!("Diff naive method:     {diff_naive:.10}");
+            println!("Diff recompile method: {diff_recompile:.10}");
+            println!("Used Strategy:         {:?}", current_strategy);
+    
+            let mut valid = true;
+            valid &= inter_ddnnf.rc() == base_ddnnf.rc();
+            for feature in 1_i32..base_ddnnf.number_of_variables as i32 {
+                valid &= 
+                    base_ddnnf.execute_query(&[feature]) ==
+                    inter_ddnnf.execute_query(&[feature]);
+            }
+            let strat = if valid {
+                format!("{:?}", current_strategy)
+            } else {
+                format!("{:?} FAILED", current_strategy)
+            };
+            raw_wtr
+                .write_record([
+                    target_file_path,
+                    &diff_naive.to_string(),
+                    &diff_recompile.to_string(),
+                    &benefit.to_string(),
+                    &strat,
+                    &base_ddnnf.node_count().to_string(),
+                    &inter_ddnnf.node_count().to_string(),
+                    &base_ddnnf.edge_count().to_string(),
+                    &inter_ddnnf.edge_count().to_string(),
+                    &base_ddnnf.sharing().to_string(),
+                    &inter_ddnnf.sharing().to_string(),
+                ]).unwrap();
+    
+            raw_wtr.flush().unwrap();
+        }
     }
 }
 
@@ -755,6 +786,7 @@ fn parse_bench_queries(file_path: &str) -> Vec<(Vec<i32>, ClauseApplication)> {
             let capp = match s {
                 "REMOVE" => ClauseApplication::Remove,
                 "ADD" => ClauseApplication::Add,
+                "IMPOSSIBLE" => return vec![],
                 _ => {
                     eprintln!("Invalid enum value: {}", s);
                     continue;
