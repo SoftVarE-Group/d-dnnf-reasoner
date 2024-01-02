@@ -15,7 +15,7 @@ use std::time::Instant;
 use ddnnf_lib::ddnnf::Ddnnf;
 use ddnnf_lib::parser::{
     self as dparser,
-    persisting::{write_as_mermaid_md, write_ddnnf},
+    persisting::{write_as_mermaid_md, write_ddnnf_to_file},
 };
 
 #[derive(Parser)]
@@ -506,7 +506,7 @@ fn main() {
     // writes the d-DNNF to file
     if cli.save_ddnnf.is_some() {
         let path = construct_ouput_path(&cli.save_ddnnf, "saved", "nnf");
-        write_ddnnf(&ddnnf, &path).unwrap();
+        write_ddnnf_to_file(&ddnnf, &path).unwrap();
         println!(
             "\nThe smooth d-DNNF was written into the c2d format in {}.",
             path

@@ -18,7 +18,7 @@ use nom::sequence::{pair, tuple};
 use nom::IResult;
 use workctl::WorkQueue;
 
-use crate::parser::persisting::write_ddnnf;
+use crate::parser::persisting::write_ddnnf_to_file;
 use crate::{parser::util::*, Ddnnf};
 
 impl Ddnnf {
@@ -344,7 +344,7 @@ impl Ddnnf {
                 if !path.is_absolute() {
                     return String::from("E6 error: file path is not absolute, but has to be");
                 }
-                match write_ddnnf(self, path.to_str().unwrap()) {
+                match write_ddnnf_to_file(self, path.to_str().unwrap()) {
                     Ok(_) => String::from(""),
                     Err(e) => format!(
                         "E6 error: {} while trying to write ddnnf to {}",

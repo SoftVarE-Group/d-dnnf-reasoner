@@ -1,7 +1,7 @@
 extern crate ddnnf_lib;
 
 use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{self, persisting::write_ddnnf};
+use ddnnf_lib::parser::{self, persisting::write_ddnnf_to_file};
 
 use file_diff::diff_files;
 use std::fs;
@@ -16,7 +16,7 @@ fn card_of_features_normal_and_reloaded_test() {
 
     // save nnf in c2d format
     let saved_nnf = "./tests/data/auto1_d4_to_c2d.nnf";
-    write_ddnnf(&mut ddnnf, saved_nnf).unwrap();
+    write_ddnnf_to_file(&mut ddnnf, saved_nnf).unwrap();
 
     // compute the cardinality of features for the saved file
     let saved_out = "./tests/data/auto1_d4_to_c2d_fs.csv";

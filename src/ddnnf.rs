@@ -1,20 +1,25 @@
 pub mod anomalies;
+pub mod clause_cache;
 pub mod counting;
 pub mod heuristics;
 pub mod multiple_queries;
 pub mod node;
 pub mod stream;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
+use itertools::Either;
 use rug::Integer;
 
-use self::node::Node;
+use self::{clause_cache::ClauseCache, node::Node};
 
 #[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
+    /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
+    /// The saved state to enable undoing and adapting the d-DNNF. Avoid exposing this field outside of this source file!
+    cached_state: Option<ClauseCache>,
     /// Literals for upwards propagation
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
@@ -31,6 +36,7 @@ impl Default for Ddnnf {
     fn default() -> Self {
         Ddnnf {
             nodes: Vec::new(),
+            cached_state: None,
             literals: HashMap::new(),
             true_nodes: Vec::new(),
             core: HashSet::new(),
@@ -51,6 +57,7 @@ impl Ddnnf {
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
+            cached_state: None,
             literals,
             true_nodes,
             core: HashSet::new(),
@@ -62,14 +69,74 @@ impl Ddnnf {
         ddnnf
     }
 
-    // returns the current count of the root node in the ddnnf
-    // that value is the same during all computations
+    /// Checks if the creation of a cached state is valid.
+    /// That is only the case if the input format was CNF.
+    pub fn can_save_state(&self) -> bool {
+        self.cached_state.is_some()
+    }
+
+    /// Either initialises the ClauseCache by saving the clauses and its corresponding clauses
+    /// or updates the state accordingly.
+    pub fn update_cached_state(
+        &mut self,
+        ddnnf: Ddnnf,
+        clause_info: Either<(Vec<BTreeSet<i32>>, Vec<BTreeSet<i32>>), BTreeSet<BTreeSet<i32>>>, // Left(edit operation) or Right(clauses)
+        total_features: Option<u32>,
+    ) -> bool {
+        match &self.cached_state {
+            Some(state) => match clause_info.left() {
+                Some((add, rmv)) => {
+                    if total_features.is_none()
+                        || !state.to_owned().apply_edits_and_replace(
+                            add,
+                            rmv,
+                            total_features.unwrap(),
+                        )
+                    {
+                        return false;
+                    }
+                    // The old d-DNNF got replaced by the new one.
+                    // Consequently, the current higher level d-DNNF becomes the older one.
+                    // We swap their field data to keep the order without needing to deal with recursivly building up
+                    // obselete d-DNNFs that trash the RAM.
+                    std::mem::swap(self, &mut state.to_owned().get_old_state());
+                }
+                None => return false,
+            },
+            None => match clause_info.right() {
+                Some(clauses) => {
+                    let mut state = ClauseCache::default();
+                    state.initialize(ddnnf, clauses, total_features);
+                    self.cached_state = Some(state);
+                }
+                None => return false,
+            },
+        }
+        true
+    }
+
+    // Performes an undo operation resulting in swaping the current d-DNNF with its older version.
+    // Hence, the perviously older version becomes the current one and the current one becomes the older version.
+    // A second undo operation in a row is equivalent to a redo. Can fail if there is no old d-DNNF available.
+    pub fn undo_on_cached_state(&mut self) -> bool {
+        match &self.cached_state {
+            Some(state) => {
+                state.to_owned().setup_for_undo();
+                std::mem::swap(self, &mut state.to_owned().get_old_state());
+                true
+            }
+            None => false,
+        }
+    }
+
+    // Returns the current count of the root node in the ddnnf.
+    // That value is the same during all computations
     pub fn rc(&self) -> Integer {
         self.nodes[self.nodes.len() - 1].count.clone()
     }
 
-    // returns the current temp count of the root node in the ddnnf
-    // that value is changed during computations
+    // Returns the current temp count of the root node in the ddnnf.
+    // That value is changed during computations
     fn rt(&self) -> Integer {
         self.nodes[self.nodes.len() - 1].temp.clone()
     }
@@ -85,8 +152,8 @@ impl Ddnnf {
         indexes
     }
 
-    /// executes a query
-    /// we use the in our opinion best type of query depending on the amount of features
+    /// Executes a query.
+    /// We use the in our opinion best type of query depending on the amount of features.
     ///
     /// # Example
     /// ```
