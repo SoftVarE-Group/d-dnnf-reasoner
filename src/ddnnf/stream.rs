@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 use std::io::BufRead;
 use std::iter::FromIterator;
 use std::path::Path;
@@ -176,6 +176,9 @@ impl Ddnnf {
         if args.is_empty() {
             return String::from("E4 error: got an empty msg");
         }
+        if let Some(duplicate) = contains_input_duplicate_commands_or_params(msg) {
+            return format!("E4 error: \"{duplicate}\" occurs at least twice in the stream msg");
+        }
 
         let mut param_index = 1;
 
@@ -336,6 +339,12 @@ impl Ddnnf {
                 let cross = args[0] == "atomic-cross";
                 format_vec_vec(self.get_atomic_sets(candidates, &params, cross).iter())
             }
+            "t-wise" => {
+                let limit_interpretation = limit.unwrap_or(1);
+                self.sample_t_wise(limit_interpretation).to_string()
+            }
+            "clause-update" => return String::from("E5 error: edit is invalid"),
+            "undo-update" => return String::from("E5 error: edit is invalid"),
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
@@ -352,10 +361,6 @@ impl Ddnnf {
                         path.to_str().unwrap()
                     ),
                 }
-            }
-            "t-wise" => {
-                let limit_interpretation = limit.unwrap_or(1);
-                self.sample_t_wise(limit_interpretation).to_string()
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),
         }
@@ -386,7 +391,24 @@ fn op_with_assumptions_and_vars<T: ToString>(
     response.join(";")
 }
 
-// parses numbers and ranges of the form START..[STOP] into a vector of i32
+// Checks for duplicates such as in "count a 1 2 3 a 1" which would be invalid due to a occuring twice
+fn contains_input_duplicate_commands_or_params(s: &str) -> Option<&str> {
+    let mut seen_text_substrings: HashSet<&str> = HashSet::new();
+
+    for word in s.split_whitespace() {
+        // Check if the word is a text substring
+        if !word.chars().all(|c| c.is_digit(10)) {
+            // Check if the text substring has already been seen
+            if !seen_text_substrings.insert(word) {
+                // If the text substring has been seen before, the string is invalid
+                return Some(word);
+            }
+        }
+    }
+    None
+}
+
+// Parses numbers and ranges of the form START..[STOP] into a vector of i32
 fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), String> {
     let mut numbers = Vec::new();
     let mut parsed_str_count = 0;
@@ -815,6 +837,15 @@ mod test {
         assert_eq!(
             String::from("E4 error: the option \"5\" is not valid in this context"),
             auto1.handle_stream_msg("random a 1 2 s 13 5")
+        );
+
+        assert_eq!(
+            String::from("E4 error: \"count\" occurs at least twice in the stream msg"),
+            auto1.handle_stream_msg("count a 1 count v 2")
+        );
+        assert_eq!(
+            String::from("E4 error: \"a\" occurs at least twice in the stream msg"),
+            auto1.handle_stream_msg("count a 1 2 3 a 1")
         );
 
         assert_eq!(
