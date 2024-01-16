@@ -249,7 +249,7 @@ fn main() {
             }
             input.push(read_line);
         }
-        ddnnf = dparser::distribute_building(input, cli.total_features);
+        ddnnf = dparser::distribute_building(input, cli.total_features, None);
     } else {
         let ddnnf_path = &cli.file_path.clone().unwrap();
         ddnnf = dparser::build_ddnnf(ddnnf_path, cli.total_features)

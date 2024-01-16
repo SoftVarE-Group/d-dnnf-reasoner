@@ -17,7 +17,7 @@ use core::panic;
 use std::{
     cell::RefCell,
     cmp::max,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     ffi::OsStr,
     fs::{self, File},
     io::{BufRead, BufReader},
@@ -57,6 +57,7 @@ use petgraph::{
 /// The function panics for an invalid file path.
 #[inline]
 pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
+    let mut clauses = BTreeSet::new();
     if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
             let file = open_file_savely(path);
@@ -65,16 +66,18 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
                 let line = line.expect("Unable to read line");
                 match check_for_cnf_header(line.as_str()).unwrap().1 {
                     CNFToken::Header {
-                        features,
-                        clauses: _,
+                        total_features: total_features_header,
+                        total_clauses: _,
                     } => {
                         let ddnnf_file = ".intermediate.nnf";
                         compile_cnf(path, ddnnf_file);
                         path = ddnnf_file;
-                        total_features = Some(features as u32);
-                        break;
+                        total_features = Some(total_features_header as u32);
                     }
-                    CNFToken::Comment | CNFToken::Clause => (),
+                    CNFToken::Clause { features } => {
+                        clauses.insert(features);
+                    }
+                    CNFToken::Comment => (),
                 }
             }
         }
@@ -90,14 +93,22 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
         fs::remove_file(path).unwrap();
     }
 
-    distribute_building(lines, total_features)
+    if clauses.is_empty() {
+        distribute_building(lines, total_features, None)
+    } else {
+        distribute_building(lines, total_features, Some(clauses))
+    }
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.
 /// Either the first line is a header and therefore the c2d format or total_features
 /// is supplied and its the d4 format.
 #[inline]
-pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> Ddnnf {
+pub fn distribute_building(
+    lines: Vec<String>,
+    total_features: Option<u32>,
+    clauses: Option<BTreeSet<BTreeSet<i32>>>,
+) -> Ddnnf {
     use C2DToken::*;
 
     match lex_line_c2d(lines[0].trim()) {
@@ -108,13 +119,13 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
                 edges: _,
                 variables,
             },
-        )) => build_c2d_ddnnf(lines, variables as u32),
+        )) => build_c2d_ddnnf(lines, variables as u32, clauses),
         Ok(_) | Err(_) => {
             // tried to parse the c2d standard, but failes
             match total_features {
                 Some(o) => {
                     // we try to parse the d4 standard
-                    build_d4_ddnnf(lines, Some(o))
+                    build_d4_ddnnf(lines, Some(o), clauses)
                 }
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
@@ -123,7 +134,7 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
                         Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
                         Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n\x1b[0m"
                     );
-                    build_d4_ddnnf(lines, None)
+                    build_d4_ddnnf(lines, None, clauses)
                 }
             }
         }
@@ -134,7 +145,11 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
 /// This function uses C2DTokens which specify a d-DNNF in c2d format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
+fn build_c2d_ddnnf(
+    lines: Vec<String>,
+    variables: u32,
+    clauses: Option<BTreeSet<BTreeSet<i32>>>,
+) -> Ddnnf {
     use C2DToken::*;
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(lines.len());
@@ -182,14 +197,18 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, variables)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, variables, clauses)
 }
 
 /// Parses a ddnnf, referenced by the file path.
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf {
+fn build_d4_ddnnf(
+    lines: Vec<String>,
+    total_features_opt: Option<u32>,
+    clauses: Option<BTreeSet<BTreeSet<i32>>>,
+) -> Ddnnf {
     let mut ddnnf_graph = StableGraph::<TId, ()>::new();
 
     let mut total_features = total_features_opt.unwrap_or(0);
@@ -486,7 +505,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
         parsed_nodes.push(next);
     }
 
-    Ddnnf::new(parsed_nodes, literals, true_nodes, total_features)
+    Ddnnf::new(parsed_nodes, literals, true_nodes, total_features, clauses)
 }
 
 // determine the differences in literal-nodes occuring in the child nodes

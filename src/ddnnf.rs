@@ -54,6 +54,7 @@ impl Ddnnf {
         literals: HashMap<i32, usize>,
         true_nodes: Vec<usize>,
         number_of_variables: u32,
+        clauses: Option<BTreeSet<BTreeSet<i32>>>,
     ) -> Ddnnf {
         let mut ddnnf = Ddnnf {
             nodes,
@@ -66,6 +67,9 @@ impl Ddnnf {
             max_worker: 4,
         };
         ddnnf.get_core();
+        if let Some(c) = clauses {
+            ddnnf.update_cached_state(Either::Right(c), Some(number_of_variables));
+        }
         ddnnf
     }
 
@@ -79,19 +83,14 @@ impl Ddnnf {
     /// or updates the state accordingly.
     pub fn update_cached_state(
         &mut self,
-        ddnnf: Ddnnf,
         clause_info: Either<(Vec<BTreeSet<i32>>, Vec<BTreeSet<i32>>), BTreeSet<BTreeSet<i32>>>, // Left(edit operation) or Right(clauses)
         total_features: Option<u32>,
     ) -> bool {
-        match &self.cached_state {
+        match self.cached_state.as_mut() {
             Some(state) => match clause_info.left() {
                 Some((add, rmv)) => {
                     if total_features.is_none()
-                        || !state.to_owned().apply_edits_and_replace(
-                            add,
-                            rmv,
-                            total_features.unwrap(),
-                        )
+                        || !state.apply_edits_and_replace(add, rmv, total_features.unwrap())
                     {
                         return false;
                     }
@@ -99,14 +98,14 @@ impl Ddnnf {
                     // Consequently, the current higher level d-DNNF becomes the older one.
                     // We swap their field data to keep the order without needing to deal with recursivly building up
                     // obselete d-DNNFs that trash the RAM.
-                    std::mem::swap(self, &mut state.to_owned().get_old_state());
+                    self.swap();
                 }
                 None => return false,
             },
             None => match clause_info.right() {
                 Some(clauses) => {
                     let mut state = ClauseCache::default();
-                    state.initialize(ddnnf, clauses, total_features);
+                    state.initialize(clauses, total_features.unwrap());
                     self.cached_state = Some(state);
                 }
                 None => return false,
@@ -115,14 +114,32 @@ impl Ddnnf {
         true
     }
 
+    fn swap(&mut self) {
+        if let Some(cached_state) = self.cached_state.as_mut() {
+            if let Some(save_state) = cached_state.old_state.as_mut() {
+                std::mem::swap(&mut self.nodes, &mut save_state.nodes);
+                std::mem::swap(&mut self.literals, &mut save_state.literals);
+                std::mem::swap(&mut self.true_nodes, &mut save_state.true_nodes);
+                std::mem::swap(&mut self.core, &mut save_state.core);
+                std::mem::swap(&mut self.md, &mut save_state.md);
+                std::mem::swap(
+                    &mut self.number_of_variables,
+                    &mut save_state.number_of_variables,
+                );
+                std::mem::swap(&mut self.max_worker, &mut save_state.max_worker);
+            }
+        }
+    }
+
     // Performes an undo operation resulting in swaping the current d-DNNF with its older version.
     // Hence, the perviously older version becomes the current one and the current one becomes the older version.
     // A second undo operation in a row is equivalent to a redo. Can fail if there is no old d-DNNF available.
     pub fn undo_on_cached_state(&mut self) -> bool {
-        match &self.cached_state {
+        match self.cached_state.as_mut() {
             Some(state) => {
-                state.to_owned().setup_for_undo();
-                std::mem::swap(self, &mut state.to_owned().get_old_state());
+                state.setup_for_undo();
+                self.swap();
+                //std::mem::swap(self, &mut state.to_owned().get_old_state().unwrap());
                 true
             }
             None => false,

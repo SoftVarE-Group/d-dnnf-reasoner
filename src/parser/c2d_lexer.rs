@@ -165,15 +165,19 @@ fn lex_false(line: &str) -> IResult<&str, C2DToken> {
     value(False, tag("O 0 0"))(line)
 }
 
-// Returns a closure that lexes exactly one number which consists of multiple digits to form an usize
-pub(super) fn split_numbers(out: &str) -> Vec<usize> {
+// Returns a closure that lexes exactly one number which consists of multiple digits to form an T
+pub(super) fn split_numbers<T: std::str::FromStr>(out: &str) -> Vec<T> {
     out.split_whitespace()
         .map(|num: &str| {
-            num.parse::<usize>().unwrap_or_else(|_| {
-                panic!("Was not able to parse usize for node. String was {}", out)
+            num.parse::<T>().unwrap_or_else(|_| {
+                panic!(
+                    "Was not able to parse {} for node. String was {}",
+                    std::any::type_name::<T>(),
+                    out
+                )
             })
         })
-        .collect::<Vec<usize>>()
+        .collect::<Vec<T>>()
 }
 
 // parses an alternating sequence of one space and multiple digits which form a number

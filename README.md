@@ -170,36 +170,43 @@ We start ddnnife in stream mode for the ```automotive01``` model via
 ```
 
 From here on, we can use the following types of queries:
-- ```count```: computes the cardinality of a partial configuration
-- ```core```: lists core and dead features
-- ```sat```: computes if a partial configuration is satisfiable
-- ```enum```: lists complete satisfiable configurations
-- ```random```: gives uniform random samples (which are complete and satisfiable)
-- ```atomic```: computes atomic sets
-- ```atomic-cross```: computes atomic sets; a set can contain included and excluded features
-- ```save```: saves the d-DNNF for future use
-- ```exit```: leaves the stream mode
+- ```count```: Computes the cardinality of a partial configuration
+- ```core```: Lists core and dead features
+- ```sat```: Computes if a partial configuration is satisfiable
+- ```enum```: Lists complete satisfiable configurations
+- ```random```: Gives uniform random samples (which are complete and satisfiable)
+- ```atomic```: Computes atomic sets
+- ```atomic-cross```: Computes atomic sets; a set can contain included and excluded features
+- ```clause-update```: Manipulates the underlying CNF by adding / removing clauses and adjusting the total amount of features. Requires any change to be valid.
+- ```undo-update```: Reverting the latest manipulation. Applying ```undo-update``` twice results in the second ```undo-update``` being equivalent to a redo.
+- ```save```: Saves the d-DNNF for future use
+- ```exit```: Leaves the stream mode
 
 Furthermore, where sensible, the types of queries can be combined with the parameters:
-- ```v variables```: the features we are interested in
-- ```a assumptions```: assignments of features to true or false
-- ```l limit```: the number of solutions
-- ```s seed```: seeding for random operations
-- ```p path```: the absolute path, we want to save the d-DNNF
+- ```v variables```: The features we are interested in
+- ```a assumptions```: Assignments of features to true or false
+- ```l limit```: The number of solutions
+- ```s seed```: Seeding for random operations
+- ```p path```: The absolute path, we want to save the d-DNNF
+- ```add```: Add something; currently only available for clauses
+- ```rmv```: Remove something; currently only available for clauses
+- ```t total-features```: Change the total amount of features. ```t total-features``` is always evaluated before ```add``` and ```rmv```.
 
-The table below depicts the possible combinations of a query type with the parameters. The order of parameters does not influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
+The table below depicts the possible combinations of a query type with the parameters. The order of parameters does NOT influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
 
-| query type / parameter | variables | assumptions | limit | seed | path |
-|------------------------|-----------|-------------|-------|------|------|
-| count                  |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
-| core                   |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
-| sat                    |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
-| enum                   |     ✘     |      ✔      |   ✔   |   ✔  |   ✘  |
-| random                 |     ✘     |      ✔      |   ✔   |   ✔  |   ✘  |
-| atomic                 |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
-| atomic-cross           |     ✔     |      ✔      |   ✘   |   ✘  |   ✘  |
-| save                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✔  |
-| exit                   |     ✘     |      ✘      |   ✘   |   ✘  |   ✘  |
+| query type / parameter | variables | assumptions | limit | seed | path | add | rmv | total-features |
+|------------------------|-----------|-------------|-------|------|------|-----|-----|----------------|
+| count                  |     ✔     |      ✔      |       |      |      |     |     |                |
+| core                   |     ✔     |      ✔      |       |      |      |     |     |                |
+| sat                    |     ✔     |      ✔      |       |      |      |     |     |                |
+| enum                   |           |      ✔      |   ✔   |   ✔  |      |     |     |                |
+| random                 |           |      ✔      |   ✔   |   ✔  |      |     |     |                |
+| atomic                 |     ✔     |      ✔      |       |      |      |     |     |                |
+| atomic-cross           |     ✔     |      ✔      |       |      |      |     |     |                |
+| clause-update          |           |             |       |      |      |  ✔  |  ✔  |       ✔        |
+| undo-update            |           |             |       |      |      |     |     |                |
+| save                   |           |             |       |      |   ✔  |     |     |                |
+| exit                   |           |             |       |      |      |     |     |                |
 
 Sub-solutions (like multiple uniform random samples) will be separated by a ```";"```. Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
 
@@ -242,6 +249,12 @@ Computes all atomic sets for the candidates ```v``` under the assumptions ```a``
 ```properties
 atomic v 1 2 3 4 5 6 7 8 9 10 a 1
 ```
+
+Adds two new features and a clause enforcing either on of the two new features to be selected.
+```properties
+clause-update t 44 add 43 44
+```
+
 Saves the nnf as smooth d-DNNF in the c2d format. The parameter ```p``` or ```path``` has to be set, and the path must be absolute.
 ```properties
 save p /home/user/Documents/d-DNNFs/auto1.nnf

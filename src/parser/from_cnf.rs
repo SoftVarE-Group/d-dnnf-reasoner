@@ -1,9 +1,12 @@
+use std::collections::BTreeSet;
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::char,
-    combinator::{map, value},
-    sequence::preceded,
+    combinator::{map, recognize, value},
+    multi::many1,
+    sequence::{preceded, terminated},
     IResult,
 };
 
@@ -12,15 +15,18 @@ use crate::{
     d4_lexer::parse_signed_alt_space1_number1,
 };
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// A classification for the different kinds of lines a CNF file contains
 pub enum CNFToken {
     /// A comment in the CNF. It starts with a 'c '
     Comment,
     /// A clause that consists of a sequence of (signed) numbers
-    Clause,
+    Clause { features: BTreeSet<i32> },
     /// The head of a CNF file of the format p cnf #FEATURES #CLAUSESs
-    Header { features: usize, clauses: usize },
+    Header {
+        total_features: usize,
+        total_clauses: usize,
+    },
 }
 
 use CNFToken::*;
@@ -39,8 +45,8 @@ fn lex_header(line: &str) -> IResult<&str, CNFToken> {
         |out: &str| {
             let nums: Vec<usize> = split_numbers(out);
             Header {
-                features: nums[0],
-                clauses: nums[1],
+                total_features: nums[0],
+                total_clauses: nums[1],
             }
         },
     )(line)
@@ -48,7 +54,12 @@ fn lex_header(line: &str) -> IResult<&str, CNFToken> {
 
 // identifies a CNF clause by finding a sequence of (signed) numbers
 fn lex_clause(line: &str) -> IResult<&str, CNFToken> {
-    value(Clause, parse_signed_alt_space1_number1)(line)
+    map(
+        terminated(recognize(many1(parse_signed_alt_space1_number1)), tag("0")),
+        |out: &str| Clause {
+            features: split_numbers(out).into_iter().collect(),
+        },
+    )(line)
 }
 
 // identifies a CNF comment by its leading 'c'
@@ -70,10 +81,15 @@ mod test {
         assert_eq!(
             check_for_cnf_header(header).unwrap().1,
             Header {
-                features: 2513,
-                clauses: 10275
+                total_features: 2513,
+                total_clauses: 10275
             }
         );
-        assert_eq!(check_for_cnf_header(clause).unwrap().1, Clause);
+        assert_eq!(
+            check_for_cnf_header(clause).unwrap().1,
+            Clause {
+                features: vec![-1628, 1734].into_iter().collect()
+            }
+        );
     }
 }

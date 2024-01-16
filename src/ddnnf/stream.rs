@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::{BinaryHeap, HashSet};
+use std::collections::{BTreeSet, BinaryHeap, HashSet};
 use std::io::BufRead;
 use std::iter::FromIterator;
 use std::path::Path;
@@ -9,7 +9,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::Arc;
 use std::{io, thread};
 
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{char, digit1};
@@ -172,7 +172,7 @@ impl Ddnnf {
     /// E5 Operation was not able to be done, because of wrong input
     /// E6 File or path error
     pub fn handle_stream_msg(&mut self, msg: &str) -> String {
-        let args: Vec<&str> = msg.split_whitespace().collect();
+        let mut args: Vec<&str> = msg.split_whitespace().collect();
         if args.is_empty() {
             return String::from("E4 error: got an empty msg");
         }
@@ -186,7 +186,47 @@ impl Ddnnf {
         let mut values = Vec::new();
         let mut seed = 42;
         let mut limit = None;
+        let mut add_clauses: Vec<BTreeSet<i32>> = Vec::new();
+        let mut rmv_clauses: Vec<BTreeSet<i32>> = Vec::new();
+        let mut total_features = self.number_of_variables;
         let mut path = Path::new("");
+
+        // We check for an adjustement of total-features beforehand.
+        // This adjustment is only valid together with the clause-update command.
+        if let Some(index) = args.iter().position(|&s| s == "total-features" || s == "t") {
+            if args[0] != "clause-update" {
+                return format!(
+                    "E4 error: {:?} can only be used in combination with \"clause-update\"",
+                    args[index]
+                );
+            }
+            let mut succesful_update = false;
+            // The boundary must be positive while still being in the limits of an i32
+            if let Ok((numbers, len)) = get_numbers(&args[index + 1..], i32::MAX as u32) {
+                if len == 1 && numbers[0] > 0 {
+                    if self
+                        .cached_state
+                        .as_mut()
+                        .unwrap()
+                        .contains_conflicting_clauses(numbers[0] as u32)
+                    {
+                        return String::from("E5 error: at least one clause is in conflict with the feature reduction; remove conflicting clauses");
+                    }
+
+                    total_features = numbers[0] as u32;
+                    succesful_update = true;
+                    // Remove the "total-features" param and its subsequent value
+                    args.remove(index);
+                    args.remove(index);
+                }
+            }
+            if !succesful_update {
+                return format!(
+                    "E4 error: {:?} must be set to a single positive number",
+                    args[index]
+                );
+            }
+        }
 
         // go through all possible extra values that can be provided til
         // either there are no more or we can't parse anymore
@@ -194,19 +234,19 @@ impl Ddnnf {
             param_index += 1;
             match args[param_index - 1] {
                 "a" | "assumptions" => {
-                    params = match get_numbers(&args[param_index..], self.number_of_variables) {
-                        Ok(v) => {
-                            param_index += v.1;
-                            v.0
+                    params = match get_numbers(&args[param_index..], total_features) {
+                        Ok((numbers, len)) => {
+                            param_index += len;
+                            numbers
                         }
                         Err(e) => return e,
                     };
                 }
                 "v" | "variables" => {
-                    values = match get_numbers(&args[param_index..], self.number_of_variables) {
-                        Ok(v) => {
-                            param_index += v.1;
-                            v.0
+                    values = match get_numbers(&args[param_index..], total_features) {
+                        Ok((numbers, len)) => {
+                            param_index += len;
+                            numbers
                         }
                         Err(e) => return e,
                     };
@@ -240,6 +280,36 @@ impl Ddnnf {
                             "E4 error: param \"{}\" was used, but no value supplied",
                             args[param_index - 1]
                         );
+                    }
+                }
+                "add" | "rmv" => {
+                    let mut res = Vec::new();
+                    let is_add = args[param_index - 1] == "add";
+
+                    match split_clauses(&args[param_index..]) {
+                        Ok(split) => {
+                            for s in split {
+                                res.push(get_numbers(&s, total_features));
+                                match get_numbers(&s, total_features) {
+                                    Ok((numbers, len)) => {
+                                        param_index += len;
+                                        // Additional offset if the last clause end with '0'
+                                        if param_index < args.len() && "0" == args[param_index] {
+                                            param_index += 1;
+                                        }
+
+                                        // Mapping of clauses to set of additions / removals
+                                        if is_add {
+                                            add_clauses.push(numbers.into_iter().collect());
+                                        } else {
+                                            rmv_clauses.push(numbers.into_iter().collect());
+                                        }
+                                    }
+                                    Err(err) => return err,
+                                };
+                            }
+                        }
+                        Err(err) => return err,
                     }
                 }
                 other => {
@@ -343,8 +413,29 @@ impl Ddnnf {
                 let limit_interpretation = limit.unwrap_or(1);
                 self.sample_t_wise(limit_interpretation).to_string()
             }
-            "clause-update" => return String::from("E5 error: edit is invalid"),
-            "undo-update" => return String::from("E5 error: edit is invalid"),
+            "clause-update" => {
+                if self.can_save_state() {
+                    if self.update_cached_state(
+                        Either::Left((add_clauses, rmv_clauses)),
+                        Some(total_features),
+                    ) {
+                        String::from("")
+                    } else {
+                        String::from("E5 error: could not update cached state")
+                    }
+                } else {
+                    String::from("E5 error: clauses corresponding to the d-DNNF aren't available; the input file must be a CNF")
+                }
+            }
+            "undo-update" => {
+                if self.undo_on_cached_state() {
+                    String::from("")
+                } else {
+                    String::from(
+                        "E5 error: could not perform undo; there does not exist any cached state1",
+                    )
+                }
+            }
             "exit" => String::from("exit"),
             "save" => {
                 if path.to_str().unwrap() == "" {
@@ -396,8 +487,8 @@ fn contains_input_duplicate_commands_or_params(s: &str) -> Option<&str> {
     let mut seen_text_substrings: HashSet<&str> = HashSet::new();
 
     for word in s.split_whitespace() {
-        // Check if the word is a text substring
-        if !word.chars().all(|c| c.is_digit(10)) {
+        // Check if the word is a text substring (and also not a minus sign)
+        if !word.chars().all(|c| c.is_ascii_digit() || c == '-') {
             // Check if the text substring has already been seen
             if !seen_text_substrings.insert(word) {
                 // If the text substring has been seen before, the string is invalid
@@ -406,6 +497,41 @@ fn contains_input_duplicate_commands_or_params(s: &str) -> Option<&str> {
         }
     }
     None
+}
+
+// Takes a vector of strings and splits them further in sub-vectors when encountering a '0'.
+// Example:
+//  ["1", "2", "3", "0", "-4", "5", "0", "6"] becomes [["1", "2", "3"], ["-4", "5"], ["6"]]
+fn split_clauses<'a>(input_strings: &'a [&'a str]) -> Result<Vec<Vec<&'a str>>, String> {
+    let mut result = Vec::new();
+    let mut subvec = Vec::new();
+
+    for &sub_str in input_strings {
+        // If the next element isn't a number, we stop splitting
+        if sub_str.parse::<f64>().is_err() {
+            break;
+        }
+
+        if sub_str == "0" {
+            if subvec.is_empty() {
+                return Err(String::from("E4 error: detected an unallowed empty clause"));
+            }
+            result.push(subvec.clone());
+            subvec.clear();
+        } else {
+            subvec.push(sub_str);
+        }
+    }
+
+    // Last clause is allowed to not end with a '0'
+    if !subvec.is_empty() {
+        result.push(subvec);
+    }
+    if result.is_empty() {
+        return Err(String::from("E4 error: key word is missing arguments"));
+    }
+
+    Ok(result)
 }
 
 // Parses numbers and ranges of the form START..[STOP] into a vector of i32
@@ -468,6 +594,14 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
         ));
     }
 
+    match check_boundary(&numbers, boundary) {
+        Ok(_) => Ok((numbers, parsed_str_count)),
+        Err(e) => Err(e),
+    }
+}
+
+// Verifies that all numbers connected to features are within the range boundary set by the total number of features for that model
+fn check_boundary(numbers: &[i32], boundary: u32) -> Result<(), String> {
     if numbers.iter().any(|v| v.abs() > boundary as i32) {
         return Err(format!(
             "E3 error: not all parameters are within the boundary of {} to {}",
@@ -475,7 +609,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
             boundary as i32
         ));
     }
-    Ok((numbers, parsed_str_count))
+    Ok(())
 }
 
 // spawns a new thread that listens on stdin and delivers its request to the stream message handling
@@ -770,6 +904,75 @@ mod test {
             // an unsat query results in an atomic set that contains one subset which contains all features
             format_vec((1..=42).into_iter()),
             vp9.handle_stream_msg("atomic a 4 5")
+        );
+    }
+
+    #[test]
+    fn handle_stream_msg_clause_update() {
+        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", None);
+
+        assert_eq!(
+            format!("E4 error: \"t\" can only be used in combination with \"clause-update\""),
+            vp9.handle_stream_msg("update-clause t 43")
+        );
+        assert_eq!(
+            format!("E4 error: \"t\" must be set to a single positive number"),
+            vp9.handle_stream_msg("clause-update t 43 44")
+        );
+        assert_eq!(
+            format!("E4 error: key word is missing arguments"),
+            vp9.handle_stream_msg("clause-update add rmv")
+        );
+
+        let rc_before = vp9.handle_stream_msg("count").parse::<u64>().unwrap();
+        assert_eq!(
+            format!(""),
+            vp9.handle_stream_msg("clause-update t 45 add 43 44 45")
+        );
+
+        // Adding three extra features of which at least one has to be selected -> rc *= 2^3 - 1 => rc *= 7
+        assert_eq!(
+            rc_before * 7,
+            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
+        );
+
+        // Switch between the different states as much as needed
+        assert_eq!(format!(""), vp9.handle_stream_msg("undo-update"));
+        assert_eq!(
+            rc_before,
+            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
+        );
+
+        assert_eq!(format!(""), vp9.handle_stream_msg("undo-update"));
+        assert_eq!(
+            rc_before * 7,
+            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
+        );
+
+        // Both, adding and removing at the same time is valid
+        assert_eq!(
+            String::from(""),
+            vp9.handle_stream_msg("clause-update rmv 43 44 45 add 43 44 0 -44 -45")
+        );
+
+        // Cannot remove a clause that should not be in the set anymore
+        assert_eq!(
+            String::from("E5 error: could not update cached state"),
+            vp9.handle_stream_msg("clause-update rmv 43 44 45")
+        );
+
+        // Shrinking the total amount of features is only valid if there are no more conflicting clauses
+        assert_eq!(
+            String::from("E5 error: at least one clause is in conflict with the feature reduction; remove conflicting clauses"),
+            vp9.handle_stream_msg("clause-update t 42")
+        );
+        assert_eq!(
+            String::from(""),
+            vp9.handle_stream_msg("clause-update rmv 43 44 0 -44 -45")
+        );
+        assert_eq!(
+            String::from(""),
+            vp9.handle_stream_msg("clause-update t 42")
         );
     }
 

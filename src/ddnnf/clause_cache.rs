@@ -21,20 +21,16 @@ pub struct ClauseCache {
     /// The number of features before the edit.
     old_total_features: Option<u32>,
     /// An old cached d-DNNF state that can be swaped with the currently used one.
-    old_state: Box<Ddnnf>,
+    pub old_state: Option<Box<Ddnnf>>,
 }
 
 impl ClauseCache {
     /// Updates the ClauseCache with starting values.
-    pub fn initialize(
-        &mut self,
-        ddnnf: Ddnnf,
-        clauses: BTreeSet<BTreeSet<i32>>,
-        total_features: Option<u32>,
-    ) {
-        self.old_state = Box::new(ddnnf);
+    pub fn initialize(&mut self, clauses: BTreeSet<BTreeSet<i32>>, total_features: u32) {
+        self.old_state = None;
         self.clauses = clauses;
-        self.old_total_features = total_features;
+        self.total_features = Some(total_features);
+        self.old_total_features = Some(total_features);
     }
 
     /// Applies edit operations on the set of clauses by adding and removing clauses.
@@ -46,20 +42,23 @@ impl ClauseCache {
         total: Option<u32>,
     ) -> bool {
         let old_set_clauses = self.clauses.clone();
-        for clause in self.edit_rmv.iter() {
+        for clause in rmv.iter() {
             if !self.clauses.remove(clause) {
                 // revert made changes if any clause could not be found
                 self.clauses = old_set_clauses;
                 return false;
             }
         }
-        for clause in self.edit_add.clone().into_iter() {
+
+        for clause in add.clone().into_iter() {
             self.clauses.insert(clause);
         }
 
         self.edit_add = add;
         self.edit_rmv = rmv;
+        self.old_total_features = self.total_features;
         self.total_features = total;
+
         true
     }
 
@@ -89,21 +88,28 @@ impl ClauseCache {
             .tempfile()
             .expect("Failed to create a temporary file");
 
-        write_cnf_to_file(
-            &self.clauses,
-            self.total_features.unwrap(),
-            temp_file
-                .path()
-                .to_str()
-                .expect("Failed to convert path to string while trying to save as CNF!"),
-        )
-        .expect("Failed to save updated CNF to file");
+        let temp_path = temp_file
+            .path()
+            .to_str()
+            .expect("Failed to convert path to string while trying to save as CNF!");
 
-        self.old_state = Box::new(build_ddnnf("temp.cnf", self.total_features));
+        write_cnf_to_file(&self.clauses, self.total_features.unwrap(), temp_path)
+            .expect("Failed to save updated CNF to file");
+
+        self.old_state = Some(Box::new(build_ddnnf(temp_path, None)));
         true
     }
 
-    pub fn get_old_state(self) -> Box<Ddnnf> {
+    /// Sets up the edit operations for an undo operation by applying and flipping added and removed clauses.
+    pub fn contains_conflicting_clauses(&mut self, total_features: u32) -> bool {
+        self.clauses.iter().any(|clause| {
+            clause
+                .iter()
+                .any(|feature| feature.unsigned_abs() > total_features)
+        })
+    }
+
+    pub fn get_old_state(self) -> Option<Box<Ddnnf>> {
         self.old_state
     }
 }
