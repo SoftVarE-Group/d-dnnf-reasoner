@@ -179,7 +179,8 @@ From here on, we can use the following types of queries:
 - ```atomic-cross```: Computes atomic sets; a set can contain included and excluded features
 - ```clause-update```: Manipulates the underlying CNF by adding / removing clauses and adjusting the total amount of features. Requires any change to be valid.
 - ```undo-update```: Reverting the latest manipulation. Applying ```undo-update``` twice results in the second ```undo-update``` being equivalent to a redo.
-- ```save```: Saves the d-DNNF for future use
+- ```save-ddnnf```: Saves the d-DNNF for future use.
+- ```save-cnf```: Saves the d-DNNF as CNF for future use; does require the input to be a CNF as well. Saving always persists the current version. Hence, this is especially intersting in combination with ```clause-update```.
 - ```exit```: Leaves the stream mode
 
 Furthermore, where sensible, the types of queries can be combined with the parameters:
@@ -187,12 +188,13 @@ Furthermore, where sensible, the types of queries can be combined with the param
 - ```a assumptions```: Assignments of features to true or false
 - ```l limit```: The number of solutions
 - ```s seed```: Seeding for random operations
-- ```p path```: The absolute path, we want to save the d-DNNF
+- ```p path```: The absolute path, for when we want to save the d-DNNF as d-DNNF or CNF.
 - ```add```: Add something; currently only available for clauses
 - ```rmv```: Remove something; currently only available for clauses
 - ```t total-features```: Change the total amount of features. ```t total-features``` is always evaluated before ```add``` and ```rmv```.
 
 The table below depicts the possible combinations of a query type with the parameters. The order of parameters does NOT influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
+Some parameters are optional and others are required. The usage should be intuitive. Otherwise, one can try and get an error message explaining what went wrong. The examples listed later serve as a guide.
 
 | query type / parameter | variables | assumptions | limit | seed | path | add | rmv | total-features |
 |------------------------|-----------|-------------|-------|------|------|-----|-----|----------------|
@@ -205,7 +207,8 @@ The table below depicts the possible combinations of a query type with the param
 | atomic-cross           |     ✔     |      ✔      |       |      |      |     |     |                |
 | clause-update          |           |             |       |      |      |  ✔  |  ✔  |       ✔        |
 | undo-update            |           |             |       |      |      |     |     |                |
-| save                   |           |             |       |      |   ✔  |     |     |                |
+| save-ddnnf             |           |             |       |      |   ✔  |     |     |                |
+| save-cnf               |           |             |       |      |   ✔  |     |     |                |
 | exit                   |           |             |       |      |      |     |     |                |
 
 Sub-solutions (like multiple uniform random samples) will be separated by a ```";"```. Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
@@ -219,7 +222,9 @@ Syntactically wrong queries will result in an error message with an error code. 
 - ```E6``` File or path error
 
 ### Examples <a name="building_stream_ex"></a>
-After entering the stream API, the following examples are conceivable.
+After entering the stream API, the following examples are conceivable but not exhaustive:
+
+
 Check whether features 10, 100, and 1000 are either core or dead under the assumption that feature 1 is deselected.
 ```properties
 core a -1 v 10 100 1000
@@ -257,7 +262,7 @@ clause-update t 44 add 43 44
 
 Saves the nnf as smooth d-DNNF in the c2d format. The parameter ```p``` or ```path``` has to be set, and the path must be absolute.
 ```properties
-save p /home/user/Documents/d-DNNFs/auto1.nnf
+save-ddnnf p /home/user/Documents/d-DNNFs/auto1.nnf
 ```
 
 Exit the stream mode and terminate the ddnnife instance.

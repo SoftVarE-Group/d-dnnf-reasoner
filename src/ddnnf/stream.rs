@@ -18,7 +18,7 @@ use nom::sequence::{pair, tuple};
 use nom::IResult;
 use workctl::WorkQueue;
 
-use crate::parser::persisting::write_ddnnf_to_file;
+use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
 use crate::{parser::util::*, Ddnnf};
 
 impl Ddnnf {
@@ -437,20 +437,41 @@ impl Ddnnf {
                 }
             }
             "exit" => String::from("exit"),
-            "save" => {
+            "save-cnf" | "save-ddnnf" => {
                 if path.to_str().unwrap() == "" {
                     return String::from("E6 error: no file path was supplied");
                 }
                 if !path.is_absolute() {
                     return String::from("E6 error: file path is not absolute, but has to be");
                 }
-                match write_ddnnf_to_file(self, path.to_str().unwrap()) {
-                    Ok(_) => String::from(""),
-                    Err(e) => format!(
-                        "E6 error: {} while trying to write ddnnf to {}",
-                        e,
-                        path.to_str().unwrap()
-                    ),
+
+                if args[0] == "save-ddnnf" {
+                    match write_ddnnf_to_file(self, path.to_str().unwrap()) {
+                        Ok(_) => String::from(""),
+                        Err(e) => format!(
+                            "E6 error: {} while trying to write ddnnf to {}",
+                            e,
+                            path.to_str().unwrap()
+                        ),
+                    }
+                } else {
+                    if self.cached_state.is_none() {
+                        return String::from(
+                            "E5 error: cannot save as CNF because clauses are not available",
+                        );
+                    }
+                    match write_cnf_to_file(
+                        &self.cached_state.as_mut().unwrap().clauses,
+                        total_features,
+                        path.to_str().unwrap(),
+                    ) {
+                        Ok(_) => String::from(""),
+                        Err(e) => format!(
+                            "E6 error: {} while trying to write cnf to {}",
+                            e,
+                            path.to_str().unwrap()
+                        ),
+                    }
                 }
             }
             other => format!("E2 error: the operation \"{}\" is not supported", other),
@@ -978,46 +999,53 @@ mod test {
 
     #[test]
     fn handle_stream_msg_save() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
         let binding = env::current_dir().unwrap();
         let working_dir = binding.to_str().unwrap();
+        let file_formats = vec!["ddnnf", "cnf"];
 
-        assert_eq!(
-            format!(
-                "E4 error: the option \"{}\" is not valid in this context",
-                &working_dir
-            ),
-            vp9.handle_stream_msg(format!("save {}", &working_dir).as_str())
-        );
-        assert_eq!(
-            String::from("E4 error: param \"path\" was used, but no value supplied"),
-            vp9.handle_stream_msg("save path")
-        );
-        assert_eq!(
-            String::from("E4 error: param \"p\" was used, but no value supplied"),
-            vp9.handle_stream_msg("save p")
-        );
+        for format in file_formats {
+            assert_eq!(
+                format!(
+                    "E4 error: the option \"{}\" is not valid in this context",
+                    &working_dir
+                ),
+                vp9.handle_stream_msg(format!("save-{format} {}", &working_dir).as_str())
+            );
+            assert_eq!(
+                String::from("E4 error: param \"path\" was used, but no value supplied"),
+                vp9.handle_stream_msg(format!("save-{format} path").as_str())
+            );
+            assert_eq!(
+                String::from("E4 error: param \"p\" was used, but no value supplied"),
+                vp9.handle_stream_msg(format!("save-{format} p").as_str())
+            );
 
-        assert_eq!(
-            String::from("E6 error: no file path was supplied"),
-            vp9.handle_stream_msg("save")
-        );
-        assert_eq!(
-            String::from("E6 error: No such file or directory (os error 2) while trying to write ddnnf to /home/ferris/Documents/crazy_project/out.nnf"),
-            vp9.handle_stream_msg("save path /home/ferris/Documents/crazy_project/out.nnf")
-        );
-        assert_eq!(
-            String::from("E6 error: file path is not absolute, but has to be"),
-            vp9.handle_stream_msg("save p ./")
-        );
+            assert_eq!(
+                String::from("E6 error: no file path was supplied"),
+                vp9.handle_stream_msg(format!("save-{format}").as_str())
+            );
+            assert_eq!(
+                format!("E6 error: No such file or directory (os error 2) while trying to write {format} to /home/ferris/Documents/crazy_project/out.{format}"),
+                vp9.handle_stream_msg(format!("save-{format} path /home/ferris/Documents/crazy_project/out.{format}").as_str())
+            );
+            assert_eq!(
+                String::from("E6 error: file path is not absolute, but has to be"),
+                vp9.handle_stream_msg(format!("save-{format} p ./").as_str())
+            );
 
-        assert_eq!(
-            String::from(""),
-            vp9.handle_stream_msg(
-                format!("save path {}/tests/data/out.nnf", &working_dir).as_str()
-            )
-        );
-        let _res = fs::remove_file(format!("{}/tests/data/out.nnf", &working_dir));
+            assert_eq!(
+                String::from(""),
+                vp9.handle_stream_msg(
+                    format!(
+                        "save-{format} path {}/tests/data/out.{format}",
+                        &working_dir
+                    )
+                    .as_str()
+                )
+            );
+            let _res = fs::remove_file(format!("{}/tests/data/out.{format}", &working_dir));
+        }
     }
 
     #[test]

@@ -11,7 +11,7 @@ use crate::{
 /// Represents all types of Nodes with its different parts
 pub struct ClauseCache {
     /// All clauses corresponding to the CNF. Is empty if ddnnife did not get clauses as input.
-    clauses: BTreeSet<BTreeSet<i32>>,
+    pub clauses: BTreeSet<BTreeSet<i32>>,
     /// The clauses that have to be added to result in the parent d-DNNF.
     edit_add: Vec<BTreeSet<i32>>,
     /// The clauses that have to be removed to result in the parent d-DNNF.
@@ -107,9 +107,5 @@ impl ClauseCache {
                 .iter()
                 .any(|feature| feature.unsigned_abs() > total_features)
         })
-    }
-
-    pub fn get_old_state(self) -> Option<Box<Ddnnf>> {
-        self.old_state
     }
 }
