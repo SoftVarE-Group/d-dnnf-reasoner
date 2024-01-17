@@ -88,9 +88,9 @@ Compute the cardinality of a feature model for ```auto1```.
 ./target/release/ddnnife example_input/auto1_c2d.nnf
 ```
 
-Compute the cardinality of features for ```busybox-1.18.0_c2d.nnf``` with 2 threads and save the result as ```busybox-features.csv``` in the current working directory.
+Compute the cardinality of features for ```busybox-1.18.0_c2d.nnf``` and saves the result as ```busybox-features.csv``` in the current working directory.
 ```properties
-./target/release/ddnnife example_input/busybox-1.18.0_c2d.nnf -c busybox -j 2
+./target/release/ddnnife example_input/busybox-1.18.0_c2d.nnf -c busybox
 ```
 
 Compute the cardinality of features for ```auto1``` when compiled with d4. Here we need the ```-t``` Option that allows us to specify the total number of features. That information is needed but not contained in d-DNNFs using the d4 standard. Furthermore, the parsing takes more time because we have to smooth the d-DNNF. The results will be saved as ```auto1_d4_2513-features.csv```. (Note that for the example input the number of features is part of the file name for d4 models).

@@ -6,6 +6,8 @@ pub struct Node {
     pub count: Integer,
     /// The cardinality during the different queries
     pub temp: Integer,
+    /// The cardinality during the different queries
+    pub partial_derivative: Integer,
     /// Every node excpet the root has (multiple) parent nodes
     pub(crate) parents: Vec<usize>,
     /// the different kinds of nodes with its additional fields
@@ -38,6 +40,7 @@ impl Node {
             marker: false,
             count,
             temp: Integer::ZERO,
+            partial_derivative: Integer::ZERO,
             parents: Vec::new(),
             ntype,
         }
@@ -85,6 +88,7 @@ mod test {
                 marker: false,
                 count: Integer::from(42),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: And {
                     children: vec![1, 5, 10]
@@ -102,6 +106,7 @@ mod test {
                 marker: false,
                 count: Integer::from(42),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: And {
                     children: vec![1, 5, 10]
@@ -114,6 +119,7 @@ mod test {
                 marker: false,
                 count: Integer::from(42),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: Or {
                     children: vec![1, 5, 10]
@@ -126,6 +132,7 @@ mod test {
                 marker: false,
                 count: Integer::from(1),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: Literal { literal: 42 }
             }
@@ -136,6 +143,7 @@ mod test {
                 marker: false,
                 count: Integer::from(1),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: True
             }
@@ -146,6 +154,7 @@ mod test {
                 marker: false,
                 count: Integer::from(0),
                 temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
                 parents: vec![],
                 ntype: False
             }
