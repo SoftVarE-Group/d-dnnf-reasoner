@@ -1,0 +1,4 @@
+count v 1..
+atomic
+random l 100
+asdfsad

@@ -1,0 +1,18 @@
+# ignore everything
+*
+
+# besides source code, build script and dependency data
+!src/
+!build.rs
+!Cargo.toml
+!Cargo.lock
+
+#d4v2
+#mermaid-transfer/
+#target/
+#valcom/
+#complete_exa/
+#.vscode/
+#.github/
+#.gitignore
+#tests/

@@ -14,20 +14,24 @@ history.txt
 tarpaulin-report.html
 tmp/
 valcom
-build.rs
 *.zip
+
+# ddnnife config input
+*.config
 
 # ddnnife output files (direct and indirect)
 *-features.csv
-*-queries.txt
+*-queries.csv
+*-sat.csv
+*-atomic.csv
+*-wise.csv
+*-urs.csv
+*-stream.csv
+*-core.csv
 *-anomalies.txt
 *-saved.nnf
 *-mermaid.md
 *.svg
-
-# docker
-dockerfile
-.dockerignore
 
 # vsc
 .idea
@@ -36,3 +40,7 @@ dockerfile
 # intellij
 ideas/
 *.iml
+
+# d4 repo and binary
+d4v2
+d4v2.bin

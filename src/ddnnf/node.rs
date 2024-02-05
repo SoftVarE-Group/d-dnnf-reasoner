@@ -6,6 +6,8 @@ pub struct Node {
     pub count: Integer,
     /// The cardinality during the different queries
     pub temp: Integer,
+    /// The cardinality during the different queries
+    pub partial_derivative: Integer,
     /// Every node excpet the root has (multiple) parent nodes
     pub(crate) parents: Vec<usize>,
     /// the different kinds of nodes with its additional fields
@@ -27,8 +29,8 @@ pub enum NodeType {
     False,
 }
 
-use NodeType::{And, False, Literal, Or, True};
 use rug::Integer;
+use NodeType::{And, False, Literal, Or, True};
 
 impl Node {
     #[inline]
@@ -38,8 +40,9 @@ impl Node {
             marker: false,
             count,
             temp: Integer::ZERO,
+            partial_derivative: Integer::ZERO,
             parents: Vec::new(),
-            ntype
+            ntype,
         }
     }
 
@@ -51,11 +54,7 @@ impl Node {
 
     #[inline]
     /// Creates a new Or node
-    pub fn new_or(
-        _decision_var: u32,
-        count: Integer,
-        children: Vec<usize>,
-    ) -> Node {
+    pub fn new_or(_decision_var: u32, count: Integer, children: Vec<usize>) -> Node {
         Node::new_node(count, Or { children })
     }
 
@@ -78,34 +77,87 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use rug::Integer;
     use super::*;
+    use rug::Integer;
 
     #[test]
     fn build_nodes() {
         assert_eq!(
             Node::new_and(Integer::from(42), vec![1, 5, 10]),
-            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: And { children: vec![1, 5, 10] } }
+            Node {
+                marker: false,
+                count: Integer::from(42),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: And {
+                    children: vec![1, 5, 10]
+                }
+            }
         );
         assert_eq!(
-            Node::new_node(Integer::from(42), And { children: vec![1, 5, 10] }),
-            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: And { children: vec![1, 5, 10] } }
+            Node::new_node(
+                Integer::from(42),
+                And {
+                    children: vec![1, 5, 10]
+                }
+            ),
+            Node {
+                marker: false,
+                count: Integer::from(42),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: And {
+                    children: vec![1, 5, 10]
+                }
+            }
         );
         assert_eq!(
             Node::new_or(42, Integer::from(42), vec![1, 5, 10]),
-            Node { marker: false, count: Integer::from(42), temp: Integer::ZERO, parents: vec![], ntype: Or { children: vec![1, 5, 10] } }
+            Node {
+                marker: false,
+                count: Integer::from(42),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: Or {
+                    children: vec![1, 5, 10]
+                }
+            }
         );
         assert_eq!(
             Node::new_literal(42),
-            Node { marker: false, count: Integer::from(1), temp: Integer::ZERO, parents: vec![], ntype: Literal { literal: 42 } }
+            Node {
+                marker: false,
+                count: Integer::from(1),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: Literal { literal: 42 }
+            }
         );
         assert_eq!(
             Node::new_bool(true),
-            Node { marker: false, count: Integer::from(1), temp: Integer::ZERO, parents: vec![], ntype: True }
+            Node {
+                marker: false,
+                count: Integer::from(1),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: True
+            }
         );
         assert_eq!(
             Node::new_bool(false),
-            Node { marker: false, count: Integer::from(0), temp: Integer::ZERO, parents: vec![], ntype: False }
+            Node {
+                marker: false,
+                count: Integer::from(0),
+                temp: Integer::ZERO,
+                partial_derivative: Integer::ZERO,
+                parents: vec![],
+                ntype: False
+            }
         );
     }
 }

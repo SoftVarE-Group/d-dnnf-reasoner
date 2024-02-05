@@ -11,8 +11,7 @@
 // We assume that we have MAX_WORKER processor cores which will do work for us.
 // You could use the num_cpus crate to find this for a particular machine.
 pub mod features;
-pub mod partial_configs;
 
-// modules that provide the basic functionality we can use in the features and configs module
+// Modules that provide the basic counting logic.
 pub mod default_count;
 pub mod marking;

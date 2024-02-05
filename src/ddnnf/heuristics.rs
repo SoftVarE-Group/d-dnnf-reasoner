@@ -1,5 +1,5 @@
+use super::{node::NodeType::*, Ddnnf};
 use crate::Node;
-use super::{Ddnnf, node::NodeType::*};
 
 impl Ddnnf {
     /// Computes and prints some heuristics including:
@@ -59,18 +59,27 @@ impl Ddnnf {
     // computes the number of childs for the differnt nodes (count of total nodes, childs relativ to number of nodes)
     fn get_child_number(&mut self) {
         let mut total_child_counter: u64 = 0;
+
         let mut and_child_counter: u64 = 0;
         let mut and_counter = 0;
+
+        let mut or_child_counter: u64 = 0;
+        let mut or_counter = 0;
 
         for i in 0..self.nodes.len() {
             match &self.nodes[i].ntype {
                 And { children } => {
-                    and_child_counter += children.len() as u64
+                    total_child_counter += children.len() as u64;
+                    and_child_counter += children.len() as u64;
+                    and_counter += 1;
                 }
-                Or { children } => total_child_counter += children.len() as u64,
+                Or { children } => {
+                    total_child_counter += children.len() as u64;
+                    or_child_counter += children.len() as u64;
+                    or_counter += 1;
+                }
                 _ => continue,
             }
-            if let And { children: _ } = &mut self.nodes[i].ntype { and_child_counter += 1; and_counter += 1}
         }
 
         let node_count: u64 = self.nodes.len() as u64;
@@ -79,12 +88,15 @@ impl Ddnnf {
                 \t |-> The overall count of child connections is {:?}\n\
                 \t |-> The overall node count is {:?}.\n\
                 \t |-> There are {:.2} times as much connections as nodes\n\
-                \t |-> Each of the {:?} And nodes has an average of ≈{:.2} child nodes\n",
+                \t |-> Each of the {:?} And nodes has an average of ≈{:.2} child nodes\n\
+                \t |-> Each of the {:?} Or nodes has an average of ≈{:.5} child nodes\n",
             total_child_counter,
             node_count,
             total_child_counter as f64 / node_count as f64,
             and_counter,
-            and_child_counter as f64 / and_counter as f64
+            and_child_counter as f64 / and_counter as f64,
+            or_counter,
+            or_child_counter as f64 / or_counter as f64
         );
     }
 

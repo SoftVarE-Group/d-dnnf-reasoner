@@ -2,16 +2,16 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use clap::Parser;
-use rustc_hash::FxHashMap;
 
+use std::collections::HashMap;
 use std::time::Instant;
 
 use std::fs::File;
-use std::io::{BufWriter, Write, BufRead, BufReader};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 
+pub use c2d_lexer::{C2DToken, TId};
 pub use ddnnf_lib::parser as dparser;
 pub use dparser::c2d_lexer;
-pub use c2d_lexer::{TId, C2DToken};
 
 pub use ddnnf_lib::Node;
 
@@ -46,8 +46,7 @@ fn main() {
 
     let token_stream = preprocess(&cli.file_path);
 
-    let file: File =
-        File::create(cli.save_as).expect("Unable to create file");
+    let file: File = File::create(cli.save_as).expect("Unable to create file");
     let mut buf_writer = BufWriter::new(file);
 
     for token in token_stream {
@@ -59,8 +58,7 @@ fn main() {
     let elapsed_time = time.elapsed().as_secs_f32();
     println!(
         "Elapsed time for preprocessing {}: {:.3}s.",
-        cli.file_path,
-        elapsed_time
+        cli.file_path, elapsed_time
     );
 }
 
@@ -74,7 +72,7 @@ fn main() {
 /// ```
 /// extern crate ddnnf_lib;
 /// use ddnnf_lib::parser;
-/// 
+///
 /// let file_path = "./tests/data/small_test.dimacs.nnf";
 /// preprocess(file_path);
 /// ```
@@ -85,7 +83,7 @@ fn main() {
 fn preprocess(path: &str) -> Vec<C2DToken> {
     let mut token_stream: Vec<C2DToken> = get_token_stream(path);
 
-    let mut literals: FxHashMap<i32, usize> = FxHashMap::default();
+    let mut literals: HashMap<i32, usize> = HashMap::new();
 
     // indices of nodes that should be replaced with true nodes
     let mut changes: Vec<usize> = Vec::new();
@@ -130,7 +128,7 @@ fn get_token_stream(path: &str) -> Vec<C2DToken> {
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
     for line in lines {
-        parsed_tokens.push(dparser::c2d_lexer::lex_line(line.as_ref()).unwrap().1);
+        parsed_tokens.push(dparser::c2d_lexer::lex_line_c2d(line.as_ref()).unwrap().1);
     }
 
     parsed_tokens
