@@ -1,110 +1,154 @@
 name: CI
 
-on: [workflow_dispatch, push]
+on:
+  - push
 
 env:
   CARGO_TERM_COLOR: always
+  CMAKE_GENERATOR: Ninja
+  CMAKE_C_COMPILER_LAUNCHER: sccache
+  CMAKE_CXX_COMPILER_LAUNCHER: sccache
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: true
+  # FIXME: cc-rs on mac currently won't set the C++ standard correctly (https://github.com/dtolnay/cxx/issues/1217).
+  CXXFLAGS: -std=c++17
 
 jobs:
   Format:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Format
         run: cargo fmt --check
 
-  Build-Linux:
-    runs-on: ubuntu-latest
-    strategy: 
-      fail-fast: false
-      matrix:
-        target: [x86_64-unknown-linux-gnu]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Cache
-        uses: Swatinem/rust-cache@v2
-      - name: d4v2 build dependencies
-        run: sudo apt-get install libboost-all-dev ninja-build
-      - name: Build target
-        run: cargo build --release --target ${{ matrix.target }}
-      - name: Archieve Binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: ddnnife_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/ddnnife
-  
-  Build-wo-d4v2-Macos:
-    runs-on: macos-latest
+  Build:
     strategy:
       fail-fast: false
       matrix:
-        target: [x86_64-apple-darwin]
+        target:
+          - os: linux
+            runner: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+            shell: bash
+            coverage: true
+          - os: macos
+            runner: macos-latest
+            triple: x86_64-apple-darwin
+            shell: bash
+          - os: windows
+            runner: windows-latest
+            triple: x86_64-pc-windows-gnu
+            shell: msys2
+            msystem: ucrt64
+        toolchain:
+          - stable
+        d4:
+          - include
+          - exclude
+    runs-on: ${{ matrix.target.runner }}
+    defaults:
+      run:
+        shell: ${{ matrix.target.shell }} {0}
+    env:
+      CARGO_BUILD_TARGET: ${{ matrix.target.triple }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-      - name: Cache
-        uses: Swatinem/rust-cache@v2
-      - name: Build target
-        run: EXCLUDE_D4V2=TRUE cargo build --release --target ${{ matrix.target }}
-      - name: Archieve Binary
-        uses: actions/upload-artifact@v3
+        uses: actions/checkout@v4
+      - name: Setup MSYS2 (Windows)
+        if: ${{ matrix.target.os == 'windows' }}
+        uses: msys2/setup-msys2@v2
         with:
-          name: ddnnife_${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/ddnnife
-
-      
-  #Build-wo-d4v2-Windows:
-  #  runs-on: ubuntu-latest
-  #  strategy:
-  #    fail-fast: false
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - uses: Swatinem/rust-cache@v2
-  #    - name: Set env variable
-  #      run: export EXCLUDE_D4V2=TRUE 
-  #    - name: Install dependencies
-  #      run: |
-  #        rustup target add x86_64-pc-windows-gnu
-  #    - name: Build
-  #      uses: actions-rs/cargo@v1
-  #      with:
-  #        use-cross: true
-  #        command: build
-  #        args: --target x86_64-pc-windows-gnu --release
-  #    - name: Archieve Binary
-  #      uses: actions/upload-artifact@v3
-  #      with:
-  #        name: ddnnife
-  #        path: target/release/ddnnife.exe
-      
-  Doc-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v2
-      - name: d4v2 build dependencies
-        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
-      - name: Doc-tests
-        run: cargo test --doc
-      
-  Integration-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v2
-      - name: d4v2 build dependencies
-        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
-      - name: Integration-tests
-        run: cargo test --release --tests
-
-  Coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: Swatinem/rust-cache@v2
-      - name: d4v2 build dependencies
-        run: sudo apt-get install libboost-all-dev; sudo apt-get install ninja-build
+          path-type: inherit
+          msystem: ${{ matrix.target.msystem }}
+          pacboy: git m4 cmake:p ninja:p
+      - name: Install dependencies (Linux)
+        if: ${{ matrix.target.os == 'linux' }}
+        run: sudo apt-get install ninja-build libtbb-dev libhwloc-dev libboost-program-options-dev
+      - name: Install dependencies (macOS)
+        if: ${{ matrix.target.os == 'macos' }}
+        run: brew install ninja boost hwloc tbb
+      - name: Install dependencies (Windows)
+        if: ${{ matrix.target.os == 'windows' }}
+        run: |
+          pacboy -S --noconfirm toolchain:p tbb:p hwloc:p boost:p
+          mv /${{ matrix.target.msystem }}/lib/libtbb12.dll.a /${{ matrix.target.msystem }}/lib/libtbb.dll.a
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.3
+      - name: Setup environment
+        run: |
+          export BUILD_ROOT=$(mktemp -d)
+          echo BUILD_ROOT=$BUILD_ROOT >> $GITHUB_ENV
+          echo MTKAHYPAR_DIR=$BUILD_ROOT >> $GITHUB_ENV
+          echo BUILD_ROOT_EXPORT=$(python3 -c "import os; print(os.environ['BUILD_ROOT'])") >> $GITHUB_ENV
+          echo LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_ROOT/lib:$BUILD_ROOT/lib64" >> $GITHUB_ENV
+          echo PATH="$PATH:$BUILD_ROOT/bin" >> $GITHUB_ENV
+      - name: Setup Rust
+        run: |
+          rustup update ${{ matrix.toolchain }}-${{ matrix.target.triple }}
+          rustup default ${{ matrix.toolchain }}-${{ matrix.target.triple }}
+      - name: Build Mt-KaHyPar
+        if: ${{ matrix.d4 == 'include' }}
+        run: |
+          cd $(mktemp -d)
+          git clone --recursive https://github.com/kahypar/mt-kahypar.git .
+          cmake -B build -D CMAKE_INSTALL_PREFIX=$BUILD_ROOT -D MT_KAHYPAR_DISABLE_BOOST=true
+          cmake --build build --target mtkahypar
+          cmake --install build
+          mkdir -p $BUILD_ROOT/licenses/mt-kahypar
+          cp LICENSE $BUILD_ROOT/licenses/mt-kahypar/
+# TODO: currently, macOS is only supported on master, move below clone to check out latest version when released.
+#          git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+      - name: Build (including d4)
+        if: ${{ matrix.d4 == 'include' }}
+        run: cargo build
+      - name: Build (excluding d4)
+        if: ${{ matrix.d4 == 'exclude' }}
+        run: cargo build --no-default-features
+      - name: Test
+        # FIXME: Some tests are currently not platform independent and fail on macos and windows and without d4
+        if: ${{ matrix.d4 == 'include' && matrix.target.os != 'macos' && matrix.target.os != 'windows' }}
+        run: cargo test
+      - name: Install coverage tool
+        if: ${{ matrix.target.coverage }}
+        uses: taiki-e/install-action@cargo-llvm-cov
       - name: Coverage
-        run: cargo +stable install cargo-llvm-cov; cargo llvm-cov
+        if: ${{ matrix.target.coverage && matrix.d4 == 'include' }}
+        run: cargo llvm-cov
+      - name: Package
+        run: |
+          mkdir -p $BUILD_ROOT/bin
+          cp target/${{ matrix.target.triple }}/debug/{ddnnife,dhone} $BUILD_ROOT/bin/
+          rm -rf $BUILD_ROOT/include
+          rm -rf $BUILD_ROOT/share
+          mkdir -p $BUILD_ROOT/licenses/d-ddnnf-reasoner
+          cp LICENSE $BUILD_ROOT/licenses/d-ddnnf-reasoner/
+      - name: Package documentation (including d4)
+        if: ${{ matrix.d4 == 'include' }}
+        run: |
+          cp doc/built/${{ matrix.target.os }}-d4.md $BUILD_ROOT/README.md
+      - name: Package documentation (excluding d4)
+        if: ${{ matrix.d4 == 'exclude' }}
+        run: |
+          cp doc/built/${{ matrix.target.os }}.md $BUILD_ROOT/README.md
+      - name: Package dependencies (Windows)
+        if: ${{ matrix.target.os == 'windows' }}
+        run: |
+          ./package-msys.bash $BUILD_ROOT $BUILD_ROOT/bin/*
+          rm -f $BUILD_ROOT/bin/b2
+          rm -f $BUILD_ROOT/bin/bjam
+          rm -f $BUILD_ROOT/bin/hwloc*
+          rm -f $BUILD_ROOT/bin/lstopo*
+          rm -rf $BUILD_ROOT/lib
+      - name: Upload (including d4)
+        if: ${{ matrix.d4 == 'include' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddnnife-d4-${{ matrix.target.triple }}
+          path: ${{ env.BUILD_ROOT_EXPORT }}
+      - name: Upload (excluding d4)
+        if: ${{ matrix.d4 == 'exclude' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddnnife-${{ matrix.target.triple }}
+          path: ${{ env.BUILD_ROOT_EXPORT }}

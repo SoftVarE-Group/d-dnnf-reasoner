@@ -26,20 +26,39 @@ In the following, we describe the process to compile ddnnife. As an alternative,
 
 ## Requirements for Building <a name="building_req"></a>
 
-First, if not done already, you have to [install rust](https://www.rust-lang.org/tools/install). The recommended way is the following, using curl and rustup:
-```properties
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- [Rust][rust]
+- [Boost][boost]
+- [GMP][gmp] (with C++ bindings)
+- [Mt-KaHyPar][mtkahypar]
+- GCC or Clang
+
+### Linux
+
+- diffutils
+- m4
+- make
+
+### macOS
+
+The commandline developer tools have to be present:
+
 ```
-After that, we recommend entering "1" to proceed with the installation (without customizations).
-
-Additionally, we use rug for the computations. Make sure to install everything mentioned on rugs [crates.io page](https://crates.io/crates/rug) to use rug and our software. There it says:
-
-*Rug [...] depends on the [GMP](https://gmplib.org/), [MPFR](https://www.mpfr.org/) and [MPC](https://www.multiprecision.org/mpc/) libraries through the low-level FFI bindings in the [gmp-mpfr-sys crate](https://crates.io/crates/gmp-mpfr-sys), which needs some setup to build; the [gmp-mpfr-sys documentation](https://docs.rs/gmp-mpfr-sys/1.4.7/gmp_mpfr_sys/index.html) has some details on usage under [different os][...].*
-
-To build on GNU/Linux, make sure you have ```diffutils, gcc, m4``` and ```make``` installed on your system. For example on Ubuntu:
-```properties
-sudo apt-get update && apt-get install diffutils gcc m4 make
+xcode-select --install
 ```
+
+### Windows
+
+On Windows, [MSYS2][msys2] is required to build the project.
+The UCRT64 or CLANG64 environment is used depending on the compiler (GCC or Clang).
+All dependencies must be installed for the environment.
+This can be achieved by using `pacboy`:
+
+```
+pacman -S pactoys
+pacboy -S toolchain:p boost:p
+```
+
+Mt-KaHyPar has to be present in the MSYS2 environment as well.
 
 ## Build the Binaries <a name="building_bin"></a>
 
@@ -317,3 +336,9 @@ After that arguments for ```ddnnife``` can be passed. It is important that to ac
 ```properties
 docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
 ```
+
+[rust]: https://rust-lang.org
+[boost]: https://boost.org
+[gmp]: https://gmplib.org
+[mtkahypar]: https://github.com/kahypar/mt-kahypar
+[msys2]: https://msys2.org

@@ -7,9 +7,6 @@ use d4_lexer::{lex_line_d4, D4Token};
 pub mod from_cnf;
 use from_cnf::{check_for_cnf_header, CNFToken};
 
-pub mod d4v2_wrapper;
-use crate::parser::d4v2_wrapper::compile_cnf;
-
 pub mod persisting;
 pub mod util;
 
@@ -60,25 +57,33 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
     let mut clauses = BTreeSet::new();
     if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
-            let file = open_file_savely(path);
-            let lines = BufReader::new(file).lines();
-            for line in lines {
-                let line = line.expect("Unable to read line");
-                match check_for_cnf_header(line.as_str()).unwrap().1 {
-                    CNFToken::Header {
-                        total_features: total_features_header,
-                        total_clauses: _,
-                    } => {
-                        let ddnnf_file = ".intermediate.nnf";
-                        compile_cnf(path, ddnnf_file);
-                        path = ddnnf_file;
-                        total_features = Some(total_features_header as u32);
+            #[cfg(feature = "d4")]
+            {
+                let file = open_file_savely(path);
+                let lines = BufReader::new(file).lines();
+                for line in lines {
+                    let line = line.expect("Unable to read line");
+                    match check_for_cnf_header(line.as_str()).unwrap().1 {
+                        CNFToken::Header {
+                            total_features: total_features_header,
+                            total_clauses: _,
+                        } => {
+                            let ddnnf_file = ".intermediate.nnf";
+                            d4_oxide::compile_ddnnf(path.to_string(), ddnnf_file.to_string());
+                            path = ddnnf_file;
+                            total_features = Some(total_features_header as u32);
+                        }
+                        CNFToken::Clause { features } => {
+                            clauses.insert(features);
+                        }
+                        CNFToken::Comment => (),
                     }
-                    CNFToken::Clause { features } => {
-                        clauses.insert(features);
-                    }
-                    CNFToken::Comment => (),
                 }
+            }
+
+            #[cfg(not(feature = "d4"))]
+            {
+                panic!("CNF to d-DNNF compilation is only possible when including d4.");
             }
         }
     }
