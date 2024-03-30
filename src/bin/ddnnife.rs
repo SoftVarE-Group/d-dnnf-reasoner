@@ -65,6 +65,10 @@ struct Cli {
     /// Provides information about the type of nodes, their connection, and the different paths.
     #[arg(long, verbatim_doc_comment)]
     heuristics: bool,
+
+    /// Whether not to use parallel computations and instead use a single-threaded thread pool.
+    #[arg(long, verbatim_doc_comment)]
+    sequential: bool,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -230,6 +234,10 @@ enum Operation {
 
 fn main() {
     let cli = Cli::parse();
+
+    if cli.sequential {
+        rayon::ThreadPoolBuilder::new().use_current_thread().num_threads(1).build_global().expect("Failed to set up single-threaded thread pool.");
+    }
 
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
