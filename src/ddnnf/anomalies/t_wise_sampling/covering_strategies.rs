@@ -1,3 +1,4 @@
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 
@@ -18,12 +19,13 @@ pub(super) fn cover_with_caching(
         return; // interaction invalid
     }
 
-    let mut found = None;
-    for (index, config) in sample.partial_configs.iter_mut().enumerate() {
-        if config.conflicts_with(interaction) {
-            continue;
-        }
-
+    let found = sample
+        .partial_configs
+        .par_iter_mut()
+        .enumerate()
+        .filter(|(_, config)| !config.conflicts_with(interaction))
+        .find_map_first(|(index, config)|
+    {
         config.update_sat_state(sat_solver, node_id);
 
         // clone sat state so that we don't change the state that is cached in the config
@@ -36,10 +38,11 @@ pub(super) fn cover_with_caching(
             // we found a config - extend config with interaction and update sat state
             config.extend(interaction.iter().cloned());
             config.set_sat_state(sat_state);
-            found = Some(index);
-            break;
+            return Some(index);
         }
-    }
+
+        None
+    });
 
     if let Some(index) = found {
         // move config to the complete configs if it is complete now

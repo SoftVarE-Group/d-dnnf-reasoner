@@ -13,6 +13,7 @@ use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, OrMerge
 use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use streaming_iterator::StreamingIterator;
 
 use crate::parser::util::format_vec;
@@ -191,14 +192,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
-            .iter()
+            .par_iter()
             .any(|result| matches!(result, SamplingResult::Void))
         {
             return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
-            .into_iter()
+            .into_par_iter()
             .filter_map(SamplingResult::get_sample)
             .collect();
 
@@ -219,14 +220,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
-            .iter()
+            .par_iter()
             .all(|result| matches!(result, SamplingResult::Void))
         {
             return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
-            .into_iter()
+            .into_par_iter()
             .filter_map(SamplingResult::get_sample)
             .collect();
 

@@ -5,6 +5,7 @@ use std::cmp::{min, Ordering};
 
 use rand::prelude::{SliceRandom, StdRng};
 use std::collections::HashSet;
+use rayon::iter::{ParallelIterator, IntoParallelRefMutIterator, IntoParallelRefIterator, IndexedParallelIterator};
 
 use streaming_iterator::StreamingIterator;
 
@@ -44,11 +45,11 @@ impl SampleMerger for SimilarityMerger {
         let next = candidates.pop()
             .expect("There should be at least one candidate because we checked that both samples are not empty");
 
-        candidates.iter_mut().for_each(|c| c.update(&next.literals));
+        candidates.par_iter_mut().for_each(|c| c.update(&next.literals));
         new_sample.add(next.config.clone());
 
         while let Some(next) = candidates
-            .iter()
+            .par_iter()
             .enumerate()
             .max_by_key(snd)
             .map(|(index, _)| index)
@@ -60,7 +61,7 @@ impl SampleMerger for SimilarityMerger {
 
             new_sample.add(next.config.clone());
 
-            candidates.iter_mut().for_each(|c| c.update(&next.literals));
+            candidates.par_iter_mut().for_each(|c| c.update(&next.literals));
         }
         new_sample
     }
