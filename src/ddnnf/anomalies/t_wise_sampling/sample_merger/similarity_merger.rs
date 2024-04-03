@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{ParallelIterator, IndexedParallelIterator};
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimilarityMerger {
@@ -48,7 +48,9 @@ impl SampleMerger for SimilarityMerger {
         let next = candidates.pop()
             .expect("There should be at least one candidate because we checked that both samples are not empty");
 
-        candidates.maybe_par_iter_mut().for_each(|c| c.update(&next.literals));
+        candidates
+            .maybe_par_iter_mut()
+            .for_each(|c| c.update(&next.literals));
         new_sample.add(next.config.clone());
 
         while let Some(next) = candidates
@@ -64,7 +66,9 @@ impl SampleMerger for SimilarityMerger {
 
             new_sample.add(next.config.clone());
 
-            candidates.maybe_par_iter_mut().for_each(|c| c.update(&next.literals));
+            candidates
+                .maybe_par_iter_mut()
+                .for_each(|c| c.update(&next.literals));
         }
 
         new_sample

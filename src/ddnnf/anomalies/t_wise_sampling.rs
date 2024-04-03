@@ -18,9 +18,9 @@ use streaming_iterator::StreamingIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
+use crate::maybe_parallel::{IntoMaybeParallelIterator, IntoMaybeParallelRefIterator};
 use crate::parser::util::format_vec;
 use crate::{Ddnnf, NodeType::*};
-use crate::maybe_parallel::{IntoMaybeParallelIterator, IntoMaybeParallelRefIterator};
 
 use self::covering_strategies::cover_with_caching;
 use self::data_structure::Sample;

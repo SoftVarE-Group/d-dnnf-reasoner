@@ -8,8 +8,8 @@
 extern crate test;
 
 pub mod ddnnf;
-pub mod parser;
 pub mod maybe_parallel;
+pub mod parser;
 
 pub use crate::ddnnf::{node::*, Ddnnf};
 pub use crate::parser::c2d_lexer;
