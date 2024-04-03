@@ -1,13 +1,16 @@
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{OrMerger, SampleMerger};
 use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
+use crate::maybe_parallel::{IntoMaybeParallelRefIterator, IntoMaybeParallelRefMutIterator};
 use std::cmp::{min, Ordering};
 
 use rand::prelude::{SliceRandom, StdRng};
 use std::collections::HashSet;
-use rayon::iter::{ParallelIterator, IntoParallelRefMutIterator, IntoParallelRefIterator, IndexedParallelIterator};
 
 use streaming_iterator::StreamingIterator;
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{ParallelIterator, IndexedParallelIterator};
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimilarityMerger {
@@ -45,11 +48,11 @@ impl SampleMerger for SimilarityMerger {
         let next = candidates.pop()
             .expect("There should be at least one candidate because we checked that both samples are not empty");
 
-        candidates.par_iter_mut().for_each(|c| c.update(&next.literals));
+        candidates.maybe_par_iter_mut().for_each(|c| c.update(&next.literals));
         new_sample.add(next.config.clone());
 
         while let Some(next) = candidates
-            .par_iter()
+            .maybe_par_iter()
             .enumerate()
             .max_by_key(snd)
             .map(|(index, _)| index)
@@ -61,8 +64,9 @@ impl SampleMerger for SimilarityMerger {
 
             new_sample.add(next.config.clone());
 
-            candidates.par_iter_mut().for_each(|c| c.update(&next.literals));
+            candidates.maybe_par_iter_mut().for_each(|c| c.update(&next.literals));
         }
+
         new_sample
     }
 }

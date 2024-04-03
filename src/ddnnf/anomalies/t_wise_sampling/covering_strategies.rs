@@ -1,6 +1,12 @@
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
+use crate::maybe_parallel::IntoMaybeParallelRefMutIterator;
+
+#[cfg(feature = "parallel")]
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+
+#[cfg(not(feature = "parallel"))]
+use crate::maybe_parallel::PolyfillIterator;
 
 /// Covering strategy that uses the sat state caching.
 pub(super) fn cover_with_caching(
@@ -21,28 +27,27 @@ pub(super) fn cover_with_caching(
 
     let found = sample
         .partial_configs
-        .par_iter_mut()
+        .maybe_par_iter_mut()
         .enumerate()
         .filter(|(_, config)| !config.conflicts_with(interaction))
-        .find_map_first(|(index, config)|
-    {
-        config.update_sat_state(sat_solver, node_id);
+        .find_map_first(|(index, config)| {
+            config.update_sat_state(sat_solver, node_id);
 
-        // clone sat state so that we don't change the state that is cached in the config
-        let mut sat_state = config
-            .get_sat_state()
-            .cloned()
-            .expect("sat state should exist because update_sat_state() was called before");
+            // clone sat state so that we don't change the state that is cached in the config
+            let mut sat_state = config
+                .get_sat_state()
+                .cloned()
+                .expect("sat state should exist because update_sat_state() was called before");
 
-        if sat_solver.is_sat_in_subgraph_cached(interaction, node_id, &mut sat_state) {
-            // we found a config - extend config with interaction and update sat state
-            config.extend(interaction.iter().cloned());
-            config.set_sat_state(sat_state);
-            return Some(index);
-        }
+            if sat_solver.is_sat_in_subgraph_cached(interaction, node_id, &mut sat_state) {
+                // we found a config - extend config with interaction and update sat state
+                config.extend(interaction.iter().cloned());
+                config.set_sat_state(sat_state);
+                return Some(index);
+            }
 
-        None
-    });
+            None
+        });
 
     if let Some(index) = found {
         // move config to the complete configs if it is complete now

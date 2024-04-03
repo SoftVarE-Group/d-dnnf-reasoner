@@ -13,11 +13,14 @@ use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, OrMerge
 use crate::ddnnf::anomalies::t_wise_sampling::SamplingResult::ResultWithSample;
 use rand::prelude::{SliceRandom, StdRng};
 use rand::SeedableRng;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use streaming_iterator::StreamingIterator;
+
+#[cfg(feature = "parallel")]
+use rayon::iter::ParallelIterator;
 
 use crate::parser::util::format_vec;
 use crate::{Ddnnf, NodeType::*};
+use crate::maybe_parallel::{IntoMaybeParallelIterator, IntoMaybeParallelRefIterator};
 
 use self::covering_strategies::cover_with_caching;
 use self::data_structure::Sample;
@@ -192,14 +195,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
-            .par_iter()
+            .maybe_par_iter()
             .any(|result| matches!(result, SamplingResult::Void))
         {
             return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
-            .into_par_iter()
+            .into_maybe_par_iter()
             .filter_map(SamplingResult::get_sample)
             .collect();
 
@@ -220,14 +223,14 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
         rng: &mut StdRng,
     ) -> SamplingResult {
         if child_results
-            .par_iter()
+            .maybe_par_iter()
             .all(|result| matches!(result, SamplingResult::Void))
         {
             return SamplingResult::Void;
         }
 
         let child_samples: Vec<&Sample> = child_results
-            .into_par_iter()
+            .into_maybe_par_iter()
             .filter_map(SamplingResult::get_sample)
             .collect();
 

@@ -7,9 +7,10 @@
 #[cfg(all(test, feature = "benchmarks"))]
 extern crate test;
 
+pub mod ddnnf;
 pub mod parser;
+pub mod maybe_parallel;
+
+pub use crate::ddnnf::{node::*, Ddnnf};
 pub use crate::parser::c2d_lexer;
 pub use crate::parser::d4_lexer;
-
-pub mod ddnnf;
-pub use crate::ddnnf::{node::*, Ddnnf};
