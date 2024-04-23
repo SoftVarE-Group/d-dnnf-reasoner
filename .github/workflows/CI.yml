@@ -5,12 +5,7 @@ on: [workflow_dispatch, push]
 env:
   CARGO_TERM_COLOR: always
   CMAKE_GENERATOR: Ninja
-  CMAKE_C_COMPILER_LAUNCHER: sccache
-  CMAKE_CXX_COMPILER_LAUNCHER: sccache
-  RUSTC_WRAPPER: sccache
   SCCACHE_GHA_ENABLED: true
-  # FIXME: cc-rs on mac currently won't set the C++ standard correctly (https://github.com/dtolnay/cxx/issues/1217).
-  CXXFLAGS: -std=c++17
 
 jobs:
   Format:
@@ -32,8 +27,12 @@ jobs:
             shell: bash
             coverage: true
           - os: macos
-            runner: macos-latest
+            runner: macos-13
             triple: x86_64-apple-darwin
+            shell: bash
+          - os: macos
+            runner: macos-latest
+            triple: aarch64-apple-darwin
             shell: bash
           - os: windows
             runner: windows-latest
@@ -74,6 +73,12 @@ jobs:
           mv /${{ matrix.target.msystem }}/lib/libtbb12.dll.a /${{ matrix.target.msystem }}/lib/libtbb.dll.a
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@v0.0.3
+      - name: Setup sccache environment
+        if: ${{ matrix.target.triple != 'aarch64-apple-darwin' }}
+        run: |
+          echo CMAKE_C_COMPILER_LAUNCHER=sccache >> $GITHUB_ENV
+          echo CMAKE_CXX_COMPILER_LAUNCHER=sccache >> $GITHUB_ENV
+          echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
       - name: Setup environment
         run: |
           export BUILD_ROOT=$(mktemp -d)
