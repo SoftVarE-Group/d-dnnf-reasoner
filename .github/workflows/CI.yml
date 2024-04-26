@@ -6,6 +6,8 @@ env:
   CARGO_TERM_COLOR: always
   CMAKE_GENERATOR: Ninja
   SCCACHE_GHA_ENABLED: true
+  # FIXME: cc-rs on mac currently won't set the C++ standard correctly (https://github.com/dtolnay/cxx/issues/1217).
+  CXXFLAGS: -std=c++17
 
 jobs:
   Format:
