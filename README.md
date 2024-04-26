@@ -18,6 +18,16 @@ Additionally, via the stream API, it can compute SAT queries, core/dead features
    - [Documentation](#documentation)
 3. [Container](#container)
 
+# Installation
+
+You can use pre-built binaries for Linux, macOS or Windows.
+There are two flavours for each target, one with the d4 compiler included and one without.
+Builds for the latest release are attached as assets for each [release][releases].
+
+Using the variant without d4 is straight forward, there are no external dependencies.
+The variant with d4 has some dynamic dependencies which need to be installed.
+Please see the README inside the release folder for details.
+
 # Building
 
 ## Requirements
@@ -388,6 +398,7 @@ After that arguments for ```ddnnife``` can be passed. It is important that to ac
 docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
 ```
 
+[releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases
 [c2d]: http://reasoning.cs.ucla.edu/c2d
 [d4]: https://github.com/SoftVarE-Group/d4v2
 [rust]: https://rust-lang.org
