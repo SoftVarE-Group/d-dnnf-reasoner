@@ -354,38 +354,22 @@ cargo doc --open
 
 # Container
 
-If you want to, you can also use a container image.
+If you want to, you can also use a container image with [Docker][docker], [Podman][podman] or any other container tool.
 However, we recommend using the native binary if possible.
 
-## Build
+For an overview, see: https://github.com/SoftVarE-Group/d-dnnf-reasoner/pkgs/container/ddnnife
 
-You can either use the provided script in the following way to build the image and also interact with it
-
-```
-./ddnnife_dw.sh
-```
-
-or you can build the image directly by hand.
-Here, ```ddnnife``` is the name of the image.
+There is a tag for the main branch and for each tagged release, the latest one is `latest`.
+To pull the latest tagged version, use:
 
 ```
-docker build -t ddnnife .
+docker pull ghcr.io/softvare-group/ddnnife:latest
 ```
 
-## Usage
-
-Like in the previous section you can use `./ddnnife_dw.sh` to interact with the image, or you can do the same by hand in with the following command:
+Then, you can use it like the standalone binary:
 
 ```
-docker run --platform linux/amd64 -i --rm -v [HOST FOLDER ABSOLUTE]:/data ddnnife
-```
-
-```--platform linux/amd64``` is necessary for host systems that are not ```linux x_86```, ```-i``` keeps STDIN open (which is relevant for the stream API), ```--rm``` removes the used container, and ```-v``` adds a volume to the container. [HOST FOLDER ABSOLUTE] is the folder on the host system that contains the input files for ```ddnnife```. ```ddnnife``` is the name of the image we created in the previous step.
-
-After that arguments for ```ddnnife``` can be passed. It is important that to access the files mounted via the volume, you need to add the ```/data/``` prefix to all the input and output files. An example to compute the cardinality of features for ```auto1``` can look like the following.
-
-```
-docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
+docker run ddnnife <path/to/ddnnf> count
 ```
 
 [c2d]: http://reasoning.cs.ucla.edu/c2d
@@ -396,3 +380,5 @@ docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example
 [mtkahypar]: https://github.com/kahypar/mt-kahypar
 [msys2]: https://msys2.org
 [llvm-cov]: https://github.com/taiki-e/cargo-llvm-cov
+[docker]: https://docker.com
+[podman]: https://podman.io
