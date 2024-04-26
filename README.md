@@ -366,10 +366,12 @@ To pull the latest tagged version, use:
 docker pull ghcr.io/softvare-group/ddnnife:latest
 ```
 
-Then, you can use it like the standalone binary:
+Then, you can use it like the standalone binary.
+For `ddnnife` to be able to access files, you need to create a volume.
+The following mounts `<local/directory>` on `/work` inside the container:
 
 ```
-docker run ddnnife <path/to/ddnnf> count
+docker run -v <local/directory>:/work ddnnife /work/<file.ddnnf> count
 ```
 
 [c2d]: http://reasoning.cs.ucla.edu/c2d
