@@ -105,6 +105,9 @@ jobs:
           cp LICENSE $BUILD_ROOT/licenses/mt-kahypar/
 # TODO: currently, macOS is only supported on master, move below clone to check out latest version when released.
 #          git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
+      - name: Setup Homebrew environment
+        if: ${{ matrix.target.triple == 'aarch64-apple-darwin' && matrix.d4 == 'include' }}
+        run: echo CPPFLAGS="-I/opt/homebrew/include" >> $GITHUB_ENV
       - name: Build (including d4)
         if: ${{ matrix.d4 == 'include' }}
         run: cargo build
