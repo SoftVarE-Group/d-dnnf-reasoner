@@ -20,13 +20,62 @@ Additionally, via the stream API, it can compute SAT queries, core/dead features
 
 # Installation
 
+## Pre-built
+
 You can use pre-built binaries for Linux, macOS or Windows.
 There are two flavours for each target, one with the d4 compiler included and one without.
 Builds for the latest release are attached as assets for each [release][releases].
 
 Using the variant without d4 is straight forward, there are no external dependencies.
-The variant with d4 has some dynamic dependencies which need to be installed.
+The variant with d4 has some dynamic dependencies which need to be set up.
 Please see the README inside the release folder for details.
+
+### Nix
+
+This project can be used and developed via a [Nix][nix] [flake][flake].
+
+With Nix installed simply run the following for a build:
+
+```
+nix build
+```
+
+The result will be at `result`.
+
+To build without the need to clone the repository, use:
+
+```
+nix build github:SoftVarE-Group/d-dnnf-reasoner
+```
+
+The default package output (`ddnnife-d4`) includes `d4`.
+To build the variant without `d4` use the package `ddnnife`:
+
+```
+nix build .#ddnnife
+```
+
+## Container
+
+There is also a container image for usage with [Docker][docker], [Podman][podman] or any other container tool.
+
+For an overview, see [here][container].
+
+There is a tag for each branch and for each tagged release.
+Currently, the latest version is found on the `main` branch.
+To pull the container, use:
+
+```
+docker pull ghcr.io/softvare-group/ddnnife:main
+```
+
+Then, you can use it like the standalone binary.
+For `ddnnife` to be able to access files, you need to create a volume.
+The following mounts `<local/directory>` on `/work` inside the container:
+
+```
+docker run -v <local/directory>:/work ddnnife:main /work/<file.ddnnf> count
+```
 
 # Building
 
@@ -362,42 +411,6 @@ To generate an HTML documentation of the code and open it in the default browser
 cargo doc --open
 ```
 
-# Container
-
-If you want to, you can also use a container image.
-However, we recommend using the native binary if possible.
-
-## Build
-
-You can either use the provided script in the following way to build the image and also interact with it
-
-```
-./ddnnife_dw.sh
-```
-
-or you can build the image directly by hand.
-Here, ```ddnnife``` is the name of the image.
-
-```
-docker build -t ddnnife .
-```
-
-## Usage
-
-Like in the previous section you can use `./ddnnife_dw.sh` to interact with the image, or you can do the same by hand in with the following command:
-
-```
-docker run --platform linux/amd64 -i --rm -v [HOST FOLDER ABSOLUTE]:/data ddnnife
-```
-
-```--platform linux/amd64``` is necessary for host systems that are not ```linux x_86```, ```-i``` keeps STDIN open (which is relevant for the stream API), ```--rm``` removes the used container, and ```-v``` adds a volume to the container. [HOST FOLDER ABSOLUTE] is the folder on the host system that contains the input files for ```ddnnife```. ```ddnnife``` is the name of the image we created in the previous step.
-
-After that arguments for ```ddnnife``` can be passed. It is important that to access the files mounted via the volume, you need to add the ```/data/``` prefix to all the input and output files. An example to compute the cardinality of features for ```auto1``` can look like the following.
-
-```
-docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example_input:/data ddnnife /data/auto1.cnf count-features /data/result
-```
-
 [releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases
 [c2d]: http://reasoning.cs.ucla.edu/c2d
 [d4]: https://github.com/SoftVarE-Group/d4v2
@@ -407,3 +420,8 @@ docker run --platform linux/amd64 -i --rm -v ~/Documents/d-dnnf-reasoner/example
 [mtkahypar]: https://github.com/kahypar/mt-kahypar
 [msys2]: https://msys2.org
 [llvm-cov]: https://github.com/taiki-e/cargo-llvm-cov
+[nix]: https://nixos.org
+[flake]: https://nixos.wiki/wiki/Flakes
+[docker]: https://docker.com
+[podman]: https://podman.io
+[container]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/pkgs/container/ddnnife

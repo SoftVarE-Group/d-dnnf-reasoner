@@ -23,7 +23,6 @@ codegen-units = 1
 # for performance graphs: debug = true
 
 [features]
-default = ["d4"]
 d4 = ["dep:d4-oxide"]
 
 [dependencies]
