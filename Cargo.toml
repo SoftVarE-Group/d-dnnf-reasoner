@@ -44,7 +44,7 @@ streaming-iterator = "0.1.9"
 tempfile = "3.9.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
-d4-oxide = { version = "0.2.1", optional = true }
+d4-oxide = { version = "0.3.0", optional = true }
 
 [dependencies.gmp-mpfr-sys]
 version = "1.6.1"
