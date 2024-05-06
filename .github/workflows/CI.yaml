@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  - push
+
+jobs:
+  Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: DeterminateSystems/nix-installer-action@v10
+      - name: Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v4
+      - name: Check
+        run: nix flake check -L
+
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - triple: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - triple: x86_64-apple-darwin
+            runner: macos-13
+          - triple: aarch64-apple-darwin
+            runner: macos-latest
+        variant:
+          - ''
+          - '-d4'
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: DeterminateSystems/nix-installer-action@v10
+      - name: Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v4
+      - name: Build
+        run: nix build -L .#bundled${{ matrix.variant }}
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddnnife-${{ matrix.target.triple }}${{ matrix.variant }}
+          path: result

@@ -1,6 +1,7 @@
-name: CI
+name: Windows
 
-on: [workflow_dispatch, push]
+on:
+  - push
 
 env:
   CARGO_TERM_COLOR: always
@@ -9,66 +10,36 @@ env:
   CMAKE_CXX_COMPILER_LAUNCHER: sccache
   RUSTC_WRAPPER: sccache
   SCCACHE_GHA_ENABLED: true
-  # FIXME: cc-rs on mac currently won't set the C++ standard correctly (https://github.com/dtolnay/cxx/issues/1217).
-  CXXFLAGS: -std=c++17
 
 jobs:
-  Format:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Format
-        run: cargo fmt --check
-
   Build:
     strategy:
       fail-fast: false
       matrix:
         target:
-          - os: linux
-            runner: ubuntu-latest
-            triple: x86_64-unknown-linux-gnu
-            shell: bash
-            coverage: true
-          - os: macos
-            runner: macos-latest
-            triple: x86_64-apple-darwin
-            shell: bash
-          - os: windows
-            runner: windows-latest
-            triple: x86_64-pc-windows-gnu
-            shell: msys2
+          - triple: x86_64-pc-windows-gnu
             msystem: ucrt64
         toolchain:
           - stable
         d4:
           - include
           - exclude
-    runs-on: ${{ matrix.target.runner }}
+    runs-on: windows-latest
     defaults:
       run:
-        shell: ${{ matrix.target.shell }} {0}
+        shell: msys2 {0}
     env:
       CARGO_BUILD_TARGET: ${{ matrix.target.triple }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup MSYS2 (Windows)
-        if: ${{ matrix.target.os == 'windows' }}
+      - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
         with:
           path-type: inherit
-          msystem: ${{ matrix.target.msystem }}
+          msystem: ucrt64
           pacboy: git m4 cmake:p ninja:p
-      - name: Install dependencies (Linux)
-        if: ${{ matrix.target.os == 'linux' }}
-        run: sudo apt-get install ninja-build libtbb-dev libhwloc-dev libboost-program-options-dev
-      - name: Install dependencies (macOS)
-        if: ${{ matrix.target.os == 'macos' }}
-        run: brew install ninja boost hwloc tbb
-      - name: Install dependencies (Windows)
-        if: ${{ matrix.target.os == 'windows' }}
+      - name: Install dependencies
         run: |
           pacboy -S --noconfirm toolchain:p tbb:p hwloc:p boost:p
           mv /${{ matrix.target.msystem }}/lib/libtbb12.dll.a /${{ matrix.target.msystem }}/lib/libtbb.dll.a
@@ -91,54 +62,36 @@ jobs:
         run: |
           cd $(mktemp -d)
           git clone --recursive https://github.com/kahypar/mt-kahypar.git .
+          git checkout c51ffeaa3b1040530bf821b7f323e3790b147b33
           cmake -B build -D CMAKE_INSTALL_PREFIX=$BUILD_ROOT -D MT_KAHYPAR_DISABLE_BOOST=true
           cmake --build build --target mtkahypar
           cmake --install build
-          mkdir -p $BUILD_ROOT/licenses/mt-kahypar
-          cp LICENSE $BUILD_ROOT/licenses/mt-kahypar/
-# TODO: currently, macOS is only supported on master, move below clone to check out latest version when released.
-#          git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
       - name: Build (including d4)
         if: ${{ matrix.d4 == 'include' }}
         run: cargo build
       - name: Build (excluding d4)
         if: ${{ matrix.d4 == 'exclude' }}
         run: cargo build --no-default-features
-      - name: Test
-        # FIXME: Some tests are currently not platform independent and fail on macos and windows and without d4
-        if: ${{ matrix.d4 == 'include' && matrix.target.os != 'macos' && matrix.target.os != 'windows' }}
-        run: cargo test
-      - name: Install coverage tool
-        if: ${{ matrix.target.coverage }}
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Coverage
-        if: ${{ matrix.target.coverage && matrix.d4 == 'include' }}
-        run: cargo llvm-cov
       - name: Package
         run: |
           mkdir -p $BUILD_ROOT/bin
           cp target/${{ matrix.target.triple }}/debug/{ddnnife,dhone} $BUILD_ROOT/bin/
+          ./package-msys.bash $BUILD_ROOT $BUILD_ROOT/bin/*
           rm -rf $BUILD_ROOT/include
           rm -rf $BUILD_ROOT/share
-          mkdir -p $BUILD_ROOT/licenses/d-ddnnf-reasoner
-          cp LICENSE $BUILD_ROOT/licenses/d-ddnnf-reasoner/
-      - name: Package documentation (including d4)
-        if: ${{ matrix.d4 == 'include' }}
-        run: |
-          cp doc/built/${{ matrix.target.os }}-d4.md $BUILD_ROOT/README.md
-      - name: Package documentation (excluding d4)
-        if: ${{ matrix.d4 == 'exclude' }}
-        run: |
-          cp doc/built/${{ matrix.target.os }}.md $BUILD_ROOT/README.md
-      - name: Package dependencies (Windows)
-        if: ${{ matrix.target.os == 'windows' }}
-        run: |
-          ./package-msys.bash $BUILD_ROOT $BUILD_ROOT/bin/*
           rm -f $BUILD_ROOT/bin/b2
           rm -f $BUILD_ROOT/bin/bjam
           rm -f $BUILD_ROOT/bin/hwloc*
           rm -f $BUILD_ROOT/bin/lstopo*
           rm -rf $BUILD_ROOT/lib
+      - name: Package documentation (including d4)
+        if: ${{ matrix.d4 == 'include' }}
+        run: |
+          cp doc/windows-d4.md $BUILD_ROOT/README.md
+      - name: Package documentation (excluding d4)
+        if: ${{ matrix.d4 == 'exclude' }}
+        run: |
+          cp doc/windows.md $BUILD_ROOT/README.md
       - name: Upload (including d4)
         if: ${{ matrix.d4 == 'include' }}
         uses: actions/upload-artifact@v4
