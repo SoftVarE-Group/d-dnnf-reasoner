@@ -1,10 +1,10 @@
 use bitvec::prelude::*;
-use itertools::Itertools;
+use itertools::{sorted_unstable, Itertools};
 use rug::Integer;
 
-use crate::Ddnnf;
+use crate::{ddnnf, Ddnnf};
 
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, thread::current};
 
 /// A quite basic union-find implementation that uses ranks and path compresion
 #[derive(Debug, Clone, PartialEq)]
@@ -194,7 +194,12 @@ impl Ddnnf {
         }
 
         let mut subsets = atomic_sets.subsets();
-        subsets.sort_unstable();
+        if cross {
+            // remove inverse duplicate atomic sets (e.g., A, B and !A,!B)
+            sort_and_clean_atomicsets(&mut subsets);
+        } else {
+            subsets.sort_unstable()
+        }
         subsets
     }
 
@@ -269,6 +274,15 @@ impl Ddnnf {
             }
         }
     }
+}
+
+// removes inverse atomic sets
+fn sort_and_clean_atomicsets(atomic_sets: &mut Vec<Vec<i16>>) {
+    for atomic in atomic_sets.iter_mut() {
+        atomic.sort_by(|a, b| a.abs().cmp(&b.abs()));
+    }
+    atomic_sets.sort_unstable_by(|a, b| a[0].abs().cmp(&b[0].abs()).then(a[0].cmp(&b[0])));
+    atomic_sets.dedup_by(|a, b| a[0].abs() == b[0].abs());
 }
 
 #[cfg(test)]
@@ -357,10 +371,11 @@ mod test {
             let mut combinations: Vec<i32> =
                 (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect();
             combinations.retain(|&x| x != 0);
-            assert_eq!(
-                ddnnf.get_atomic_sets(None, &[], true),
-                brute_force_atomic_sets(&mut ddnnf, combinations)
-            );
+
+            let mut brute_force_result = brute_force_atomic_sets(&mut ddnnf, combinations);
+            sort_and_clean_atomicsets(&mut brute_force_result);
+
+            assert_eq!(ddnnf.get_atomic_sets(None, &[], true), brute_force_result);
         }
     }
 
