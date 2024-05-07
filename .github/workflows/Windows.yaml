@@ -30,6 +30,7 @@ jobs:
         shell: msys2 {0}
     env:
       CARGO_BUILD_TARGET: ${{ matrix.target.triple }}
+      RUSTUP_TOOLCHAIN: ${{ matrix.toolchain }}-${{ matrix.target.triple }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +45,7 @@ jobs:
           pacboy -S --noconfirm toolchain:p tbb:p hwloc:p boost:p
           mv /${{ matrix.target.msystem }}/lib/libtbb12.dll.a /${{ matrix.target.msystem }}/lib/libtbb.dll.a
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.3
+        uses: mozilla-actions/sccache-action@v0.0.4
       - name: Setup environment
         run: |
           export BUILD_ROOT=$(mktemp -d)
@@ -54,9 +55,7 @@ jobs:
           echo LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_ROOT/lib:$BUILD_ROOT/lib64" >> $GITHUB_ENV
           echo PATH="$PATH:$BUILD_ROOT/bin" >> $GITHUB_ENV
       - name: Setup Rust
-        run: |
-          rustup update ${{ matrix.toolchain }}-${{ matrix.target.triple }}
-          rustup default ${{ matrix.toolchain }}-${{ matrix.target.triple }}
+        run: rustup toolchain add $RUSTUP_TOOLCHAIN
       - name: Build Mt-KaHyPar
         if: ${{ matrix.d4 == 'include' }}
         run: |
