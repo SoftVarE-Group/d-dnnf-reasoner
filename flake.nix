@@ -35,6 +35,7 @@
         crateArgs = {
           inherit src;
           strictDeps = true;
+          doCheck = false;
 
           buildInputs = lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
 
@@ -81,12 +82,10 @@
 
           ddnnife = craneLib.buildPackage (crateArgs // {
             inherit cargoArtifacts;
-            doCheck = false;
           });
 
           ddnnife-d4 = craneLib.buildPackage (crateArgs-d4 // {
             cargoArtifacts = cargoArtifacts-d4;
-            doCheck = false;
           });
 
           container = pkgs.dockerTools.buildLayeredImage {
