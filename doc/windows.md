@@ -7,11 +7,11 @@ All dependencies are in `bin`.
 
 ## Usage
 
-The binaries `ddnife.exe` and `dhone.exe` are inside `bin`.
+The binaries `ddnnife.exe` and `dhone.exe` are inside `bin`.
 To show the help message, use:
 
 ```
-ddnife.exe --help
+ddnnife.exe --help
 ```
 
 For full usage instructions, see the README at https://github.com/SoftVarE-Group/d-dnnf-reasoner

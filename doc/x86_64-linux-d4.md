@@ -12,11 +12,11 @@ or by setting the `LD_LIBRARY_PATH` environment variable to include the `lib` di
 
 ## Usage
 
-The binaries `ddnife` and `dhone` are inside `bin`.
+The binaries `ddnnife` and `dhone` are inside `bin`.
 To show the help message, use:
 
 ```
-ddnife --help
+ddnnife --help
 ```
 
 For full usage instructions, see the README at https://github.com/SoftVarE-Group/d-dnnf-reasoner
