@@ -39,7 +39,7 @@ jobs:
       - name: Cache
         uses: DeterminateSystems/magic-nix-cache-action@v4
       - name: Build
-        run: nix build -L .#bundled${{ matrix.variant }}
+        run: nix build -L .#all${{ matrix.variant }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:

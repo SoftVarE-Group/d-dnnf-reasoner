@@ -111,8 +111,8 @@
             };
           };
 
-          bundled-doc = pkgs.stdenv.mkDerivation {
-            name = "bundled-doc";
+          documentation = pkgs.stdenv.mkDerivation {
+            name = "documentation";
             src = ./doc;
             installPhase = ''
               mkdir $out
@@ -120,8 +120,8 @@
             '';
           };
 
-          bundled-doc-d4 = pkgs.stdenv.mkDerivation {
-            name = "bundled-doc-d4";
+          documentation-d4 = pkgs.stdenv.mkDerivation {
+            name = "documentation-d4";
             src = ./doc;
             installPhase = ''
               mkdir $out
@@ -129,20 +129,20 @@
             '';
           };
 
-          bundled = pkgs.buildEnv {
-            name = "bundled";
+          all = pkgs.buildEnv {
+            name = "ddnnife";
             paths = [
               self.packages.${system}.ddnnife
-              self.packages.${system}.bundled-doc
+              self.packages.${system}.documentation
             ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
           };
 
-          bundled-d4 = pkgs.buildEnv {
-            name = "bundled-d4";
+          all-d4 = pkgs.buildEnv {
+            name = "ddnnife-d4";
             paths = [
               self.packages.${system}.ddnnife-d4
-              self.packages.${system}.bundled-doc-d4
-              d4.packages.${system}.bundled-deps
+              self.packages.${system}.documentation-d4
+              d4.packages.${system}.dependencies
             ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
           };
         };

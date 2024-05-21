@@ -30,6 +30,9 @@ Using the variant without d4 is straight forward, there are no external dependen
 The variant with d4 has some dynamic dependencies which need to be set up.
 Please see the README inside the release folder for details.
 
+On (Linux) systems with an older glibc, the d4 variant might not work.
+In this case, there is also the portable variant which is a self-extracting archive with everything bundled in one binary.
+
 ### Nix
 
 This project can be used and developed via a [Nix][nix] [flake][flake].
