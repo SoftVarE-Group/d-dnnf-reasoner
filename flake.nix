@@ -30,10 +30,11 @@
         toolchain = fenix.packages.${system}.stable.defaultToolchain;
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
-        src = craneLib.cleanCargoSource (craneLib.path ./.);
+        src = craneLib.path ./.;
 
         crateArgs = {
           inherit src;
+
           strictDeps = true;
           doCheck = false;
 
@@ -67,26 +68,34 @@
 
         cargoArtifacts = craneLib.buildDepsOnly crateArgs;
         cargoArtifacts-d4 = craneLib.buildDepsOnly crateArgs-d4;
+
+        ddnnife =
+          craneLib.buildPackage (crateArgs // { inherit cargoArtifacts; });
+
+        ddnnife-d4 = craneLib.buildPackage
+          (crateArgs-d4 // { cargoArtifacts = cargoArtifacts-d4; });
       in {
         formatter = pkgs.nixfmt;
 
         checks = {
+          format = craneLib.cargoFmt { inherit src; };
+
           lint = craneLib.cargoClippy
             (crateArgs-d4 // { cargoArtifacts = cargoArtifacts-d4; });
 
-          format = craneLib.cargoFmt { inherit src; };
+          test = craneLib.cargoNextest (crateArgs-d4 // {
+            doCheck = true;
+            cargoArtifacts = cargoArtifacts-d4;
+            cargoNextestExtraArgs =
+              "--test-threads 1 --no-fail-fast --hide-progress-bar";
+          });
         };
 
         packages = {
           default = self.packages.${system}.ddnnife-d4;
 
-          ddnnife = craneLib.buildPackage (crateArgs // {
-            inherit cargoArtifacts;
-          });
-
-          ddnnife-d4 = craneLib.buildPackage (crateArgs-d4 // {
-            cargoArtifacts = cargoArtifacts-d4;
-          });
+          inherit ddnnife;
+          inherit ddnnife-d4;
 
           container = pkgs.dockerTools.buildLayeredImage {
             name = "ddnnife";
@@ -138,6 +147,6 @@
           };
         };
 
-        devShells.default = craneLib.devShell { };
+        devShells.default = craneLib.devShell { inputsFrom = [ ddnnife-d4 ]; };
       });
 }
