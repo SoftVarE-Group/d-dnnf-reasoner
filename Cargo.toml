@@ -27,6 +27,7 @@ debug = true
 
 [features]
 d4 = ["dep:d4-oxide"]
+deterministic = []
 
 [dependencies]
 bitvec = "1.0"

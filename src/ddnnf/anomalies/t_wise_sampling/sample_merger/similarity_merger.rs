@@ -1,11 +1,11 @@
-use crate::ddnnf::anomalies::t_wise_sampling::data_structure::{Config, Sample};
-use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{OrMerger, SampleMerger};
-use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
+use super::super::t_iterator::TInteractionIter;
+use super::super::SamplingResult;
+use super::{Config, Sample};
+use super::{OrMerger, SampleMerger};
+use crate::util::rng;
+use rand::prelude::SliceRandom;
 use std::cmp::{min, Ordering};
-
-use rand::prelude::{SliceRandom, StdRng};
 use std::collections::HashSet;
-
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
@@ -17,13 +17,7 @@ pub struct SimilarityMerger {
 impl OrMerger for SimilarityMerger {}
 
 impl SampleMerger for SimilarityMerger {
-    fn merge<'a>(
-        &self,
-        _node_id: usize,
-        left: &Sample,
-        right: &Sample,
-        rng: &mut StdRng,
-    ) -> Sample {
+    fn merge<'a>(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
         } else if right.is_empty() {
@@ -54,7 +48,7 @@ impl SampleMerger for SimilarityMerger {
             .map(|(index, _)| index)
         {
             let next = candidates.swap_remove(next);
-            if next.is_t_wise_covered_by(&new_sample, self.t, rng) {
+            if next.is_t_wise_covered_by(&new_sample, self.t) {
                 continue;
             }
 
@@ -63,6 +57,13 @@ impl SampleMerger for SimilarityMerger {
             candidates.iter_mut().for_each(|c| c.update(&next.literals));
         }
         new_sample
+    }
+
+    // For an or node, all samples have to be void for the resulting sample to also be void.
+    fn is_void(&self, samples: &[&SamplingResult]) -> bool {
+        samples
+            .iter()
+            .all(|result| matches!(result, SamplingResult::Void))
     }
 }
 
@@ -121,7 +122,7 @@ impl<'a> Candidate<'a> {
         }
     }
 
-    fn is_t_wise_covered_by(&self, sample: &Sample, t: usize, rng: &mut StdRng) -> bool {
+    fn is_t_wise_covered_by(&self, sample: &Sample, t: usize) -> bool {
         if self.max_intersect == self.literals.len() {
             return true;
         }
@@ -139,7 +140,7 @@ impl<'a> Candidate<'a> {
         }
 
         let mut literals: Vec<i32> = self.config.get_decided_literals().collect();
-        literals.shuffle(rng);
+        literals.shuffle(&mut rng());
         debug_assert!(!literals.contains(&0));
 
         TInteractionIter::new(&literals, min(t, literals.len()))
@@ -150,16 +151,14 @@ impl<'a> Candidate<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::SeedableRng;
 
     #[test]
     fn test_similarity_merger() {
         let merger = SimilarityMerger { t: 2 };
-        let mut rng = StdRng::seed_from_u64(42);
 
         let left = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
         let right = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
-        let merged = merger.merge(0, &left, &right, &mut rng);
+        let merged = merger.merge(0, &left, &right);
         assert_eq!(
             merged,
             Sample::new_from_configs(vec![Config::from(&[1], 1)])
@@ -171,7 +170,6 @@ mod test {
         let number_of_variables = 4;
         let candidate_config = Config::from(&[1, 2, 3, 4], number_of_variables);
         let mut candidate = Candidate::new(&candidate_config);
-        let mut rng = StdRng::seed_from_u64(42);
 
         let sample = Sample::new_from_configs(vec![
             Config::from(&[1, 2, 3], number_of_variables),
@@ -184,7 +182,7 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
 
-        assert!(candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
+        assert!(candidate.is_t_wise_covered_by(&sample, 2));
 
         let mut candidate = Candidate::new(&candidate_config);
         let sample = Sample::new_from_configs(vec![
@@ -197,6 +195,6 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
 
-        assert!(!candidate.is_t_wise_covered_by(&sample, 2, &mut rng));
+        assert!(!candidate.is_t_wise_covered_by(&sample, 2));
     }
 }

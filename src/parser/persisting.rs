@@ -9,7 +9,7 @@ use rug::Assign;
 
 use crate::{Ddnnf, Node, NodeType};
 
-use super::util::format_vec;
+use crate::util::format_vec;
 
 /// Takes a CNF and writes the string representation into a file with the provided name
 pub(crate) fn write_cnf_to_file(

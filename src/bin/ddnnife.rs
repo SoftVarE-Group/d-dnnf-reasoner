@@ -4,7 +4,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use clap::{ArgGroup, Parser, Subcommand};
 
 use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
-use ddnnf_lib::parser::util::format_vec;
+use ddnnf_lib::util::format_vec;
 use itertools::Itertools;
 
 use std::fs::File;
