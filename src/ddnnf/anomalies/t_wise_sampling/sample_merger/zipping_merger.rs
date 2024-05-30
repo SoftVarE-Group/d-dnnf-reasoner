@@ -221,11 +221,16 @@ mod test {
         };
 
         let mut left_sample = new_with_literals(HashSet::from([2, 3]), vec![-2, 3]);
-        left_sample.add_partial(Config::from(&[3], 4));
+        left_sample.add_partial(Config::from(&[3, -2], 4));
         let right_sample = Sample::new_from_configs(vec![Config::from(&[1, 4], 4)]);
 
-        let result = zipping_merger.merge(node, &left_sample, &right_sample);
-        let expected = Sample::new_from_configs(vec![Config::from(&[-2, 1, 3, 4], 4)]);
-        assert_eq!(result, expected);
+        let result = zipping_merger
+            .merge(node, &left_sample, &right_sample)
+            .iter()
+            .next()
+            .unwrap();
+
+        let expected = Config::from(&[-2, 1, 3, 4], 4);
+        assert_eq!(result, &expected);
     }
 }
