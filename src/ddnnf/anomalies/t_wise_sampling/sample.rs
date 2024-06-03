@@ -55,7 +55,7 @@ impl Sample {
     ///
     /// # Examples
     /// ```
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::config::{Config, Sample};
+    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::{Config, Sample};
     ///
     /// let conf_a = Config::from(&[1,2], 3);
     /// let conf_b = Config::from(&[1,2,3], 3);
@@ -151,7 +151,7 @@ impl Sample {
     /// # Examples
     /// ```
     /// use std::collections::HashSet;
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::config::{Config, Sample};
+    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::{Config, Sample};
     ///
     /// let sample = Sample::new(HashSet::from([1,2,3]));
     ///
@@ -193,7 +193,7 @@ impl Sample {
     /// # Examples
     /// ```
     /// use std::collections::HashSet;
-    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::config::{Config, Sample};
+    /// use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::{Config, Sample};
     /// let mut s = Sample::new(HashSet::from([1,2,3]));
     ///
     /// assert!(s.is_empty());

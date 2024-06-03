@@ -9,8 +9,8 @@ mod t_wise_sampler;
 
 use crate::util::format_vec;
 use crate::Ddnnf;
-use config::Config;
-use sample::Sample;
+pub use config::Config;
+pub use sample::Sample;
 use sample_merger::similarity_merger::SimilarityMerger;
 use sample_merger::zipping_merger::ZippingMerger;
 use sampling_result::SamplingResult;
