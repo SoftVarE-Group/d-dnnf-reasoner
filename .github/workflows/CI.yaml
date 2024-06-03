@@ -4,7 +4,7 @@ on:
   - push
 
 jobs:
-  Test:
+  Check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,8 +28,16 @@ jobs:
           - triple: aarch64-apple-darwin
             runner: macos-latest
         variant:
-          - ''
-          - '-d4'
+          - flake: 'all'
+            artifact: ''
+          - flake: 'all-d4'
+            artifact: '-d4'
+        exclude:
+          - target: { triple: x86_64-unknown-linux-gnu, runner: ubuntu-latest }
+            variant: { flake: 'all', artifact: '' }
+        include:
+          - target: { triple: x86_64-unknown-linux-musl, runner: ubuntu-latest }
+            variant: { flake: 'ddnnife-static', artifact: '' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -39,9 +47,9 @@ jobs:
       - name: Cache
         uses: DeterminateSystems/magic-nix-cache-action@v4
       - name: Build
-        run: nix build -L .#all${{ matrix.variant }}
+        run: nix build -L .#${{ matrix.variant.flake }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-${{ matrix.target.triple }}${{ matrix.variant }}
+          name: ddnnife-${{ matrix.target.triple }}${{ matrix.variant.artifact }}
           path: result

@@ -2,12 +2,8 @@
   description = "Packages and development environments for ddnnife";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     flake-utils.url = "github:numtide/flake-utils/v1.0.0";
-    crane = {
-      url = "github:ipetkov/crane/v0.16.3";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -19,28 +15,47 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, crane, fenix, d4, ... }:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      fenix,
+      d4,
+      ...
+    }:
     let
       lib = nixpkgs.lib;
       systems = lib.systems.doubles.unix;
-    in flake-utils.lib.eachDefaultSystem (system:
+    in
+    flake-utils.lib.eachSystem systems (
+      system:
       let
         pkgs = import nixpkgs { inherit system; };
 
-        toolchain = fenix.packages.${system}.stable.defaultToolchain;
-        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+        toolchain = {
+          default = fenix.packages.${system}.stable.defaultToolchain;
+          static =
+            with fenix.packages.${system};
+            combine [
+              stable.defaultToolchain
+              targets.x86_64-unknown-linux-musl.stable.rust-std
+            ];
+        };
 
-        src = craneLib.path ./.;
+        rust = {
+          default = pkgs.makeRustPlatform {
+            cargo = toolchain.default;
+            rustc = toolchain.default;
+          };
+          static = pkgs.pkgsStatic.makeRustPlatform {
+            cargo = toolchain.static;
+            rustc = toolchain.static;
+          };
+        };
 
-        crateArgs = {
-          inherit src;
-
-          strictDeps = true;
-          doCheck = false;
-
-          buildInputs = lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-
-          nativeBuildInputs = [ pkgs.gnum4 ];
+        crate = {
+          name = "ddnnife";
 
           meta = with lib; {
             description = "A d-DNNF reasoner";
@@ -48,53 +63,70 @@
             license = licenses.lgpl3Plus;
             platforms = systems;
           };
+
+          src = ./.;
+          cargoLock.lockFile = ./Cargo.lock;
+
+          nativeBuildInputs = [ pkgs.gnum4 ];
+
+          # FIXME: Tests are currently unable to run without d4.
+          doCheck = false;
+          dontUseCargoParallelTests = true;
         };
 
-        crateArgs-d4 = crateArgs // {
-          cargoExtraArgs = "--features d4";
+        crate-d4 = crate // {
+          buildFeatures = [ "d4" ];
 
-          buildInputs =
-            [ pkgs.boost.dev pkgs.gmp.dev d4.packages.${system}.mt-kahypar ]
-            ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+          buildInputs = [
+            pkgs.boost.dev
+            pkgs.gmp.dev
+            d4.packages.${system}.mt-kahypar
+          ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
 
-          nativeBuildInputs = [ pkgs.gnum4 pkgs.pkg-config ];
+          nativeBuildInputs = [
+            pkgs.gnum4
+            pkgs.pkg-config
+          ];
 
-          # FIXME: libcxx symbols missing (https://github.com/NixOS/nixpkgs/issues/166205)
-          # Should be fixed in 24.05.
-          env = lib.optionalAttrs pkgs.stdenv.cc.isClang {
-            NIX_LDFLAGS = "-l${pkgs.stdenv.cc.libcxx.cxxabi.libName}";
-          };
+          # FIXME: Tests are currently unable to run on x86_64-darwin.
+          doCheck = system != "x86_64-darwin";
         };
 
-        cargoArtifacts = craneLib.buildDepsOnly crateArgs;
-        cargoArtifacts-d4 = craneLib.buildDepsOnly crateArgs-d4;
+        ddnnife = rust.default.buildRustPackage crate;
+        ddnnife-static = rust.static.buildRustPackage crate;
+        ddnnife-d4 = rust.default.buildRustPackage crate-d4;
 
-        ddnnife =
-          craneLib.buildPackage (crateArgs // { inherit cargoArtifacts; });
-
-        ddnnife-d4 = craneLib.buildPackage
-          (crateArgs-d4 // { cargoArtifacts = cargoArtifacts-d4; });
-      in {
-        formatter = pkgs.nixfmt;
+        runTest =
+          name: crate: testCommand:
+          rust.default.buildRustPackage (
+            crate
+            // {
+              inherit name;
+              installPhase = "touch $out";
+              dontBuild = true;
+              doCheck = true;
+              checkType = "debug";
+              checkPhase = ''
+                set -x
+                ${testCommand}
+                set +x
+              '';
+            }
+          );
+      in
+      {
+        formatter = pkgs.nixfmt-rfc-style;
 
         checks = {
-          format = craneLib.cargoFmt { inherit src; };
-
-          lint = craneLib.cargoClippy
-            (crateArgs-d4 // { cargoArtifacts = cargoArtifacts-d4; });
-
-          test = craneLib.cargoNextest (crateArgs-d4 // {
-            doCheck = true;
-            cargoArtifacts = cargoArtifacts-d4;
-            cargoNextestExtraArgs =
-              "--test-threads 1 --no-fail-fast --hide-progress-bar";
-          });
+          format = runTest "format" crate "cargo fmt --check";
+          lint = runTest "lint" crate-d4 "cargo clippy --all-features";
         };
 
         packages = {
           default = self.packages.${system}.ddnnife-d4;
 
           inherit ddnnife;
+          inherit ddnnife-static;
           inherit ddnnife-d4;
 
           container = pkgs.dockerTools.buildLayeredImage {
@@ -103,8 +135,7 @@
             config = {
               Entrypoint = [ "/bin/ddnnife" ];
               Labels = {
-                "org.opencontainers.image.source" =
-                  "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
+                "org.opencontainers.image.source" = "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
                 "org.opencontainers.image.description" = "A d-DNNF reasoner";
                 "org.opencontainers.image.licenses" = "LGPL-3.0-or-later";
               };
@@ -121,7 +152,7 @@
           };
 
           documentation-d4 = pkgs.stdenv.mkDerivation {
-            name = "documentation-d4";
+            name = "documentation";
             src = ./doc;
             installPhase = ''
               mkdir $out
@@ -134,19 +165,18 @@
             paths = [
               self.packages.${system}.ddnnife
               self.packages.${system}.documentation
-            ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+            ];
           };
 
           all-d4 = pkgs.buildEnv {
-            name = "ddnnife-d4";
+            name = "ddnnife";
             paths = [
               self.packages.${system}.ddnnife-d4
               self.packages.${system}.documentation-d4
               d4.packages.${system}.dependencies
-            ] ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+            ];
           };
         };
-
-        devShells.default = craneLib.devShell { inputsFrom = [ ddnnife-d4 ]; };
-      });
+      }
+    );
 }
