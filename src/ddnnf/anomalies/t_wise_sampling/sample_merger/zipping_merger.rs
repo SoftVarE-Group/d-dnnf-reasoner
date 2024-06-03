@@ -154,7 +154,7 @@ impl ZippingMerger<'_> {
                     if left_complete && right_complete {
                         new_sample.add_complete(new_config);
                     } else {
-                        new_sample.add_partial(new_config);
+                        new_sample.add(new_config);
                     }
                 },
             );
