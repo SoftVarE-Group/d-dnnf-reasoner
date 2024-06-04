@@ -1,4 +1,4 @@
-use rug::Float;
+use num::{BigRational, ToPrimitive};
 use std::error::Error;
 
 use super::super::Ddnnf;
@@ -14,7 +14,6 @@ impl Ddnnf {
     /// extern crate ddnnf_lib;
     /// use ddnnf_lib::Ddnnf;
     /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
     /// use std::fs;
     ///
     /// // create a ddnnf
@@ -36,7 +35,12 @@ impl Ddnnf {
             wtr.write_record(vec![
                 work.to_string(),
                 cardinality.to_string(),
-                format!("{:.20}", Float::with_val(200, cardinality) / self.rc()),
+                format!(
+                    "{:.10e}",
+                    BigRational::from((cardinality, self.rc()))
+                        .to_f64()
+                        .expect("Failed to convert rational!")
+                ),
             ])?;
         }
 

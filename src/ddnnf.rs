@@ -9,7 +9,7 @@ pub mod stream;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use itertools::Either;
-use rug::Integer;
+use num::BigInt;
 
 use self::{clause_cache::ClauseCache, node::Node};
 
@@ -148,13 +148,13 @@ impl Ddnnf {
 
     // Returns the current count of the root node in the ddnnf.
     // That value is the same during all computations
-    pub fn rc(&self) -> Integer {
+    pub fn rc(&self) -> BigInt {
         self.nodes[self.nodes.len() - 1].count.clone()
     }
 
     // Returns the current temp count of the root node in the ddnnf.
     // That value is changed during computations
-    fn rt(&self) -> Integer {
+    fn rt(&self) -> BigInt {
         self.nodes[self.nodes.len() - 1].temp.clone()
     }
 
@@ -177,15 +177,15 @@ impl Ddnnf {
     /// extern crate ddnnf_lib;
     /// use ddnnf_lib::Ddnnf;
     /// use ddnnf_lib::parser::*;
-    /// use rug::Integer;
+    /// use num::BigInt;
     ///
     /// // create a ddnnf
     /// let file_path = "./tests/data/small_ex_c2d.nnf";
     /// let mut ddnnf: Ddnnf = build_ddnnf(file_path, None);
     ///
-    /// assert_eq!(1, ddnnf.execute_query(&vec![3,4]));
-    /// assert_eq!(2, ddnnf.execute_query(&vec![3]));
-    pub fn execute_query(&mut self, features: &[i32]) -> Integer {
+    /// assert_eq!(BigInt::from(1), ddnnf.execute_query(&vec![3,4]));
+    /// assert_eq!(BigInt::from(2), ddnnf.execute_query(&vec![3]));
+    pub fn execute_query(&mut self, features: &[i32]) -> BigInt {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]),

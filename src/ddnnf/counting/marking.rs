@@ -1,4 +1,4 @@
-use rug::{Assign, Complete, Integer};
+use num::{BigInt, One, Zero};
 
 use super::super::node::NodeType::*;
 use crate::Ddnnf;
@@ -7,13 +7,12 @@ impl Ddnnf {
     #[inline]
     pub(crate) fn annotate_partial_derivatives(&mut self) {
         for node in self.nodes.iter_mut() {
-            node.partial_derivative.assign(Integer::ZERO);
+            node.partial_derivative.set_zero();
         }
 
         let total_nodes = self.nodes.len();
-        self.nodes[total_nodes - 1]
-            .partial_derivative
-            .assign(Integer::ONE);
+        self.nodes[total_nodes - 1].partial_derivative.set_one();
+
         for i in (0..total_nodes).rev() {
             self.annotate_single_partial_derivative(i);
         }
@@ -48,7 +47,7 @@ impl Ddnnf {
     }
 
     #[inline]
-    pub(crate) fn card_of_feature_with_partial_derivatives(&mut self, feature: i32) -> Integer {
+    pub(crate) fn card_of_feature_with_partial_derivatives(&mut self, feature: i32) -> BigInt {
         match self.literals.get(&-feature).cloned() {
             Some(i) => self.rc() - &self.nodes[i].partial_derivative,
             // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
@@ -72,47 +71,47 @@ impl Ddnnf {
                         .iter()
                         .fold(self.nodes[i].count.clone(), |mut acc, &&index| {
                             let node = &self.nodes[index];
-                            if node.count != 0 {
+                            if !node.count.is_zero() {
                                 acc /= &node.count;
                             }
                             acc *= &node.temp;
                             acc
                         })
                 } else {
-                    Integer::product(children.iter().map(|&index| {
+                    children
+                        .iter()
+                        .map(|&index| {
+                            let node = &self.nodes[index];
+                            if node.marker {
+                                &node.temp
+                            } else {
+                                &node.count
+                            }
+                        })
+                        .product()
+                }
+            }
+            Or { children } => {
+                self.nodes[i].temp = children
+                    .iter()
+                    .map(|&index| {
                         let node = &self.nodes[index];
                         if node.marker {
                             &node.temp
                         } else {
                             &node.count
                         }
-                    }))
-                    .complete()
-                }
+                    })
+                    .sum()
             }
-            Or { children } => {
-                self.nodes[i].temp = Integer::sum(children.iter().map(|&index| {
-                    let node = &self.nodes[index];
-                    if node.marker {
-                        &node.temp
-                    } else {
-                        &node.count
-                    }
-                }))
-                .complete()
-            }
-            False => self.nodes[i].temp.assign(0),
-            _ => self.nodes[i].temp.assign(1), // True and Literal
+            False => self.nodes[i].temp.set_zero(),
+            _ => self.nodes[i].temp.set_one(), // True and Literal
         }
     }
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn operate_on_marker(
-        &mut self,
-        indexes: &[usize],
-        operation: fn(&mut Ddnnf, usize),
-    ) -> Integer {
+    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> BigInt {
         self.mark_assumptions(indexes);
 
         // calc the count for all marked nodes, respectevly all nodes that matter
@@ -138,11 +137,11 @@ impl Ddnnf {
     /// The marking algorithm differs to the standard variation by only reomputing the
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
-    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> Integer {
+    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> BigInt {
         if self.has_no_effect_on_query(&feature) {
             self.rc()
         } else if self.makes_query_unsat(&feature) {
-            Integer::ZERO
+            BigInt::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
                 Some(i) => self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node),
@@ -159,9 +158,9 @@ impl Ddnnf {
         &mut self,
         features: &[i32],
         operation: fn(&mut Ddnnf, usize),
-    ) -> Integer {
+    ) -> BigInt {
         if self.query_is_not_sat(features) {
-            Integer::ZERO
+            BigInt::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
             let indexes: Vec<usize> = self.map_features_opposing_indexes(&features);
@@ -200,7 +199,7 @@ impl Ddnnf {
     // indexes are literals that are deselected
     fn mark_assumptions(&mut self, indexes: &[usize]) {
         for index in indexes.iter().copied() {
-            self.nodes[index].temp.assign(0); // change the value of the node
+            self.nodes[index].temp.set_zero(); // change the value of the node
             self.mark_nodes_start(index); // go through the path til the root node is marked
         }
 
