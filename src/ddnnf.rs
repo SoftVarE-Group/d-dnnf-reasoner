@@ -13,6 +13,10 @@ use num::BigInt;
 
 use self::{clause_cache::ClauseCache, node::Node};
 
+type Clause = BTreeSet<i32>;
+type ClauseSet = BTreeSet<Clause>;
+type EditOperation = (Vec<Clause>, Vec<Clause>);
+
 #[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 pub struct Ddnnf {
@@ -83,7 +87,7 @@ impl Ddnnf {
     /// or updates the state accordingly.
     pub fn update_cached_state(
         &mut self,
-        clause_info: Either<(Vec<BTreeSet<i32>>, Vec<BTreeSet<i32>>), BTreeSet<BTreeSet<i32>>>, // Left(edit operation) or Right(clauses)
+        clause_info: Either<EditOperation, ClauseSet>,
         total_features: Option<u32>,
     ) -> bool {
         match self.cached_state.as_mut() {

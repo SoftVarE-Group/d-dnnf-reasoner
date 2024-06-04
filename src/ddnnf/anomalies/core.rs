@@ -8,7 +8,7 @@ impl Ddnnf {
     /// A feature is a dead feature iff there exists only the negativ occurence of that feature.
     pub(crate) fn get_core(&mut self) {
         self.core = (-(self.number_of_variables as i32)..=self.number_of_variables as i32)
-            .filter(|f| self.literals.get(f).is_some() && self.literals.get(&-f).is_none())
+            .filter(|f| self.literals.contains_key(f) && !self.literals.contains_key(&-f))
             .collect::<HashSet<i32>>()
     }
 

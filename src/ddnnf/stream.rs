@@ -63,7 +63,7 @@ impl Ddnnf {
                     } else {
                         // If there isn't any more work left, we can stop the busy waiting
                         // and sleep til unparked again by the main thread.
-                        std::thread::park();
+                        thread::park();
                     }
                 }
             });
@@ -671,7 +671,7 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = auto1.handle_stream_msg("core");
-        let res = binding.split(" ").collect::<Vec<&str>>();
+        let res = binding.split(' ').collect::<Vec<&str>>();
         assert_eq!(279, res.len());
         assert!(res.contains(&"20") && res.contains(&"-168"));
         assert_eq!(
@@ -698,16 +698,16 @@ mod test {
         );
         assert!(
             // count p 1 2 3 == 0 => all features are core under that assumption
-            auto1.handle_stream_msg("core a 1 2 3").split(" ").count()
+            auto1.handle_stream_msg("core a 1 2 3").split(' ').count()
                 == (auto1.number_of_variables * 2) as usize
         );
 
         assert_eq!(
-            auto1.handle_stream_msg("core").split(" ").count(),
+            auto1.handle_stream_msg("core").split(' ').count(),
             auto1.core.len()
         );
         assert_eq!(
-            vp9.handle_stream_msg("core").split(" ").count(),
+            vp9.handle_stream_msg("core").split(' ').count(),
             vp9.core.len()
         );
     }
@@ -717,12 +717,9 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         assert_eq!(
-            String::from(
-            vec![
-                "1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000",
+            ["1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000",
                 "44558490301175088812121229002380743156731839067219819764321860535061593824456157036646879771006312148798957047211355633063364007335639360623647085885718285895752858908864905172260153747031300505600000000000000000000000",
-                "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000"
-            ].join(";")),
+                "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000"].join(";"),
             auto1.handle_stream_msg("count v 1 -2 3")
         );
         assert_eq!(
@@ -733,7 +730,7 @@ mod test {
         assert_eq!(auto1.rc().to_string(), auto1.handle_stream_msg("count"));
         assert_eq!(
             auto1.handle_stream_msg("count v 123 -1111"),
-            vec![
+            [
                 auto1.handle_stream_msg("count a 123"),
                 auto1.handle_stream_msg("count a -1111")
             ]
@@ -759,7 +756,7 @@ mod test {
         );
         assert_eq!(
             auto1.handle_stream_msg("sat v 1 58"),
-            vec![
+            [
                 auto1.handle_stream_msg("sat a 1"),
                 auto1.handle_stream_msg("sat a 58")
             ]
@@ -773,7 +770,7 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
-        let res: Vec<&str> = binding.split(";").collect_vec();
+        let res: Vec<&str> = binding.split(';').collect_vec();
 
         assert!(
             res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 -41 42")
@@ -786,13 +783,13 @@ mod test {
         let binding = vp9.handle_stream_msg(
             "enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 l 80",
         );
-        let res: Vec<&str> = binding.split(";").collect();
+        let res: Vec<&str> = binding.split(';').collect();
         assert_eq!(80, res.len());
 
         let mut res_set = HashSet::new();
         for config_str in res {
             let config: Vec<i32> = config_str
-                .split(" ")
+                .split(' ')
                 .map(|f| f.parse::<i32>().unwrap())
                 .collect();
             assert_eq!(
@@ -805,13 +802,13 @@ mod test {
         }
 
         let binding = vp9.handle_stream_msg("enum a 1 l 216000");
-        let res: Vec<&str> = binding.split(";").collect();
+        let res: Vec<&str> = binding.split(';').collect();
         assert_eq!(216000, res.len());
 
         let mut res_set = HashSet::new();
         for config_str in res {
             let config: Vec<i32> = config_str
-                .split(" ")
+                .split(' ')
                 .map(|f| f.parse::<i32>().unwrap())
                 .collect();
             assert_eq!(
@@ -849,7 +846,7 @@ mod test {
 
         let mut binding = vp9.handle_stream_msg("random a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 seed 42");
         let mut res = binding
-            .split(" ")
+            .split(' ')
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
         assert_eq!(BigInt::from(1), vp9.execute_query(&res));
@@ -857,7 +854,7 @@ mod test {
 
         binding = vp9.handle_stream_msg("random");
         res = binding
-            .split(" ")
+            .split(' ')
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
         assert_eq!(BigInt::from(1), vp9.execute_query(&res));
@@ -865,9 +862,9 @@ mod test {
 
         binding = auto1.handle_stream_msg("random assumptions 1 3 -4 270 122 -2000 limit 135");
         let results = binding
-            .split(";")
+            .split(';')
             .map(|v| {
-                v.split(" ")
+                v.split(' ')
                     .map(|v_inner| v_inner.parse::<i32>().unwrap())
                     .collect::<Vec<i32>>()
             })
@@ -876,10 +873,10 @@ mod test {
             assert_eq!(auto1.number_of_variables as usize, result.len());
 
             // contains the assumptions
-            for elem in vec![1, 3, -4, 270, 122, -2000].iter() {
+            for elem in [1, 3, -4, 270, 122, -2000].iter() {
                 assert!(result.contains(elem));
             }
-            for elem in vec![-1, -3, 4, -270, -122, 2000].iter() {
+            for elem in [-1, -3, 4, -270, -122, 2000].iter() {
                 assert!(!result.contains(elem));
             }
 
@@ -930,7 +927,7 @@ mod test {
         );
         assert_eq!(
             // an unsat query results in an atomic set that contains one subset which contains all features
-            format_vec((1..=42).into_iter()),
+            format_vec(1..=42),
             vp9.handle_stream_msg("atomic a 4 5")
         );
     }

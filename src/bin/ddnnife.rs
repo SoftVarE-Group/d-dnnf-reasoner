@@ -267,7 +267,7 @@ fn main() {
         format!(
             "{}-{}.{}",
             maybe_prefix.clone().unwrap_or(input_file_path.clone()),
-            operation.to_string(),
+            operation,
             file_type
         )
     };

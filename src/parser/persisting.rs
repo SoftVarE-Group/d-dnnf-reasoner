@@ -63,7 +63,7 @@ fn deconstruct_node(node: &Node) -> String {
 }
 
 #[inline]
-fn deconstruct_children(mut str: String, children: &Vec<usize>) -> String {
+fn deconstruct_children(mut str: String, children: &[usize]) -> String {
     str.push_str(&children.len().to_string());
     str.push(' ');
 
@@ -87,7 +87,7 @@ pub fn write_as_mermaid_md(
     path_out: &str,
 ) -> std::io::Result<()> {
     for node in ddnnf.nodes.iter_mut() {
-        node.temp = node.count.clone();
+        node.temp.clone_from(&node.count);
     }
 
     ddnnf.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node);

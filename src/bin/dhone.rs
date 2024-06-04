@@ -92,7 +92,7 @@ fn preprocess(path: &str) -> Vec<C2DToken> {
         // if we find a literal we save the number and its position
         let unique: i32 = match token {
             C2DToken::Literal { feature: f } => {
-                if literals.get(f).is_some() {
+                if literals.contains_key(f) {
                     *f
                 } else {
                     literals.insert(*f, index);
