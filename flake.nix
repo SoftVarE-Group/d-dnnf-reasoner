@@ -68,10 +68,6 @@
           cargoLock.lockFile = ./Cargo.lock;
 
           nativeBuildInputs = [ pkgs.gnum4 ];
-
-          # FIXME: Tests are currently unable to run without d4.
-          doCheck = false;
-          dontUseCargoParallelTests = true;
         };
 
         crate-d4 = crate // {

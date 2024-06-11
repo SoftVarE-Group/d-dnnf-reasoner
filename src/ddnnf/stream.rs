@@ -928,6 +928,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "d4")]
     #[test]
     fn handle_stream_msg_clause_update() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", None);
@@ -997,6 +998,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "d4")]
     #[test]
     fn handle_stream_msg_save() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
@@ -1189,6 +1191,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "d4")]
     #[test]
     #[serial]
     fn parallel_stream() {
