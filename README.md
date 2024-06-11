@@ -122,20 +122,20 @@ Mt-KaHyPar has to be present in the MSYS2 environment as well when building with
 
 There are two flavours of ddnnife:
 One with the [d4][d4] compiler built in and one without.
-Whether d4 is included depends on the `d4` flag passed to cargo.
+Whether d4 is included depends on the `d4` feature flag passed to cargo.
 
 When building with cargo, the resulting binaries will be at `target/release/{ddnnife, dhone}`.
 
-### With d4
+### With default features (without d4)
 
 ```
 cargo build --release
 ```
 
-### Without d4
+### With d4
 
 ```
-cargo build --release --no-default-features
+cargo build --release --features d4
 ```
 
 ### dhone (dsharp preprocessor)
