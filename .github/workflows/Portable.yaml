@@ -20,7 +20,7 @@ jobs:
       - name: Cache
         uses: DeterminateSystems/magic-nix-cache-action@v4
       - name: Bundle
-        run: nix bundle --bundler github:DavHau/nix-portable -o bundle .#all
+        run: nix bundle --bundler github:DavHau/nix-portable -o bundle .#all-d4
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
