@@ -338,6 +338,7 @@ mod test {
         assert_eq!(vec![vec![5, 100], vec![1, 2, 3, 4, 7]], subsets2);
     }
 
+    #[cfg(feature = "d4")]
     #[test]
     #[serial]
     fn brute_force_wo_cross() {
@@ -357,6 +358,7 @@ mod test {
         }
     }
 
+    #[cfg(feature = "d4")]
     #[test]
     #[serial]
     fn brute_force_cross() {

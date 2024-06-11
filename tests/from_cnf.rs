@@ -4,6 +4,7 @@ use assert_cmd::prelude::*; // Add methods on commands
 use predicates::prelude::*; // Used for writing assertions
 use std::process::Command; // Run programs
 
+#[cfg(feature = "d4")]
 #[test]
 fn compiles_cnf_to_d_dnnf() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("ddnnife")?;

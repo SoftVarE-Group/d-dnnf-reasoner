@@ -36,6 +36,7 @@ fn card_of_features_d4() {
     let _res = fs::remove_file(d4_out);
 }
 
+#[cfg(feature = "d4")]
 #[test]
 #[serial]
 fn card_of_features_cnf() {
@@ -91,6 +92,7 @@ fn card_of_pc_d4() {
     fs::remove_file(d4_out).unwrap();
 }
 
+#[cfg(feature = "d4")]
 #[test]
 #[serial]
 fn card_of_pc_cnf() {

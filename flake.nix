@@ -69,8 +69,7 @@
 
           nativeBuildInputs = [ pkgs.gnum4 ];
 
-          # FIXME: Tests are currently unable to run without d4.
-          doCheck = false;
+          # FIXME: Tests are currently unable to run in parallel.
           dontUseCargoParallelTests = true;
         };
 
