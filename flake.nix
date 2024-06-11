@@ -68,9 +68,6 @@
           cargoLock.lockFile = ./Cargo.lock;
 
           nativeBuildInputs = [ pkgs.gnum4 ];
-
-          # FIXME: Tests are currently unable to run in parallel.
-          dontUseCargoParallelTests = true;
         };
 
         crate-d4 = crate // {
