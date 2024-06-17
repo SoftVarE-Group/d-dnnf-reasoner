@@ -19,7 +19,7 @@ use nom::IResult;
 use workctl::WorkQueue;
 
 use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
-use crate::{parser::util::*, Ddnnf};
+use crate::{util::*, Ddnnf};
 
 impl Ddnnf {
     /// Initiate the Stream mode. This enables a commincation channel between stdin and stdout.

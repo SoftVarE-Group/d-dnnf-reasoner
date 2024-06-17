@@ -8,7 +8,6 @@ pub mod from_cnf;
 use from_cnf::{check_for_cnf_header, CNFToken};
 
 pub mod persisting;
-pub mod util;
 
 use core::panic;
 use std::{

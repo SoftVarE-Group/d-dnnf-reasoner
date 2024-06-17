@@ -8,6 +8,7 @@
 extern crate test;
 
 pub mod parser;
+pub mod util;
 pub use crate::parser::c2d_lexer;
 pub use crate::parser::d4_lexer;
 
