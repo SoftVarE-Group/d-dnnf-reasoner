@@ -18,6 +18,7 @@ jobs:
       matrix:
         target:
           - triple: x86_64-pc-windows-gnu
+            double: x86_64-windows
             msystem: ucrt64
         toolchain:
           - stable
@@ -95,11 +96,11 @@ jobs:
         if: ${{ matrix.d4 == 'include' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-d4-${{ matrix.target.triple }}
+          name: ddnnife-${{ matrix.target.double }}-d4
           path: ${{ env.BUILD_ROOT_EXPORT }}
       - name: Upload (excluding d4)
         if: ${{ matrix.d4 == 'exclude' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-${{ matrix.target.triple }}
+          name: ddnnife-${{ matrix.target.double }}
           path: ${{ env.BUILD_ROOT_EXPORT }}

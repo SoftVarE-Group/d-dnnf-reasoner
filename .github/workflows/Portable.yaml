@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - triple: x86_64-unknown-linux-gnu
+          - double: x86_64-linux
             runner: ubuntu-latest
     runs-on: ${{ matrix.target.runner }}
     steps:
@@ -24,5 +24,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-${{ matrix.target.triple }}-d4-portable
+          name: ddnnife-${{ matrix.target.double }}-d4-portable
           path: bundle
