@@ -96,18 +96,10 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
         // Uniform random samples produce an SATISFIABLE complete configuration.
-        for sample in vp9
-            .uniform_random_sampling(&vec![], 1000, 42)
-            .unwrap()
-            .iter()
-        {
+        for sample in vp9.uniform_random_sampling(&[], 1000, 42).unwrap().iter() {
             assert!(vp9.sat(sample));
         }
-        for sample in auto1
-            .uniform_random_sampling(&vec![], 1000, 42)
-            .unwrap()
-            .iter()
-        {
+        for sample in auto1.uniform_random_sampling(&[], 1000, 42).unwrap().iter() {
             assert!(auto1.sat(sample));
         }
     }

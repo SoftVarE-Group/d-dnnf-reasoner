@@ -105,7 +105,7 @@ impl Ddnnf {
 
                 // Signal to the operating system that now is a good time
                 // to give another thread a chance to run.
-                std::thread::yield_now();
+                thread::yield_now();
             });
 
             // Add the handle for the newly spawned thread to the list of handles
@@ -235,7 +235,6 @@ mod test {
             // takes a query of the file and parses the i32 values
             let query: Vec<i32> = split_query_res[0]
                 .split_whitespace()
-                .into_iter()
                 .map(|elem| elem.parse::<i32>().unwrap())
                 .collect();
             let res = split_query_res[1].parse::<bool>().unwrap();

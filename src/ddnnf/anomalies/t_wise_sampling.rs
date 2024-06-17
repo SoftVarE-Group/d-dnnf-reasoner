@@ -105,9 +105,11 @@ mod test {
             for combi in possible_features.into_iter().combinations(t) {
                 // checks if the pair can be found in at least one of the samples
                 let combi_exists = |combi: &[i32]| -> bool {
-                    configs
-                        .iter()
-                        .any(|config| combi.iter().all(|&f| config[f.abs() as usize - 1] == f))
+                    configs.iter().any(|config| {
+                        combi
+                            .iter()
+                            .all(|&f| config[f.unsigned_abs() as usize - 1] == f)
+                    })
                 };
 
                 assert!(

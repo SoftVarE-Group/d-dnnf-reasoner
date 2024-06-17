@@ -1,7 +1,7 @@
 use crate::Ddnnf;
 use bitvec::prelude::*;
 use itertools::Itertools;
-use num::{BigInt, Integer};
+use num::BigInt;
 use std::{collections::HashMap, hash::Hash};
 
 /// A quite basic union-find implementation that uses ranks and path compresion
@@ -257,12 +257,12 @@ impl Ddnnf {
             // then we can by sure that they don't belong to the same atomic set. Differences can be checked by
             // applying XOR to the two bitvectors and checking if any bit is set.
             let var_occurences_x = if (x.signum() * y.signum()).is_positive() {
-                signed_excludes[x.abs() as usize - 1]
+                signed_excludes[x.unsigned_abs() as usize - 1]
             } else {
-                !signed_excludes[x.abs() as usize - 1]
+                !signed_excludes[x.unsigned_abs() as usize - 1]
             };
 
-            if (var_occurences_x ^ signed_excludes[y.abs() as usize - 1]).any() {
+            if (var_occurences_x ^ signed_excludes[y.unsigned_abs() as usize - 1]).any() {
                 continue;
             }
 
@@ -277,7 +277,7 @@ impl Ddnnf {
 // removes inverse atomic sets
 fn sort_and_clean_atomicsets(atomic_sets: &mut Vec<Vec<i16>>) {
     for atomic in atomic_sets.iter_mut() {
-        atomic.sort_by(|a, b| a.abs().cmp(&b.abs()));
+        atomic.sort_by_key(|a| a.abs());
     }
     atomic_sets.sort_unstable_by(|a, b| a[0].abs().cmp(&b[0].abs()).then(a[0].cmp(&b[0])));
     atomic_sets.dedup_by(|a, b| a[0].abs() == b[0].abs());
@@ -403,7 +403,7 @@ mod test {
 
         // make sure that the results are reproducible
         for _ in 0..3 {
-            let vp9_atomic_sets = vp9.get_atomic_sets(None, &vec![], false);
+            let vp9_atomic_sets = vp9.get_atomic_sets(None, &[], false);
             assert_eq!(vec![vec![1, 2, 6, 10, 15, 19, 25, 31, 40]], vp9_atomic_sets);
 
             // There should exactly one atomic set that is a subset of the core and the dead features.
@@ -426,7 +426,7 @@ mod test {
 
         // ensure reproducible
         for _ in 0..3 {
-            let auto1_atomic_sets = auto1.get_atomic_sets(None, &vec![], false);
+            let auto1_atomic_sets = auto1.get_atomic_sets(None, &[], false);
             assert_eq!(155, auto1_atomic_sets.len());
 
             // check some subset values
@@ -470,23 +470,21 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
-        assert!(vp9.get_atomic_sets(Some(vec![]), &vec![], false).is_empty());
-        assert!(auto1
-            .get_atomic_sets(Some(vec![]), &vec![], false)
-            .is_empty());
+        assert!(vp9.get_atomic_sets(Some(vec![]), &[], false).is_empty());
+        assert!(auto1.get_atomic_sets(Some(vec![]), &[], false).is_empty());
     }
 
     #[test]
     fn candidates_and_assumptions_for_core() {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
-        let vp9_default_as = vp9.get_atomic_sets(None, &vec![], false);
+        let vp9_default_as = vp9.get_atomic_sets(None, &[], false);
         let vp9_core = vp9.core.clone().into_iter().collect_vec();
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
                 Some((1..=vp9.number_of_variables as u32).collect_vec()),
-                &vec![],
+                &[],
                 false
             )
         );
@@ -514,7 +512,7 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let assumptions = vec![10, 20, 35];
         let atomic_sets = auto1
-            .get_atomic_sets(Some((1..=50).collect_vec()), &vec![10, 20, 35], false)
+            .get_atomic_sets(Some((1..=50).collect_vec()), &[10, 20, 35], false)
             .iter()
             .map(|subset| subset.iter().map(|&f| f as i32).collect_vec())
             .collect_vec();

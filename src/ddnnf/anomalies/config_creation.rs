@@ -105,7 +105,7 @@ impl Ddnnf {
         }
 
         for node in self.nodes.iter_mut() {
-            node.temp = node.count.clone();
+            node.temp.clone_from(&node.count);
         }
 
         for literal in assumptions.iter() {
@@ -493,7 +493,7 @@ mod test {
 
         let auto1_samples = auto1
             .uniform_random_sampling(
-                &mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111],
+                &mut [-546, 55, 646, -872, -873, 102, 23, 764, -1111],
                 1_000,
                 42,
             )
@@ -511,37 +511,37 @@ mod test {
 
         // same seeding should yield same results, different seeding should (normally) yield different results
         assert_eq!(
-            vp9.uniform_random_sampling(&mut vec![], 100, 42),
-            vp9.uniform_random_sampling(&mut vec![], 100, 42)
+            vp9.uniform_random_sampling(&mut [], 100, 42),
+            vp9.uniform_random_sampling(&mut [], 100, 42)
         );
         assert_eq!(
-            vp9.uniform_random_sampling(&mut vec![23, 4, -17], 100, 99),
-            vp9.uniform_random_sampling(&mut vec![23, 4, -17], 100, 99),
+            vp9.uniform_random_sampling(&mut [23, 4, -17], 100, 99),
+            vp9.uniform_random_sampling(&mut [23, 4, -17], 100, 99),
         );
         assert_ne!(
-            vp9.uniform_random_sampling(&mut vec![38, 2, -14], 100, 99),
-            vp9.uniform_random_sampling(&mut vec![38, 2, -14], 100, 50),
+            vp9.uniform_random_sampling(&mut [38, 2, -14], 100, 99),
+            vp9.uniform_random_sampling(&mut [38, 2, -14], 100, 50),
         );
 
         assert_eq!(
-            auto1.uniform_random_sampling(&mut vec![], 100, 42),
-            auto1.uniform_random_sampling(&mut vec![], 100, 42)
+            auto1.uniform_random_sampling(&mut [], 100, 42),
+            auto1.uniform_random_sampling(&mut [], 100, 42)
         );
         assert_eq!(
             auto1.uniform_random_sampling(
-                &mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111],
+                &mut [-546, 55, 646, -872, -873, 102, 23, 764, -1111],
                 100,
                 1970
             ),
             auto1.uniform_random_sampling(
-                &mut vec![-546, 55, 646, -872, -873, 102, 23, 764, -1111],
+                &mut [-546, 55, 646, -872, -873, 102, 23, 764, -1111],
                 100,
                 1970
             ),
         );
         assert_ne!(
-            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 1),
-            auto1.uniform_random_sampling(&mut vec![11, 12, 13, -14, -15, -16], 100, 2)
+            auto1.uniform_random_sampling(&mut [11, 12, 13, -14, -15, -16], 100, 1),
+            auto1.uniform_random_sampling(&mut [11, 12, 13, -14, -15, -16], 100, 2)
         );
     }
 
@@ -550,22 +550,18 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
         let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
 
+        assert!(vp9.uniform_random_sampling(&mut [1, -1], 1, 42).is_none());
         assert!(vp9
-            .uniform_random_sampling(&mut vec![1, -1], 1, 42)
+            .uniform_random_sampling(&mut [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
             .is_none());
-        assert!(vp9
-            .uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
-            .is_none());
-        assert!(vp9.uniform_random_sampling(&mut vec![100], 1, 42).is_none());
+        assert!(vp9.uniform_random_sampling(&mut [100], 1, 42).is_none());
 
+        assert!(auto1.uniform_random_sampling(&mut [1, -1], 1, 42).is_none());
         assert!(auto1
-            .uniform_random_sampling(&mut vec![1, -1], 1, 42)
+            .uniform_random_sampling(&mut [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
             .is_none());
         assert!(auto1
-            .uniform_random_sampling(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
-            .is_none());
-        assert!(auto1
-            .uniform_random_sampling(&mut vec![-10_000], 1, 42)
+            .uniform_random_sampling(&mut [-10_000], 1, 42)
             .is_none());
     }
 }

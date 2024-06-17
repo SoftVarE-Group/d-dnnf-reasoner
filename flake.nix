@@ -102,11 +102,7 @@
               dontBuild = true;
               doCheck = true;
               checkType = "debug";
-              checkPhase = ''
-                set -x
-                ${testCommand}
-                set +x
-              '';
+              checkPhase = testCommand;
             }
           );
       in
@@ -115,7 +111,7 @@
 
         checks = {
           format = runTest "format" crate "cargo fmt --check";
-          lint = runTest "lint" crate-d4 "cargo clippy --all-features";
+          lint = runTest "lint" crate-d4 "cargo clippy --all-features -- --deny warnings";
         };
 
         packages = {
