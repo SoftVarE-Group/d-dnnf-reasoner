@@ -28,16 +28,16 @@ jobs:
           - triple: aarch64-apple-darwin
             runner: macos-latest
         variant:
-          - flake: 'all'
+          - flake: all
             artifact: ''
-          - flake: 'all-d4'
+          - flake: all-d4
             artifact: '-d4'
         exclude:
           - target: { triple: x86_64-unknown-linux-gnu, runner: ubuntu-latest }
-            variant: { flake: 'all', artifact: '' }
+            variant: { flake: all, artifact: '' }
         include:
           - target: { triple: x86_64-unknown-linux-musl, runner: ubuntu-latest }
-            variant: { flake: 'ddnnife-static', artifact: '' }
+            variant: { flake: ddnnife-static, artifact: '' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -48,6 +48,15 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@v4
       - name: Build
         run: nix build -L .#${{ matrix.variant.flake }}
+      - name: Set interpreter
+        if: ${{ matrix.target.triple == 'x86_64-unknown-linux-gnu' }}
+        run: |
+          cp -rL result output
+          rm -rf result
+          chmod +w output/bin/*
+          nix run nixpkgs#patchelf -- --set-interpreter /lib64/ld-linux-x86-64.so.2 output/bin/*
+          chmod -w output/bin/*
+          mv output result
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
