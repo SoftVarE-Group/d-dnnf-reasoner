@@ -5,8 +5,6 @@ use std::{
     io::{LineWriter, Write},
 };
 
-use rug::Assign;
-
 use crate::{Ddnnf, Node, NodeType};
 
 use crate::util::format_vec;
@@ -89,7 +87,7 @@ pub fn write_as_mermaid_md(
     path_out: &str,
 ) -> std::io::Result<()> {
     for node in ddnnf.nodes.iter_mut() {
-        node.temp.assign(&node.count);
+        node.temp = node.count.clone();
     }
 
     ddnnf.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node);

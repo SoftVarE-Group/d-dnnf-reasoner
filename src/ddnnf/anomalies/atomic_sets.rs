@@ -1,10 +1,8 @@
+use crate::Ddnnf;
 use bitvec::prelude::*;
-use itertools::{sorted_unstable, Itertools};
-use rug::Integer;
-
-use crate::{ddnnf, Ddnnf};
-
-use std::{collections::HashMap, hash::Hash, thread::current};
+use itertools::Itertools;
+use num::{BigInt, Integer};
+use std::{collections::HashMap, hash::Hash};
 
 /// A quite basic union-find implementation that uses ranks and path compresion
 #[derive(Debug, Clone, PartialEq)]
@@ -134,7 +132,7 @@ impl Ddnnf {
         assumptions: &[i32],
         cross: bool,
     ) -> Vec<Vec<i16>> {
-        let mut combinations: Vec<(Integer, i32)> = Vec::new();
+        let mut combinations: Vec<(BigInt, i32)> = Vec::new();
 
         // If there are no candidates supplied, we consider all features to be a candidate
         let considered_features = match candidates {
@@ -238,7 +236,7 @@ impl Ddnnf {
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
     fn incremental_subset_check(
         &mut self,
-        control: Integer,
+        control: BigInt,
         pot_atomic_set: &[i32],
         signed_excludes: &[BitArray<[u64; 8]>],
         assumptions: &[i32],
@@ -532,12 +530,12 @@ mod test {
 
         // atomic set property holds for all possibilities
         for subset in atomic_sets.iter() {
-            let mut compare_value = Integer::from(-1);
+            let mut compare_value = BigInt::from(-1);
             for feature in subset.iter() {
                 let mut query_slice = assumptions.clone();
                 query_slice.push(*feature);
 
-                if compare_value == -1 {
+                if compare_value == BigInt::from(-1) {
                     compare_value = auto1.execute_query(&query_slice);
                 } else {
                     assert_eq!(compare_value, auto1.execute_query(&query_slice));

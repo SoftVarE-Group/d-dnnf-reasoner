@@ -166,6 +166,7 @@ mod test {
 
     use file_diff::diff_files;
     use itertools::Itertools;
+    use num::BigInt;
 
     use crate::parser::build_ddnnf;
 
@@ -240,7 +241,10 @@ mod test {
             let res = split_query_res[1].parse::<bool>().unwrap();
 
             assert_eq!(ddnnf.sat(&query), res);
-            assert_eq!(ddnnf.sat(&query), (ddnnf.execute_query(&query) > 0));
+            assert_eq!(
+                ddnnf.sat(&query),
+                (ddnnf.execute_query(&query) > BigInt::ZERO)
+            );
         }
 
         fs::remove_file("./tests/data/sat.csv").unwrap();

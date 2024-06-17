@@ -10,6 +10,7 @@ use from_cnf::{check_for_cnf_header, CNFToken};
 pub mod persisting;
 
 use core::panic;
+use num::BigInt;
 use std::{
     cell::RefCell,
     cmp::max,
@@ -21,8 +22,6 @@ use std::{
     process,
     rc::Rc,
 };
-
-use rug::{Complete, Integer};
 
 use crate::ddnnf::{node::Node, node::NodeType, Ddnnf};
 
@@ -577,14 +576,14 @@ fn get_literals(
 
 // multiplies the count of all child Nodes of an And Node
 #[inline]
-fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
-    Integer::product(indices.iter().map(|&index| &nodes[index].count)).complete()
+fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
+    indices.iter().map(|&index| &nodes[index].count).product()
 }
 
 // adds up the count of all child Nodes of an And Node
 #[inline]
-fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> Integer {
-    Integer::sum(indices.iter().map(|&index| &nodes[index].count)).complete()
+fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
+    indices.iter().map(|&index| &nodes[index].count).sum()
 }
 
 /// Is used to parse the queries in the config files

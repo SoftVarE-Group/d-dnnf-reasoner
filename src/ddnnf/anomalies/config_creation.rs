@@ -5,13 +5,12 @@ use std::{
 };
 
 use itertools::Itertools;
+use num::{BigInt, BigRational, ToPrimitive, Zero};
 use once_cell::sync::Lazy;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_distr::{Binomial, Distribution, WeightedAliasIndex};
 use rand_pcg::{Lcg64Xsh32, Pcg32};
-
-use rug::{Assign, Integer, Rational};
 
 use crate::Ddnnf;
 use crate::NodeType::*;
@@ -38,7 +37,7 @@ impl Ddnnf {
         }
         assumptions.sort_unstable_by_key(|f| f.abs());
 
-        if self.execute_query(assumptions) > 0 {
+        if self.execute_query(assumptions) > BigInt::ZERO {
             let last_stop = match ENUMERATION_CACHE.lock().unwrap().get(assumptions) {
                 Some(&x) => x,
                 None => 0,
@@ -46,8 +45,8 @@ impl Ddnnf {
 
             let mut sample_list = self.enumerate_node(
                 (
-                    &Integer::from(last_stop),
-                    &min(self.rt(), Integer::from(last_stop + amount)),
+                    &BigInt::from(last_stop),
+                    &min(self.rt(), BigInt::from(last_stop + amount)),
                 ),
                 self.nodes.len() - 1,
             );
@@ -57,7 +56,9 @@ impl Ddnnf {
 
             ENUMERATION_CACHE.lock().unwrap().insert(
                 assumptions.to_vec(),
-                (min(self.rt(), Integer::from(last_stop + amount)) % self.rt()).to_usize_wrapping(),
+                (min(self.rt(), BigInt::from(last_stop + amount)) % self.rt())
+                    .to_usize()
+                    .expect("Attempt to convert to large integer!"),
             );
             return Some(sample_list);
         }
@@ -77,7 +78,7 @@ impl Ddnnf {
             return None;
         }
 
-        if self.execute_query(assumptions) > 0 {
+        if self.execute_query(assumptions) > BigInt::ZERO {
             let mut sample_list = self.sample_node(
                 amount,
                 self.nodes.len() - 1,
@@ -104,35 +105,44 @@ impl Ddnnf {
         }
 
         for node in self.nodes.iter_mut() {
-            node.temp.assign(&node.count);
+            node.temp = node.count.clone();
         }
 
         for literal in assumptions.iter() {
             if let Some(&x) = self.literals.get(&-literal) {
-                self.nodes[x].temp.assign(0)
+                self.nodes[x].temp.set_zero();
             }
         }
 
         // We can't create a config that contains a true node.
         // Hence, we have to hide the true node by changing its count to 0
         for &index in self.true_nodes.iter() {
-            self.nodes[index].temp.assign(0);
+            self.nodes[index].temp.set_zero();
         }
         true
     }
 
     // Handles a node appropiate depending on its kind to produce complete
     // satisfiable configurations
-    fn enumerate_node(&self, range: (&Integer, &Integer), index: usize) -> Vec<Vec<i32>> {
-        let _range2 = (range.0.to_usize_wrapping(), range.1.to_usize_wrapping());
+    fn enumerate_node(&self, range: (&BigInt, &BigInt), index: usize) -> Vec<Vec<i32>> {
+        let _range2 = (
+            range
+                .0
+                .to_usize()
+                .expect("Attempt to convert to large integer!"),
+            range
+                .1
+                .to_usize()
+                .expect("Attempt to convert to large integer!"),
+        );
         let mut enumeration_list = Vec::new();
-        if *range.1 == 0 || self.nodes[index].temp == 0 {
+        if range.1.is_zero() || self.nodes[index].temp.is_zero() {
             return enumeration_list;
         }
 
         match &self.nodes[index].ntype {
             And { children } => {
-                let mut acc_amount = Integer::from(1);
+                let mut acc_amount = BigInt::from(1);
                 let mut enumeration_child_lists = Vec::new();
 
                 for &child in children {
@@ -142,13 +152,13 @@ impl Ddnnf {
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (&Integer::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_child_lists.push(self.enumerate_node(change, child));
                         acc_amount *= change.1;
                     } else {
                         // restrict the creation of any more configs
                         enumeration_child_lists.push(vec![self
-                            .enumerate_node((&Integer::ZERO, &Integer::from(1)), child)[0]
+                            .enumerate_node((&BigInt::ZERO, &BigInt::from(1)), child)[0]
                             .clone()]);
                     }
                 }
@@ -166,20 +176,34 @@ impl Ddnnf {
                     .into_iter()
                     .multi_cartesian_product()
                     .map(|elem| elem.into_iter().flatten().collect())
-                    .skip(range.0.to_usize_wrapping())
-                    .take(range.1.to_usize_wrapping() - range.0.to_usize_wrapping()) // stop after we got our required amount of configs
+                    .skip(
+                        range
+                            .0
+                            .to_usize()
+                            .expect("Attempt to convert to large integer!"),
+                    )
+                    .take(
+                        range
+                            .1
+                            .to_usize()
+                            .expect("Attempt to convert to large integer!")
+                            - range
+                                .0
+                                .to_usize()
+                                .expect("Attempt to convert to large integer!"),
+                    ) // stop after we got our required amount of configs
                     .collect();
             }
             Or { children } => {
-                let mut acc_amount = Integer::ZERO;
+                let mut acc_amount = BigInt::ZERO;
 
                 for &child in children {
-                    if self.nodes[child].temp == Integer::ZERO {
+                    if self.nodes[child].temp == BigInt::ZERO {
                         continue;
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (&Integer::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_list.append(&mut self.enumerate_node(change, child));
                         acc_amount += change.1;
                     } else {
@@ -224,15 +248,17 @@ impl Ddnnf {
                 let mut weights = Vec::new();
 
                 // compute the probability of getting a sample of a child node
-                let parent_count_as_float = Rational::from((&self.nodes[index].temp, 1));
+                let parent_count_as_float = BigRational::from(self.nodes[index].temp.clone());
                 #[allow(clippy::needless_range_loop)]
                 for child_index in 0..children.len() {
                     let child_count_as_float =
-                        Rational::from((&self.nodes[children[child_index]].temp, 1));
+                        BigRational::from(self.nodes[children[child_index]].temp.clone());
 
                     // can't get a sample of a children with no more valid configuration
-                    if child_count_as_float != 0 {
-                        let child_amount = (child_count_as_float / &parent_count_as_float).to_f64()
+                    if !child_count_as_float.is_zero() {
+                        let child_amount = (child_count_as_float / &parent_count_as_float)
+                            .to_f64()
+                            .expect("Failed to convert BigRational to f64!")
                             * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
@@ -331,9 +357,13 @@ mod test {
         for inter in inter_res {
             res_all.insert(inter);
         }
-        assert_eq!(vp9.rt(), res_all.len(), "there are duplicates");
+        assert_eq!(
+            vp9.rt(),
+            BigInt::from(res_all.len()),
+            "there are duplicates"
+        );
 
-        assert_eq!(80, vp9.execute_query(&assumptions));
+        assert_eq!(BigInt::from(80), vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_2.clone() {
             res_assumptions.insert(inter);

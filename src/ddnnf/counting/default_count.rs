@@ -1,7 +1,6 @@
-use rug::{Assign, Complete, Integer};
-
 use super::super::node::NodeType::*;
 use crate::Ddnnf;
+use num::{BigInt, One, Zero};
 
 impl Ddnnf {
     #[inline]
@@ -9,16 +8,19 @@ impl Ddnnf {
     pub(crate) fn calc_count(&mut self, i: usize) {
         match &self.nodes[i].ntype {
             And { children } => {
-                self.nodes[i].temp =
-                    Integer::product(children.iter().map(|&indice| &self.nodes[indice].temp))
-                        .complete()
+                self.nodes[i].temp = children
+                    .iter()
+                    .map(|&indice| &self.nodes[indice].temp)
+                    .product()
             }
             Or { children } => {
-                self.nodes[i].temp =
-                    Integer::sum(children.iter().map(|&indice| &self.nodes[indice].temp)).complete()
+                self.nodes[i].temp = children
+                    .iter()
+                    .map(|&indice| &self.nodes[indice].temp)
+                    .sum()
             }
-            False => self.nodes[i].temp.assign(0),
-            _ => self.nodes[i].temp.assign(1), // True and Literal
+            False => self.nodes[i].temp.set_zero(),
+            _ => self.nodes[i].temp.set_one(), // True and Literal
         }
     }
 
@@ -31,18 +33,18 @@ impl Ddnnf {
         &mut self,
         feature: i32,
         operation: fn(&mut Ddnnf, usize),
-    ) -> Integer {
+    ) -> BigInt {
         if self.has_no_effect_on_query(&feature) {
             self.rc()
         } else if self.makes_query_unsat(&feature) {
-            Integer::ZERO
+            BigInt::ZERO
         } else {
             for i in 0..self.nodes.len() {
                 match &mut self.nodes[i].ntype {
                     // search for the node we want to adjust
                     Literal { literal } => {
                         if feature == -*literal {
-                            self.nodes[i].temp.assign(0);
+                            self.nodes[i].temp.set_zero();
                         } else {
                             operation(self, i)
                         }
@@ -64,9 +66,9 @@ impl Ddnnf {
         &mut self,
         features: &[i32],
         operation: fn(&mut Ddnnf, usize),
-    ) -> Integer {
+    ) -> BigInt {
         if self.query_is_not_sat(features) {
-            Integer::ZERO
+            BigInt::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
             for i in 0..self.nodes.len() {
@@ -74,7 +76,7 @@ impl Ddnnf {
                     // search for the nodes we want to adjust
                     Literal { literal } => {
                         if features.contains(&-literal) {
-                            self.nodes[i].temp.assign(0);
+                            self.nodes[i].temp.set_zero();
                         } else {
                             operation(self, i)
                         }

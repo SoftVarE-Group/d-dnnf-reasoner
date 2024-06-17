@@ -16,6 +16,7 @@ use nom::character::complete::{char, digit1};
 use nom::combinator::{map_res, opt, recognize};
 use nom::sequence::{pair, tuple};
 use nom::IResult;
+use num::{BigInt, ToPrimitive, Zero};
 use workctl::WorkQueue;
 
 use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
@@ -348,7 +349,7 @@ impl Ddnnf {
                             if reference == inter {
                                 core.push(i);
                             }
-                            if inter == 0 {
+                            if inter.is_zero() {
                                 core.push(-i);
                             }
                             assumptions.pop();
@@ -376,10 +377,12 @@ impl Ddnnf {
                 let limit_interpretation = match limit {
                     Some(limit) => limit,
                     None => {
-                        if self.rc() > 1_000 {
+                        if self.rc() > BigInt::from(1_000) {
                             1_000
                         } else {
-                            self.rc().to_usize_wrapping()
+                            self.rc()
+                                .to_usize()
+                                .expect("Attempt to convert to large integer!")
                         }
                     }
                 };
@@ -656,6 +659,7 @@ mod test {
 
     use assert_cmd::Command;
     use itertools::Itertools;
+    use num::One;
     use serial_test::serial;
 
     use super::*;
@@ -749,7 +753,10 @@ mod test {
             String::from("false;false"),
             auto1.handle_stream_msg("sat a -1469 -1114 939 1551 v 1 1529")
         );
-        assert_eq!((auto1.rc() > 0).to_string(), auto1.handle_stream_msg("sat"));
+        assert_eq!(
+            (auto1.rc() > BigInt::ZERO).to_string(),
+            auto1.handle_stream_msg("sat")
+        );
         assert_eq!(
             auto1.handle_stream_msg("sat v 1 58"),
             vec![
@@ -845,7 +852,7 @@ mod test {
             .split(" ")
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
-        assert_eq!(1, vp9.execute_query(&res));
+        assert_eq!(BigInt::from(1), vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());
 
         binding = vp9.handle_stream_msg("random");
@@ -853,7 +860,7 @@ mod test {
             .split(" ")
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
-        assert_eq!(1, vp9.execute_query(&res));
+        assert_eq!(BigInt::from(1), vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());
 
         binding = auto1.handle_stream_msg("random assumptions 1 3 -4 270 122 -2000 limit 135");
@@ -876,7 +883,7 @@ mod test {
                 assert!(!result.contains(elem));
             }
 
-            assert!(auto1.execute_query(result) == 1);
+            assert!(auto1.execute_query(result).is_one());
         }
         assert_eq!(135, results.len());
     }
