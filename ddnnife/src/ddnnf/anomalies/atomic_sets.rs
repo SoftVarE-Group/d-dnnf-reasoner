@@ -4,7 +4,7 @@ use itertools::Itertools;
 use num::BigInt;
 use std::{collections::HashMap, hash::Hash};
 
-/// A quite basic union-find implementation that uses ranks and path compresion
+/// A quite basic union-find implementation that uses ranks and path compression
 #[derive(Debug, Clone, PartialEq)]
 struct UnionFind<N: Hash + Eq + Clone> {
     size: usize,
@@ -55,14 +55,14 @@ where
             self.size += 1;
         }
 
-        if !(node.eq(self.parents.get(&node).unwrap())) {
+        if !node.eq(self.parents.get(&node).unwrap()) {
             let found = self.find((*self.parents.get(&node).unwrap()).clone());
             self.parents.insert(node.clone(), found);
         }
         (*self.parents.get(&node).unwrap()).clone()
     }
 
-    // checks wether two values x and y share the same root
+    // checks whether two values x and y share the same root
     fn equiv(&mut self, x: T, y: T) -> bool {
         self.find(x) == self.find(y)
     }
@@ -125,7 +125,7 @@ where
 impl Ddnnf {
     /// Compute all atomic sets
     /// A group forms an atomic set iff every valid configuration either includes
-    /// or excludes all mebers of that atomic set
+    /// or excludes all members of that atomic set
     pub fn get_atomic_sets(
         &mut self,
         candidates: Option<Vec<u32>>,
@@ -178,7 +178,7 @@ impl Ddnnf {
         }
         data_grouped.push((current_key, values_current_key));
 
-        // initalize Unionfind and Samples
+        // initialize Unionfind and Samples
         let mut atomic_sets: UnionFind<i16> = UnionFind::default();
         let signed_excludes = self.get_signed_excludes(assumptions);
         for (key, group) in data_grouped {
@@ -254,7 +254,7 @@ impl Ddnnf {
             }
 
             // If the sign of the two feature candidates differs in at least one of the uniform random samples,
-            // then we can by sure that they don't belong to the same atomic set. Differences can be checked by
+            // then we can be sure that they don't belong to the same atomic set. Differences can be checked by
             // applying XOR to the two bitvectors and checking if any bit is set.
             let var_occurences_x = if (x.signum() * y.signum()).is_positive() {
                 signed_excludes[x.unsigned_abs() as usize - 1]
@@ -312,7 +312,7 @@ mod test {
 
         // check for transitivity via subsets
         let mut subsets1 = union.subsets();
-        assert!(subsets1.len() == 1);
+        assert_eq!(subsets1.len(), 1);
         subsets1[0].sort();
         assert_eq!(vec![1, 2, 3, 4], subsets1[0]);
 
@@ -329,7 +329,7 @@ mod test {
 
         // make sure subsets are still valid
         let mut subsets2 = union.subsets();
-        assert!(subsets2.len() == 2);
+        assert_eq!(subsets2.len(), 2);
         subsets2.sort_by_key(|subset| subset.len());
         subsets2[0].sort();
         subsets2[1].sort();
@@ -483,7 +483,7 @@ mod test {
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
-                Some((1..=vp9.number_of_variables as u32).collect_vec()),
+                Some((1..=vp9.number_of_variables).collect_vec()),
                 &[],
                 false
             )
@@ -492,7 +492,7 @@ mod test {
         assert_eq!(
             vp9_default_as,
             vp9.get_atomic_sets(
-                Some((1..=vp9.number_of_variables as u32).collect_vec()),
+                Some((1..=vp9.number_of_variables).collect_vec()),
                 &vp9_core,
                 false
             )

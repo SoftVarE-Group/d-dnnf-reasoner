@@ -178,9 +178,8 @@ impl Ddnnf {
     ///
     /// # Example
     /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::Ddnnf;
-    /// use ddnnf_lib::parser::*;
+    /// use ddnnife::Ddnnf;
+    /// use ddnnife::parser::*;
     /// use num::BigInt;
     ///
     /// // create a ddnnf

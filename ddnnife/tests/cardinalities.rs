@@ -1,8 +1,5 @@
-extern crate ddnnf_lib;
-
-use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser;
-
+use ddnnife::ddnnf::Ddnnf;
+use ddnnife::parser;
 use file_diff::diff_files;
 use serial_test::serial;
 use std::fs;

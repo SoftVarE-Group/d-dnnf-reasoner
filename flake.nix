@@ -68,6 +68,9 @@
           cargoLock.lockFile = ./Cargo.lock;
 
           nativeBuildInputs = [ pkgs.gnum4 ];
+
+          useNextest = true;
+          dontUseCargoParallelTests = true;
         };
 
         crate-d4 = crate // {

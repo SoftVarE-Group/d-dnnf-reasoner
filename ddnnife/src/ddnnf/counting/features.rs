@@ -11,9 +11,8 @@ impl Ddnnf {
     /// Here the number of threads influence the speed by using a shared work queue.
     /// # Example
     /// ```
-    /// extern crate ddnnf_lib;
-    /// use ddnnf_lib::Ddnnf;
-    /// use ddnnf_lib::parser::*;
+    /// use ddnnife::Ddnnf;
+    /// use ddnnife::parser::*;
     /// use std::fs;
     ///
     /// // create a ddnnf

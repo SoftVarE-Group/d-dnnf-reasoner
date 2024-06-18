@@ -657,10 +657,8 @@ mod test {
         fs::{self},
     };
 
-    use assert_cmd::Command;
     use itertools::Itertools;
     use num::One;
-    use serial_test::serial;
 
     use super::*;
     use crate::parser::build_ddnnf;
@@ -1193,44 +1191,5 @@ mod test {
             Ok((vec![1, 2, 3, 4, 5], 1)),
             get_numbers(vec!["1..5", "a", "6", "7", "3", "4", "5"].as_ref(), 20)
         );
-    }
-
-    #[cfg(feature = "d4")]
-    #[test]
-    #[serial]
-    fn parallel_stream() {
-        let mut ddnnf: Ddnnf = build_ddnnf("example_input/auto1_d4_2513.nnf", Some(2513));
-
-        let mut card_of_features_input = String::new();
-        let mut should_be = String::new();
-        for i in 1..=2513 {
-            card_of_features_input += format!("count a {i}\n").as_str(); // form the query for stream
-            should_be += format!("{:?}\n", ddnnf.execute_query(&[i])).as_str(); // build the expected result
-        }
-        card_of_features_input += "exit\n";
-
-        // execute all the 2513 queries with 4 threads
-        let cmd_ddnnf = Command::cargo_bin("ddnnife")
-            .unwrap()
-            .args([
-                "example_input/auto1_d4_2513.nnf",
-                "-t",
-                "2513",
-                "stream",
-                "-j",
-                "4",
-            ])
-            .write_stdin(card_of_features_input.clone())
-            .unwrap();
-
-        // do the same when using a CNF
-        let cmd_cnf = Command::cargo_bin("ddnnife")
-            .unwrap()
-            .args(["example_input/auto1.cnf", "-t", "2513", "stream", "-j", "4"])
-            .write_stdin(card_of_features_input.clone())
-            .unwrap();
-
-        assert_eq!(should_be, String::from_utf8(cmd_ddnnf.stdout).unwrap());
-        assert_eq!(should_be, String::from_utf8(cmd_cnf.stdout).unwrap());
     }
 }

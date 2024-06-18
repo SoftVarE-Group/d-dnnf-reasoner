@@ -1,38 +1,21 @@
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-use clap::{ArgGroup, Parser, Subcommand};
-
-use ddnnf_lib::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
-use ddnnf_lib::util::format_vec;
-use itertools::Itertools;
-
+use clap::{Parser, Subcommand};
+use ddnnife::ddnnf::anomalies::t_wise_sampling::save_sample_to_file;
+use ddnnife::ddnnf::Ddnnf;
+use ddnnife::parser::{
+    self as dparser,
+    persisting::{write_as_mermaid_md, write_ddnnf_to_file},
+};
+use ddnnife::util::format_vec;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
 
-use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{
-    self as dparser,
-    persisting::{write_as_mermaid_md, write_ddnnf_to_file},
-};
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
-#[command(author, version, about, arg_required_else_help(true),
-help_template("\
-{before-help}{name} {version}
-{author-with-newline}{about-with-newline}
-{usage-heading} {usage}
-
-{all-args}{after-help}
-"), allow_negative_numbers = true, long_about = None)]
-#[clap(group(
-    ArgGroup::new("loading")
-        .required(true)
-        .args(&["file_path", "pipe_ddnnf_stdin"]),
-))]
-
+#[command(version, name = "ddnnife")]
 struct Cli {
     /// The path to either a dDNNF file in c2d or d4 format or a CNF file. The ddnnf has to be either fulfill the requirements
     /// of the c2d format and be smooth or produced by the newest d4 compiler version to work properly!
@@ -474,7 +457,7 @@ fn main() {
             Core {
                 custom_output_file: _,
             } => {
-                let mut core = ddnnf.core.clone().into_iter().collect_vec();
+                let mut core: Vec<i32> = ddnnf.core.clone().into_iter().collect();
                 core.sort_unstable_by_key(|k| k.abs());
 
                 let mut wtr =

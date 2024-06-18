@@ -1,7 +1,5 @@
-extern crate ddnnf_lib;
-
-use ddnnf_lib::ddnnf::{node::NodeType::*, Ddnnf};
-use ddnnf_lib::parser;
+use ddnnife::ddnnf::{node::NodeType::*, Ddnnf};
+use ddnnife::parser;
 use num::BigInt;
 
 #[test]

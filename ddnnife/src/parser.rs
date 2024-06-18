@@ -38,9 +38,8 @@ use petgraph::{
 /// # Examples
 ///
 /// ```
-/// extern crate ddnnf_lib;
-/// use ddnnf_lib::parser;
-/// use ddnnf_lib::Ddnnf;
+/// use ddnnife::parser;
+/// use ddnnife::Ddnnf;
 ///
 /// let file_path = "./tests/data/small_ex_c2d.nnf";
 ///
@@ -594,7 +593,7 @@ fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
 ///
 /// # Example
 /// ```
-/// use ddnnf_lib::parser::parse_queries_file;
+/// use ddnnife::parser::parse_queries_file;
 ///
 /// let config_path = "./tests/data/auto1.config";
 /// let queries: Vec<(usize, Vec<i32>)> = parse_queries_file(config_path);
