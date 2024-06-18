@@ -15,7 +15,7 @@ use std::time::Instant;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
-#[command(version, name = "ddnnife")]
+#[command(name = "ddnnife", version, arg_required_else_help(true))]
 struct Cli {
     /// The path to either a dDNNF file in c2d or d4 format or a CNF file. The ddnnf has to be either fulfill the requirements
     /// of the c2d format and be smooth or produced by the newest d4 compiler version to work properly!
