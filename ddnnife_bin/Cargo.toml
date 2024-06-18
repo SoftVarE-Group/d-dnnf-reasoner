@@ -1,0 +1,21 @@
+[package]
+name = "ddnnife_bin"
+description = "d-DNNF toolkit"
+version = "0.7.0"
+authors = ["Heiko Raab <heiko.raab@uni-ulm-de>", "Chico Sundermann <chico.sundermann@uni-ulm.de>", "Jan Baudisch <jan.baudisch@uni-ulm.de>"]
+edition = "2021"
+license = "LGPL-3.0-or-later"
+workspace = ".."
+
+[[bin]]
+name = "ddnnife"
+path = "src/main.rs"
+
+[features]
+d4 = ["ddnnife/d4"]
+deterministic = ["ddnnife/deterministic"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+ddnnife = { path = "../ddnnife" }
+mimalloc = "0.1"

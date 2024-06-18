@@ -61,8 +61,7 @@ pub enum C2DToken {
 /// # Examples
 ///
 /// ```
-/// extern crate ddnnf_lib;
-/// use ddnnf_lib::parser::c2d_lexer::*;
+/// use ddnnife::parser::c2d_lexer::*;
 ///
 /// let and_str = "A 3 1 2 3";
 /// assert_eq!(lex_line_c2d(and_str).unwrap().1, C2DToken::And { children: vec![1_usize, 2_usize, 3_usize]});

@@ -1,8 +1,5 @@
-extern crate ddnnf_lib;
-
-use ddnnf_lib::ddnnf::Ddnnf;
-use ddnnf_lib::parser::{self, persisting::write_ddnnf_to_file};
-
+use ddnnife::ddnnf::Ddnnf;
+use ddnnife::parser::{self, persisting::write_ddnnf_to_file};
 use file_diff::diff_files;
 use std::fs;
 use std::fs::File;
