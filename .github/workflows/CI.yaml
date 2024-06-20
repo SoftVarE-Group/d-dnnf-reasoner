@@ -28,16 +28,15 @@ jobs:
           - double: aarch64-darwin
             runner: macos-latest
         variant:
-          - flake: all
+          - flake: ddnnife
             artifact: ''
-          - flake: all-d4
+          - flake: bundled-d4
             artifact: '-d4'
-        exclude:
-          - target: { double: x86_64-linux, runner: ubuntu-latest }
-            variant: { flake: all, artifact: '' }
         include:
-          - target: { double: x86_64-linux, runner: ubuntu-latest }
-            variant: { flake: ddnnife-static, artifact: '' }
+          - target: { double: x86_64-windows, runner: ubuntu-latest }
+            variant: { flake: ddnnife-windows, artifact: '' }
+          - target: { double: x86_64-windows, runner: ubuntu-latest }
+            variant: { flake: bundled-d4-windows, artifact: '-d4' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -49,7 +48,7 @@ jobs:
       - name: Build
         run: nix build -L .#${{ matrix.variant.flake }}
       - name: Set interpreter
-        if: ${{ matrix.target.double == 'x86_64-linux' && matrix.variant.artifact == '-d4' }}
+        if: ${{ matrix.target.double == 'x86_64-linux' && matrix.variant.flake == 'bundled-d4' }}
         run: |
           cp -rL result output
           rm -rf result

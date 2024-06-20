@@ -3,6 +3,13 @@
 This is a built version of ddnnife and dhone.
 The project is licensed under the LGPL-3.0 and the source can be found at https://github.com/SoftVarE-Group/d-dnnf-reasoner.
 
+## Dependencies
+
+All dependencies are bundled with this build inside the `lib` directory.
+To use the binaries, they have to be visible to the linker.
+This can either be accomplished by moving the `lib` directories contents to the global library path (such as `/usr/lib`)
+or by setting the `LD_LIBRARY_PATH` environment variable to include the `lib` directory.
+
 ## Usage
 
 The binaries `ddnnife` and `dhone` are inside `bin`.
