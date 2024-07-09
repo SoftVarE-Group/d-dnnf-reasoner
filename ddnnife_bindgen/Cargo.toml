@@ -1,6 +1,6 @@
 [package]
-name = "ddnnife_dhone"
-description = "Smoothener for a d-DNNF produced by dsharp"
+name = "ddnnife_bindgen"
+description = "uniffi wrapper for ddnnife ffi bindings"
 version = "0.7.0"
 authors = ["Heiko Raab <heiko.raab@uni-ulm-de>", "Chico Sundermann <chico.sundermann@uni-ulm.de>", "Jan Baudisch <jan.baudisch@uni-ulm.de>"]
 edition = "2021"
@@ -8,10 +8,8 @@ license = "LGPL-3.0-or-later"
 workspace = ".."
 
 [[bin]]
-name = "dhone"
+name = "uniffi-bindgen"
 path = "src/main.rs"
 
 [dependencies]
-clap = { workspace = true }
-ddnnife = { workspace = true }
-mimalloc = { workspace = true }
+uniffi = { workspace = true, features = ["cli"] }

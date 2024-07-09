@@ -19,8 +19,10 @@ use std::path::Path;
 use std::{fs, io, iter};
 use t_wise_sampler::TWiseSampler;
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
         // Setup everything needed for the sampling process.
         let sat_solver = SatWrapper::new(self);

@@ -1,11 +1,5 @@
-//#![warn(missing_docs)]
-#![warn(unused_qualifications)]
-//#![deny(unreachable_pub)]
-#![deny(deprecated)]
-#![deny(missing_copy_implementations)]
-#![warn(clippy::disallowed_types)]
-#[cfg(all(test, feature = "benchmarks"))]
-extern crate test;
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
 
 pub mod parser;
 pub mod util;
@@ -14,3 +8,6 @@ pub use crate::parser::d4_lexer;
 
 pub mod ddnnf;
 pub use crate::ddnnf::{node::*, Ddnnf};
+
+#[cfg(feature = "uniffi")]
+mod ffi;

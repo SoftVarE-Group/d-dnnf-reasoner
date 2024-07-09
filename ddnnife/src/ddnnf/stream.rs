@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeSet, BinaryHeap, HashSet};
 use std::io::BufRead;
-use std::iter::FromIterator;
 use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,7 +15,7 @@ use nom::character::complete::{char, digit1};
 use nom::combinator::{map_res, opt, recognize};
 use nom::sequence::{pair, tuple};
 use nom::IResult;
-use num::{BigInt, ToPrimitive, Zero};
+use num::{BigInt, ToPrimitive};
 use workctl::WorkQueue;
 
 use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
@@ -332,30 +331,15 @@ impl Ddnnf {
                         let with_cf = Ddnnf::execute_query(d, assumptions);
 
                         if with_cf == without_cf {
-                            Some(could_be_core.to_string())
+                            return Some(could_be_core.to_string());
                         } else {
-                            None
+                            return None;
                         }
-                    } else if assumptions.is_empty() {
-                        let mut core = Vec::from_iter(&d.core);
-                        core.sort_by_key(|a| a.abs());
-                        Some(format_vec(core.iter()))
-                    } else {
-                        let mut core = Vec::new();
-                        let reference = Ddnnf::execute_query(d, assumptions);
-                        for i in 1_i32..=d.number_of_variables as i32 {
-                            assumptions.push(i);
-                            let inter = Ddnnf::execute_query(d, assumptions);
-                            if reference == inter {
-                                core.push(i);
-                            }
-                            if inter.is_zero() {
-                                core.push(-i);
-                            }
-                            assumptions.pop();
-                        }
-                        Some(format_vec(core.iter()))
                     }
+
+                    Some(format_vec(
+                        d.core_dead_with_assumptions(assumptions).iter().sorted(),
+                    ))
                 },
                 self,
                 &mut params,
@@ -694,10 +678,10 @@ mod test {
             String::from("1 2 6 10 15 19 25 31 40"),
             vp9.handle_stream_msg("core assumptions 1")
         );
-        assert!(
-            // count p 1 2 3 == 0 => all features are core under that assumption
-            auto1.handle_stream_msg("core a 1 2 3").split(' ').count()
-                == (auto1.number_of_variables * 2) as usize
+
+        assert_eq!(
+            auto1.handle_stream_msg("core a 1 2 3").split(' ').count(),
+            (auto1.number_of_variables * 2) as usize
         );
 
         assert_eq!(

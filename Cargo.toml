@@ -2,10 +2,17 @@
 members = [
     "ddnnife",
     "ddnnife_bin",
-    "ddnnife_dhone"
+    "ddnnife_bindgen",
+    "ddnnife_dhone",
 ]
 
 resolver = "2"
+
+[workspace.dependencies]
+clap = { version = "4.5", features = ["derive"] }
+ddnnife = { path = "ddnnife" }
+mimalloc = "0.1"
+uniffi = { version = "0.28" }
 
 [profile.release]
 lto = true

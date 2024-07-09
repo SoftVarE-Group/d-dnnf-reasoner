@@ -30,13 +30,19 @@ jobs:
         variant:
           - flake: ddnnife
             artifact: ''
-          - flake: bundled-d4
+          - flake: ddnnife-d4-bundled
             artifact: '-d4'
+        exclude:
+          - target: { double: x86_64-linux }
+            variant: { flake: ddnnife }
         include:
+          - target: { double: x86_64-linux, runner: ubuntu-latest }
+            variant: { flake: ddnnife-static, artifact: '' }
+            docs: true
           - target: { double: x86_64-windows, runner: ubuntu-latest }
             variant: { flake: ddnnife-windows, artifact: '' }
           - target: { double: x86_64-windows, runner: ubuntu-latest }
-            variant: { flake: bundled-d4-windows, artifact: '-d4' }
+            variant: { flake: ddnnife-windows-d4-bundled, artifact: '-d4' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -48,7 +54,7 @@ jobs:
       - name: Build
         run: nix build -L .#${{ matrix.variant.flake }}
       - name: Set interpreter
-        if: ${{ matrix.target.double == 'x86_64-linux' && matrix.variant.flake == 'bundled-d4' }}
+        if: ${{ matrix.target.double == 'x86_64-linux' && matrix.variant.flake == 'ddnnife-d4-bundled' }}
         run: |
           cp -rL result output
           rm -rf result
@@ -61,3 +67,19 @@ jobs:
         with:
           name: ddnnife-${{ matrix.target.double }}${{ matrix.variant.artifact }}
           path: result
+      - name: Docs
+        if: ${{ matrix.target.docs }}
+        run: |
+          nix build .#documentation
+          mkdir docs
+          cp -rL result/share/doc docs/rust
+      - name: Upload (docs)
+        if: ${{ matrix.target.docs }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-rust
+          path: docs
+  Pages:
+    if: github.ref == 'refs/heads/main'
+    needs: Build
+    uses: ./.github/workflows/Pages.yaml
