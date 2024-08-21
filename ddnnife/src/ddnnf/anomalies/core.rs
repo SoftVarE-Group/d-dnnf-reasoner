@@ -1,12 +1,12 @@
-use std::collections::HashSet;
-
 use crate::Ddnnf;
+use num::Zero;
+use std::collections::HashSet;
 
 impl Ddnnf {
     /// Computes all dead and core features.
     /// A feature is a core feature iff there exists only the positiv occurence of that feature.
     /// A feature is a dead feature iff there exists only the negativ occurence of that feature.
-    pub(crate) fn get_core(&mut self) {
+    pub(crate) fn calculate_core(&mut self) {
         self.core = (-(self.number_of_variables as i32)..=self.number_of_variables as i32)
             .filter(|f| self.literals.contains_key(f) && !self.literals.contains_key(&-f))
             .collect::<HashSet<i32>>()
@@ -44,5 +44,44 @@ impl Ddnnf {
     pub(crate) fn query_is_not_sat(&mut self, features: &[i32]) -> bool {
         // if there is an included dead or an excluded core feature
         features.iter().any(|f| self.makes_query_unsat(f))
+    }
+
+    /// Calculates the core and dead features for a given assumption.
+    ///
+    /// The return values are not deduplicated, they might be put into a `HashSet`.
+    pub fn core_dead_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+        if assumptions.is_empty() {
+            return self.core.iter().copied().collect();
+        }
+
+        let mut assumptions = assumptions.to_vec();
+        let mut core = Vec::new();
+        let reference = self.execute_query(&assumptions);
+
+        for i in 1_i32..=self.number_of_variables as i32 {
+            assumptions.push(i);
+            let inter = self.execute_query(&assumptions);
+            if reference == inter {
+                core.push(i);
+            }
+            if inter.is_zero() {
+                core.push(-i);
+            }
+            assumptions.pop();
+        }
+
+        core
+    }
+
+    pub fn core_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+        let mut features = self.core_dead_with_assumptions(assumptions);
+        features.retain(|feature| feature.is_positive());
+        features
+    }
+
+    pub fn dead_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+        let mut features = self.core_dead_with_assumptions(assumptions);
+        features.retain(|feature| feature.is_negative());
+        features
     }
 }

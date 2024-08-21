@@ -1,0 +1,32 @@
+name: Python
+
+on:
+  - push
+
+jobs:
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - double: x86_64-linux
+            runner: ubuntu-latest
+          - double: x86_64-darwin
+            runner: macos-13
+          - double: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: DeterminateSystems/nix-installer-action@v10
+      - name: Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v4
+      - name: Build
+        run: nix build -L .#python
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddnnife-python-${{ matrix.target.double }}
+          path: result

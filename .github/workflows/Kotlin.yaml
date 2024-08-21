@@ -1,0 +1,74 @@
+name: Kotlin
+
+on:
+  - push
+
+jobs:
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - double: x86_64-linux
+            jna: linux-x86-64
+            runner: ubuntu-24.04
+            docs: true
+          - double: x86_64-darwin
+            jna: darwin-x86-64
+            runner: macos-13
+          - double: aarch64-darwin
+            jna: darwin-aarch64
+            runner: macos-latest
+        variant:
+          - ''
+          - '-d4'
+        exclude:
+          - target: { double: x86_64-darwin }
+            variant: '-d4'
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: DeterminateSystems/nix-installer-action@v10
+      - name: Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v4
+      - name: Build (bindgen)
+        run: |
+          nix build -L .#bindgen
+          cp -L result/bin/uniffi-bindgen .
+      - name: Build (library)
+        run: |
+          nix build -L .#libddnnife${{ matrix.variant }}
+          mkdir -p libraries/${{ matrix.target.jna }}
+          cp -L result/lib/*ddnnife* libraries/${{ matrix.target.jna }}/
+      - name: Build
+        run: |
+          cd bindings/kotlin
+          gradle shadowJar --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
+      - name: Test
+        run: |
+          cd bindings/kotlin
+          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddnnife-kotlin-${{ matrix.target.double }}${{ matrix.variant }}
+          path: bindings/kotlin/build/libs
+      - name: Docs
+        if: ${{ matrix.target.docs && matrix.variant == '' }}
+        run: |
+          cd bindings/kotlin
+          gradle dokkaHtml --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
+          mkdir docs
+          mv build/dokka/html docs/kotlin
+      - name: Upload (docs)
+        if: ${{ matrix.target.docs && matrix.variant == '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-kotlin
+          path: bindings/kotlin/docs
+  Pages:
+    if: github.ref == 'refs/heads/main'
+    needs: Build
+    uses: ./.github/workflows/Pages.yaml

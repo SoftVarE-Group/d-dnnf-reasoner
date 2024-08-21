@@ -6,19 +6,19 @@ pub mod multiple_queries;
 pub mod node;
 pub mod stream;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
-
+use self::{clause_cache::ClauseCache, node::Node};
+use crate::parser::build_ddnnf;
 use itertools::Either;
 use num::BigInt;
-
-use self::{clause_cache::ClauseCache, node::Node};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 type Clause = BTreeSet<i32>;
 type ClauseSet = BTreeSet<Clause>;
 type EditOperation = (Vec<Clause>, Vec<Clause>);
 
-#[derive(Clone, Debug)]
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Ddnnf {
     /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
@@ -36,7 +36,9 @@ pub struct Ddnnf {
     pub max_worker: u16,
 }
 
+#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl Default for Ddnnf {
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     fn default() -> Self {
         Ddnnf {
             nodes: Vec::new(),
@@ -48,6 +50,31 @@ impl Default for Ddnnf {
             number_of_variables: 0,
             max_worker: 4,
         }
+    }
+}
+
+#[cfg_attr(feature = "uniffi", uniffi::export)]
+impl Ddnnf {
+    /// Loads a d-DNNF from file.
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    fn from_file(path: String, features: Option<u32>) -> Self {
+        build_ddnnf(&path.clone(), features)
+    }
+
+    /// Returns the current count of the root node in the d-DNNF.
+    ///
+    /// This value is the same during all computations.
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub fn rc(&self) -> BigInt {
+        self.nodes[self.nodes.len() - 1].count.clone()
+    }
+
+    /// Returns the core features of this d-DNNF.
+    ///
+    /// This is only calculated once at creation of the d-DNNF.
+    #[cfg_attr(feature = "uniffi", uniffi::method)]
+    pub fn get_core(&self) -> HashSet<i32> {
+        self.core.clone()
     }
 }
 
@@ -70,7 +97,7 @@ impl Ddnnf {
             number_of_variables,
             max_worker: 4,
         };
-        ddnnf.get_core();
+        ddnnf.calculate_core();
         if let Some(c) = clauses {
             ddnnf.update_cached_state(Either::Right(c), Some(number_of_variables));
         }
@@ -148,12 +175,6 @@ impl Ddnnf {
             }
             None => false,
         }
-    }
-
-    // Returns the current count of the root node in the ddnnf.
-    // That value is the same during all computations
-    pub fn rc(&self) -> BigInt {
-        self.nodes[self.nodes.len() - 1].count.clone()
     }
 
     // Returns the current temp count of the root node in the ddnnf.

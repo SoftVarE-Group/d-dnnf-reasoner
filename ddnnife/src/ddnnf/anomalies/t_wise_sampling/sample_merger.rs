@@ -40,6 +40,7 @@ pub(super) trait AndMerger: SampleMerger {}
 pub(super) trait OrMerger: SampleMerger {}
 
 /// A simple [AndMerger] that just builds all valid configs
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub(super) struct DummyAndMerger<'a> {
     ddnnf: &'a Ddnnf,
@@ -77,6 +78,7 @@ impl SampleMerger for DummyAndMerger<'_> {
 impl AndMerger for DummyAndMerger<'_> {}
 
 /// A simple [OrMerger] that just builds all valid configs
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub(super) struct DummyOrMerger {}
 

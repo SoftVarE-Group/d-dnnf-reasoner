@@ -16,6 +16,6 @@ d4 = ["ddnnife/d4"]
 deterministic = ["ddnnife/deterministic"]
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-ddnnife = { path = "../ddnnife" }
-mimalloc = "0.1"
+clap = { workspace = true }
+ddnnife = { workspace = true }
+mimalloc = { workspace = true }

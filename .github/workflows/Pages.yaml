@@ -1,0 +1,23 @@
+name: Pages
+
+on: workflow_call
+
+jobs:
+  Deploy:
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v4
+        with:
+          path: pages
+          pattern: pages-*
+          merge-multiple: true
+      - name: Upload
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - name: Deploy
+        uses: actions/deploy-pages@v4

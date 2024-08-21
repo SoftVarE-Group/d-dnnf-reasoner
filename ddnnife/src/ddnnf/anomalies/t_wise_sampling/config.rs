@@ -3,6 +3,7 @@ use crate::util::format_vec;
 use std::fmt::Display;
 
 /// Represents a (partial) configuration
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, Eq)]
 pub struct Config {
     /// A vector of selected features (positive values) and deselected features (negative values)

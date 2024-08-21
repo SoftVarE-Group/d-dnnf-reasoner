@@ -200,7 +200,9 @@ impl Ddnnf {
         }
         subsets
     }
+}
 
+impl Ddnnf {
     /// Computes the signs of the features in multiple uniform random samples.
     /// Each of the features is represented by an BitArray holds as many entries as random samples
     /// with a 0 indicating that the feature occurs negated and a 1 indicating the feature occurs affirmed.

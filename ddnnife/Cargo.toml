@@ -10,6 +10,10 @@ workspace = ".."
 [features]
 d4 = ["dep:d4-oxide"]
 deterministic = []
+uniffi = ["dep:uniffi"]
+
+[lib]
+crate-type = ["lib", "cdylib"]
 
 [dependencies]
 bitvec = "1.0"
@@ -25,6 +29,7 @@ rand_distr = "0.4"
 rand_pcg = "0.3"
 streaming-iterator = "0.1"
 tempfile = "3.10"
+uniffi = { workspace = true, optional = true }
 workctl = "0.2"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
