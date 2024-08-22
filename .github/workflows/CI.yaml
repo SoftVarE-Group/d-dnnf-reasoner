@@ -79,7 +79,3 @@ jobs:
         with:
           name: pages-rust
           path: docs
-  Pages:
-    if: github.ref == 'refs/heads/main'
-    needs: Build
-    uses: ./.github/workflows/Pages.yaml

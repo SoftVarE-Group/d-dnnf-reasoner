@@ -68,7 +68,3 @@ jobs:
         with:
           name: pages-kotlin
           path: bindings/kotlin/docs
-  Pages:
-    if: github.ref == 'refs/heads/main'
-    needs: Build
-    uses: ./.github/workflows/Pages.yaml
