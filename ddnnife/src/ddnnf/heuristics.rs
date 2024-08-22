@@ -1,5 +1,6 @@
 use super::{node::NodeType::*, Ddnnf};
 use crate::Node;
+use log::info;
 
 impl Ddnnf {
     /// Computes and prints some heuristics including:
@@ -31,7 +32,7 @@ impl Ddnnf {
         }
 
         let node_count: u64 = self.nodes.len() as u64;
-        println!(
+        info!(
             "\nThe d-DNNF consists out of the following node types:\n\
             \t |-> {:?} out of {:?} are And nodes (≈{:.2}% of total)\n\
             \t |-> {:?} out of {:?} are Or nodes (≈{:.2}% of total)\n\
@@ -83,7 +84,7 @@ impl Ddnnf {
         }
 
         let node_count: u64 = self.nodes.len() as u64;
-        println!(
+        info!(
             "\nThe d-DNNF has the following information regarding node count:\n\
                 \t |-> The overall count of child connections is {:?}\n\
                 \t |-> The overall node count is {:?}.\n\
@@ -130,7 +131,7 @@ impl Ddnnf {
 
         let s_x: f64 = (derivation / length as f64).sqrt();
 
-        println!("\nThe d-DNNF has the following length attributes:\n\
+        info!("\nThe d-DNNF has the following length attributes:\n\
                 \t |-> The shortest path is {:?} units long\n\
                 \t |-> The longest path is {:?} units long\n\
                 \t |-> The mean path is ≈{:.2} units long\n\

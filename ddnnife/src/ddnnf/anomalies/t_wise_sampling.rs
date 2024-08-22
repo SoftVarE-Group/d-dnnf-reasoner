@@ -7,16 +7,13 @@ mod sat_wrapper;
 mod t_iterator;
 mod t_wise_sampler;
 
-use crate::util::format_vec;
 use crate::Ddnnf;
 pub use config::Config;
 pub use sample::Sample;
 use sample_merger::similarity_merger::SimilarityMerger;
 use sample_merger::zipping_merger::ZippingMerger;
-use sampling_result::SamplingResult;
+pub use sampling_result::SamplingResult;
 use sat_wrapper::SatWrapper;
-use std::path::Path;
-use std::{fs, io, iter};
 use t_wise_sampler::TWiseSampler;
 
 #[cfg_attr(feature = "uniffi", uniffi::export)]
@@ -35,33 +32,6 @@ impl Ddnnf {
 
         TWiseSampler::new(self, and_merger, or_merger).sample(t)
     }
-}
-
-pub fn save_sample_to_file(sampling_result: &SamplingResult, file_path: &str) -> io::Result<()> {
-    let file_path = Path::new(file_path);
-    if let Some(dir) = file_path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    let mut wtr = csv::Writer::from_path(file_path)?;
-
-    match sampling_result {
-        /*
-        Writing "true" and "false" to the file does not really fit the format of the file but we
-        want to somehow distinguish between true and false sampling results.
-        True means that the feature model contains no variables and therefore an empty sample
-        covers all t-wise interactions.
-        False means that the feature model is void.
-        */
-        SamplingResult::Empty => wtr.write_record(iter::once("true"))?,
-        SamplingResult::Void => wtr.write_record(iter::once("false"))?,
-        SamplingResult::ResultWithSample(sample) => {
-            for (index, config) in sample.iter().enumerate() {
-                wtr.write_record([index.to_string(), format_vec(config.get_literals().iter())])?;
-            }
-        }
-    }
-
-    wtr.flush()
 }
 
 #[cfg(test)]

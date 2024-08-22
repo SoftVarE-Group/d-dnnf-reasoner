@@ -181,19 +181,19 @@ This could be achieved by modifying `$PATH` on unix system for example.
 Prepossesses the d-DNNF: `berkeleydb_dsharp.nnf` which may need preprocessing because it was created with dsharp (in this case it is necessary) and save the resulting d-DNNF as `berkeleydb_prepo.nnf`.
 
 ```
-ddnnife example_input/berkeleydb_dsharp.nnf -s example_input/berkeleydb_prepo.nnf
+ddnnife -i example_input/berkeleydb_dsharp.nnf --save-ddnnf example_input/berkeleydb_prepo.nnf
 ```
 
 Compute the cardinality of a feature model for `auto1`.
 
 ```
-ddnnife example_input/auto1_c2d.nnf
+ddnnife -i example_input/auto1_c2d.nnf count
 ```
 
 Compute the cardinality of features for `busybox-1.18.0_c2d.nnf` and saves the result as `busybox-features.csv` in the current working directory.
 
 ```
-ddnnife example_input/busybox-1.18.0_c2d.nnf -c busybox
+ddnnife -i example_input/busybox-1.18.0_c2d.nnf -o busybox-features.csv count-features
 ```
 
 Compute the cardinality of features for `auto1` when compiled with d4.
@@ -204,40 +204,40 @@ The results will be saved as `auto1_d4_2513-features.csv`.
 (Note that for the example input the number of features is part of the file name for d4 models.)
 
 ```
-ddnnife example_input/auto1_d4_2513.nnf -t 2513 -c
+ddnnife -i example_input/auto1_d4_2513.nnf -t 2513 count-features
 ```
 
-Compute the cardinality of features for `auto1` starting from a CNF file.
+Compute the cardinality of `auto1` starting from a CNF file.
 Currently, the CNF file must be indicated by either the file ending `.cnf` or `.dimacs`.
 We use the d4 compiler to generate a dDNNF which we can use in the following steps.
 The `-t` option is not necessary, because the needed information if part of the CNF.
 
 ```
-ddnnife example_input/auto1.cnf -c
+ddnnife -i example_input/auto1.cnf count
 ```
 
 An alternative to the above, using the possibility to load a model via stdin.
 
 ```
-cat example_input/auto1_d4_2513.nnf | ddnnife -p -t 2513 -c
+cat example_input/auto1_d4_2513.nnf | ddnnife -t 2513 count
 ```
 
-Compute the cardinality of partial configurations for `X264_c2d.nnf` with 4 threads (default) and save the result as `X264_c2d-queries.csv` (default) in the current working directory (default).
+Compute the cardinality of partial configurations for `X264_c2d.nnf`.
 
 ```
-ddnnife example_input/X264_c2d.nnf -q example_input/X264.config
+ddnnife -i example_input/X264_c2d.nnf count-queries example_input/X264.config
 ```
 
 Compute 100 uniform random samples for the auto1 model for seed 42.
 
 ```
-ddnnife example_input/auto1_d4.nnf -t 2513 urs -n 100 -s 42
+ddnnife -i example_input/auto1_d4.nnf -t 2513 urs -n 100 -s 42
 ```
 
 Compute the atomic sets for auto1.
 
 ```
-ddnnife example_input/auto1_d4.nnf -t 2513 atomic-sets
+ddnnife -i example_input/auto1_d4.nnf -t 2513 atomic-sets
 ```
 
 Display the help information for the sat command.
@@ -250,7 +250,7 @@ Create the mermaid visualization of the small example d-DNNF under assumptions.
 The model count is 4 and the count for the partial configuration (2,4) is 1.
 
 ```
-ddnnife example_input/small_example_c2d.nnf mermaid -a 2 4 
+ddnnife -i example_input/small_example_c2d.nnf mermaid -a 2 4 
 ```
 
 ```mermaid
@@ -290,7 +290,7 @@ The idea behind the stream API is to interact with `ddnnife` with another progra
 We start ddnnife in stream mode for the `automotive01` model via
 
 ```
-ddnnife example_input/auto1_d4.nnf -t 2513 stream
+ddnnife -i example_input/auto1_d4.nnf -t 2513 stream
 ```
 
 From here on, we can use the following types of queries:
