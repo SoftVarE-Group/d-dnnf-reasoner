@@ -122,6 +122,9 @@
           libddnnife = import ./nix/ddnnife.nix (defaultAttrs // libAttrs);
           libddnnife-d4 = import ./nix/ddnnife.nix (d4Attrs // libAttrs);
 
+          dependencies-d4 = d4.packages.${system}.dependencies;
+          dependencies-d4-windows = d4.packages.${system}.dependencies-windows;
+
           bindgen = import ./nix/ddnnife.nix (
             defaultAttrs
             // {

@@ -10,20 +10,33 @@ env:
 
 jobs:
   Build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - double: aarch64-linux # target we are building for
+            architecture: arm64   # container architecture label
+            emulated: true        # whether this build is being emulated
+          - double: x86_64-linux
+            architecture: amd64
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: QEMU
+        if: ${{ matrix.target.emulated }}
+        run: sudo apt-get install -y qemu-user-static
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v10
+        uses: DeterminateSystems/nix-installer-action@v13
+        with:
+          extra-conf: extra-platforms = ${{ matrix.target.double }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v4
+        uses: DeterminateSystems/magic-nix-cache-action@v7
       - name: Build
-        run: nix build -L .#container
+        run: nix build -L .#packages.${{ matrix.target.double }}.container
       - name: Login
         run: nix run nixpkgs#skopeo -- login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
       - name: Push
-        run: nix run nixpkgs#skopeo -- copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG
+        run: nix run nixpkgs#skopeo -- copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }}
       - name: Push latest tag
         if: ${{ github.ref_type == 'tag' }}
-        run: nix run nixpkgs#skopeo -- copy docker://$REGISTRY/$IMAGE_NAME:$TAG docker://$REGISTRY/$IMAGE_NAME:latest
+        run: nix run nixpkgs#skopeo -- copy docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }} docker://$REGISTRY/$IMAGE_NAME:latest-${{ matrix.target.architecture }}
