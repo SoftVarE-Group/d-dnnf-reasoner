@@ -4,66 +4,126 @@ on:
   - push
 
 jobs:
-  Build:
+  Library:
     strategy:
       fail-fast: false
       matrix:
         target:
+          - double: aarch64-linux
+            jna: linux-aarch64
+            runner: ubuntu-24.04
+            emulated: true
           - double: x86_64-linux
             jna: linux-x86-64
             runner: ubuntu-24.04
-            docs: true
-          - double: x86_64-darwin
-            jna: darwin-x86-64
-            runner: macos-13
           - double: aarch64-darwin
             jna: darwin-aarch64
             runner: macos-latest
+          - double: x86_64-darwin
+            jna: darwin-x86-64
+            runner: macos-13
         variant:
-          - ''
-          - '-d4'
+          - flake: ''
+            artifact: ''
+          - flake: '-d4'
+            artifact: 'd4-'
         exclude:
           - target: { double: x86_64-darwin }
-            variant: '-d4'
+            variant: { flake: '-d4' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: QEMU
+        if: ${{ matrix.target.emulated }}
+        run: sudo apt-get install -y qemu-user-static
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v10
+        uses: DeterminateSystems/nix-installer-action@v13
+        with:
+          extra-conf: extra-platforms = ${{ matrix.target.double }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v4
+        uses: DeterminateSystems/magic-nix-cache-action@v7
+      - name: Build
+        run: |
+          nix build -L .#packages.${{ matrix.target.double }}.libddnnife${{ matrix.variant.flake }}
+          mkdir -p libraries/${{ matrix.target.jna }}
+          cp -L result/lib/*ddnnife* libraries/${{ matrix.target.jna }}/
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant.artifact }}libddnnife-${{ matrix.target.double }}
+          path: libraries
+      - name: Build (dependencies)
+        if: ${{ matrix.variant.flake == '-d4' }}
+        run: nix build -L .#packages.${{ matrix.target.double }}.dependencies-d4
+      - name: Upload (dependencies)
+        if: ${{ matrix.variant.flake == '-d4' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependencies-d4-libddnnife-${{ matrix.target.double }}
+          path: result
+
+  Package:
+    needs: Library
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - prefix: ''
+            suffix: ''
+          - prefix: 'd4-'
+            suffix: '-d4'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: DeterminateSystems/nix-installer-action@v13
       - name: Build (bindgen)
         run: |
           nix build -L .#bindgen
           cp -L result/bin/uniffi-bindgen .
-      - name: Build (library)
-        run: |
-          nix build -L .#libddnnife${{ matrix.variant }}
-          mkdir -p libraries/${{ matrix.target.jna }}
-          cp -L result/lib/*ddnnife* libraries/${{ matrix.target.jna }}/
+      - name: Download (libraries)
+        uses: actions/download-artifact@v4
+        with:
+          path: libraries
+          pattern: ${{ matrix.variant.prefix }}libddnnife-*
+          merge-multiple: true
+      - name: Download (dependencies)
+        if: ${{ matrix.variant.suffix == '-d4' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: dependencies-d4-libddnnife-x86_64-linux
       - name: Build
         run: |
           cd bindings/kotlin
           gradle shadowJar --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
       - name: Test
+        if: ${{ matrix.variant.suffix != '-d4' }}
         run: |
           cd bindings/kotlin
           gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
+      - name: Test
+        if: ${{ matrix.variant.suffix == '-d4' }}
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/lib
+        run: |
+          cd bindings/kotlin
+          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen -Pjna.debug_load=true
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-kotlin-${{ matrix.target.double }}${{ matrix.variant }}
+          name: ddnnife-kotlin${{ matrix.variant.suffix }}
           path: bindings/kotlin/build/libs
       - name: Docs
-        if: ${{ matrix.target.docs && matrix.variant == '' }}
+        if: ${{ matrix.variant.suffix != '-d4' }}
         run: |
           cd bindings/kotlin
           gradle dokkaHtml --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
           mkdir docs
           mv build/dokka/html docs/kotlin
       - name: Upload (docs)
-        if: ${{ matrix.target.docs && matrix.variant == '' }}
+        if: ${{ matrix.variant.suffix != '-d4' }}
         uses: actions/upload-artifact@v4
         with:
           name: pages-kotlin
