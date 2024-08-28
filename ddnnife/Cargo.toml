@@ -28,7 +28,7 @@ rand = "0.8"
 rand_distr = "0.4"
 rand_pcg = "0.3"
 streaming-iterator = "0.1"
-tempfile = "3.10"
+tempfile = "3.12"
 uniffi = { workspace = true, optional = true }
 workctl = "0.2"
 

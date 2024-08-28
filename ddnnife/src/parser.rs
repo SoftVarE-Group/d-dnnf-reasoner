@@ -5,32 +5,35 @@ pub mod d4_lexer;
 use d4_lexer::{lex_line_d4, D4Token};
 
 pub mod from_cnf;
-use from_cnf::{check_for_cnf_header, CNFToken};
 
 pub mod persisting;
 
+use crate::ddnnf::{node::Node, node::NodeType, Ddnnf};
 use core::panic;
 use num::BigInt;
-use std::{
-    cell::RefCell,
-    cmp::max,
-    collections::{BTreeSet, HashMap, HashSet},
-    ffi::OsStr,
-    fs::{self, File},
-    io::{BufRead, BufReader},
-    path::Path,
-    process,
-    rc::Rc,
-};
-
-use crate::ddnnf::{node::Node, node::NodeType, Ddnnf};
-
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableGraph,
     visit::DfsPostOrder,
     Direction::{Incoming, Outgoing},
 };
+use std::{
+    cell::RefCell,
+    cmp::max,
+    collections::{BTreeSet, HashMap, HashSet},
+    ffi::OsStr,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::Path,
+    process,
+    rc::Rc,
+};
+
+#[cfg(feature = "d4")]
+use tempfile::NamedTempFile;
+
+#[cfg(feature = "d4")]
+use from_cnf::{check_for_cnf_header, CNFToken};
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -50,8 +53,11 @@ use petgraph::{
 ///
 /// The function panics for an invalid file path.
 #[inline]
-pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
+#[allow(unused_mut)]
+pub fn build_ddnnf(path: &str, mut total_features: Option<u32>) -> Ddnnf {
+    let mut ddnnf = File::open(path).expect("Failed to open input file.");
     let mut clauses = BTreeSet::new();
+
     if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
         if extension == "dimacs" || extension == "cnf" {
             #[cfg(feature = "d4")]
@@ -65,10 +71,23 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
                             total_features: total_features_header,
                             total_clauses: _,
                         } => {
-                            let ddnnf_file = ".intermediate.nnf";
-                            d4_oxide::compile_ddnnf(path.to_string(), ddnnf_file.to_string());
-                            path = ddnnf_file;
+                            let temporary_ddnnf = NamedTempFile::new()
+                                .expect("Failed to create temporary d-DNNF file.");
+
+                            d4_oxide::compile_ddnnf(
+                                path.to_string(),
+                                temporary_ddnnf
+                                    .path()
+                                    .to_str()
+                                    .expect("Failed to serialize temporary d-DNNF path.")
+                                    .to_string(),
+                            );
+
                             total_features = Some(total_features_header as u32);
+
+                            ddnnf = temporary_ddnnf
+                                .reopen()
+                                .expect("Failed to open temporary d-DNNF.");
                         }
                         CNFToken::Clause { features } => {
                             clauses.insert(features);
@@ -85,15 +104,10 @@ pub fn build_ddnnf(mut path: &str, mut total_features: Option<u32>) -> Ddnnf {
         }
     }
 
-    let file = open_file_savely(path);
-    let lines = BufReader::new(file)
+    let lines = BufReader::new(ddnnf)
         .lines()
         .map(|line| line.expect("Unable to read line"))
         .collect::<Vec<String>>();
-
-    if path == ".intermediate.nnf" {
-        fs::remove_file(path).unwrap();
-    }
 
     if clauses.is_empty() {
         distribute_building(lines, total_features, None)
