@@ -1,9 +1,20 @@
-use num::{BigRational, ToPrimitive};
+use super::super::Ddnnf;
+use num::{BigInt, BigRational, ToPrimitive};
 use std::error::Error;
 
-use super::super::Ddnnf;
-
 impl Ddnnf {
+    pub fn card_of_each_feature(&mut self) -> impl Iterator<Item = (i32, BigInt, f64)> + '_ {
+        self.annotate_partial_derivatives();
+        let rc = self.rc();
+        (1_i32..self.number_of_variables as i32 + 1).map(move |variable| {
+            let cardinality = self.card_of_feature_with_partial_derivatives(variable);
+            let ratio = BigRational::from((cardinality.clone(), rc.clone()))
+                .to_f64()
+                .unwrap();
+            (variable, cardinality, ratio)
+        })
+    }
+
     #[inline]
     /// Computes the cardinality of features for all features in a model.
     /// The results are saved in the file_path. The .csv ending always gets added to the user input.
@@ -18,30 +29,29 @@ impl Ddnnf {
     /// // create a ddnnf
     /// // and run the queries
     /// let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
-    /// ddnnf.card_of_each_feature("./tests/data/smt_out.csv")
+    /// ddnnf.card_of_each_feature_csv("./tests/data/smt_out.csv")
     ///      .unwrap_or_default();
     /// let _rm = fs::remove_file("./tests/data/smt_out.csv");
     ///
     /// ```
-    pub fn card_of_each_feature(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn card_of_each_feature_csv(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         self.annotate_partial_derivatives();
 
         // start the csv writer with the file_path
         let mut wtr = csv::Writer::from_path(file_path)?;
 
-        for work in 1_i32..self.number_of_variables as i32 + 1 {
-            let cardinality = self.card_of_feature_with_partial_derivatives(work);
-            wtr.write_record(vec![
-                work.to_string(),
-                cardinality.to_string(),
-                format!(
-                    "{:.10e}",
-                    BigRational::from((cardinality, self.rc()))
-                        .to_f64()
-                        .expect("Failed to convert rational!")
-                ),
-            ])?;
-        }
+        self.card_of_each_feature()
+            .for_each(|(variable, cardinality, ratio)| {
+                wtr.write_record(vec![
+                    variable.to_string(),
+                    cardinality.to_string(),
+                    format!(
+                        "{:.10e}",
+                        ratio.to_f64().expect("Failed to convert rational!")
+                    ),
+                ])
+                .unwrap();
+            });
 
         Ok(())
     }
@@ -61,10 +71,14 @@ mod test {
     fn card_multi_queries() {
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.card_of_each_feature("./tests/data/fcs.csv").unwrap();
+        ddnnf
+            .card_of_each_feature_csv("./tests/data/fcs.csv")
+            .unwrap();
 
         ddnnf.max_worker = 4;
-        ddnnf.card_of_each_feature("./tests/data/fcm.csv").unwrap();
+        ddnnf
+            .card_of_each_feature_csv("./tests/data/fcm.csv")
+            .unwrap();
 
         let mut is_single = File::open("./tests/data/fcs.csv").unwrap();
         let mut is_multi = File::open("./tests/data/fcm.csv").unwrap();
@@ -93,7 +107,7 @@ mod test {
 
         let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
         ddnnf.max_worker = 1;
-        ddnnf.card_of_each_feature(PD_FILE).unwrap();
+        ddnnf.card_of_each_feature_csv(PD_FILE).unwrap();
 
         let mut pd: File = File::open(PD_FILE).unwrap();
         let mut should_be = File::open(SHOULD_FILE).unwrap();

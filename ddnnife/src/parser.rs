@@ -1,15 +1,14 @@
 pub mod c2d_lexer;
-use c2d_lexer::{lex_line_c2d, C2DToken, TId};
-
 pub mod d4_lexer;
-use d4_lexer::{lex_line_d4, D4Token};
-
 pub mod from_cnf;
 
 pub mod persisting;
 
 use crate::ddnnf::{node::Node, node::NodeType, Ddnnf};
+use c2d_lexer::{lex_line_c2d, C2DToken, TId};
 use core::panic;
+use d4_lexer::{lex_line_d4, D4Token};
+use log::{error, warn};
 use num::BigInt;
 use petgraph::{
     graph::{EdgeIndex, NodeIndex},
@@ -145,10 +144,9 @@ pub fn distribute_building(
                 }
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
-                    // Bold, Yellow, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-                    println!("\x1b[1;38;5;226mWARNING: The first line of the file isn't a header and the option 'total_features' is not set. \
+                    warn!("The first line of the file isn't a header and the option 'total_features' is not set. \
                         Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
-                        Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner.\n\x1b[0m"
+                        Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner."
                     );
                     build_d4_ddnnf(lines, None, clauses)
                 }
@@ -421,8 +419,7 @@ fn build_d4_ddnnf(
                             TId::And => ddnnf_graph.remove_edge(n_edge).unwrap(),
                             TId::Or => (), // should never happen
                             _ => {
-                                // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting...");
+                                error!("Unexpected Nodetype while encoutering a True node. Only OR and AND nodes can have children. Aborting...");
                                 process::exit(1);
                             }
                         };
@@ -433,7 +430,7 @@ fn build_d4_ddnnf(
                             TId::Or => ddnnf_graph.remove_edge(n_edge).unwrap(),
                             TId::And => delete_parent_and_chain(&mut ddnnf_graph, nx),
                             _ => {
-                                eprintln!("\x1b[1;38;5;196mERROR: Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
+                                error!("Unexpected Nodetype while encoutering a False node. Only OR and AND nodes can have children. Aborting...");
                                 process::exit(1);
                             }
                         };
@@ -648,7 +645,7 @@ pub fn open_file_savely(path: &str) -> File {
         Ok(x) => x,
         Err(err) => {
             // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-            eprintln!("\x1b[1;38;5;196mERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
+            error!("The following error code occured while trying to open the file {}:\n{}\nAborting...", path, err);
             process::exit(1);
         }
     }

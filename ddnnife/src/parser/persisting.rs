@@ -84,16 +84,13 @@ fn deconstruct_children(mut str: String, children: &[usize]) -> String {
 pub fn write_as_mermaid_md(
     ddnnf: &mut Ddnnf,
     features: &[i32],
-    path_out: &str,
+    mut output: impl Write,
 ) -> std::io::Result<()> {
     for node in ddnnf.nodes.iter_mut() {
         node.temp.clone_from(&node.count);
     }
 
     ddnnf.operate_on_partial_config_marker(features, Ddnnf::calc_count_marked_node);
-
-    let file = File::create(path_out)?;
-    let mut lw = LineWriter::with_capacity(1000, file);
 
     let config = format!(
         "```mermaid\n\t\
@@ -113,10 +110,10 @@ pub fn write_as_mermaid_md(
         classDef marked stroke:#d90000, stroke-width:4px\n\n",
         features
     );
-    lw.write_all(config.as_bytes()).unwrap();
+    output.write_all(config.as_bytes()).unwrap();
     let marking = ddnnf.get_marked_nodes_clone(features);
-    lw.write_all(mermaidify_nodes(ddnnf, &marking).as_bytes())?;
-    lw.write_all(b"```").unwrap();
+    output.write_all(mermaidify_nodes(ddnnf, &marking).as_bytes())?;
+    output.write_all(b"```").unwrap();
 
     Ok(())
 }
