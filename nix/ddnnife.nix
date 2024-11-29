@@ -81,6 +81,7 @@ let
 
       nativeBuildInputs =
         lib.optionals d4 [
+          buildPkgs.cmake
           buildPkgs.m4
           buildPkgs.pkg-config
         ]

@@ -278,6 +278,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
+name = "cmake"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c682c223677e0e5b6b7f63a64b9351844c3f1b1678a68b7ee617e30fb082620e"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -359,16 +368,97 @@ dependencies = [
 ]
 
 [[package]]
-name = "d4-oxide"
-version = "0.4.2"
+name = "d4-arjun-sys"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b67903bc877566c257a6ad006d4bc1c562ecd3045bad3ade4868cf8da4e332cd"
+checksum = "3d1884953f5291054b879008b38200a92f4db3ee6b297f30dd81753a6260bb0d"
+dependencies = [
+ "cmake",
+ "d4-cryptominisat-sys",
+ "gmp-mpfr-sys",
+]
+
+[[package]]
+name = "d4-cadiback-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "485597d03ccb4519a4836caa7de00ae813bea6cc97e554868cd3fdab972442ac"
+dependencies = [
+ "cmake",
+ "d4-cadical-sys",
+]
+
+[[package]]
+name = "d4-cadical-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c19a08dbae54dbc5da83f86f25c1945eb552113b02a3a8cc5664ac9384a6a4e6"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
+name = "d4-cryptominisat-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804b915a8679c1daa54323d6eae2ee09b06720ec7bb3c9491147fc958457fbdf"
+dependencies = [
+ "cmake",
+ "d4-cadiback-sys",
+ "d4-cadical-sys",
+]
+
+[[package]]
+name = "d4-glucose-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f39a3211bd062eff44dfe48ff8b17eb26b42b4a1d2248468e5913b14ce9dcac2"
+dependencies = [
+ "cmake",
+ "libz-sys",
+]
+
+[[package]]
+name = "d4-gpmc-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68d537b5745821e523a4b6901a8fe6c6628fd4813a0862023770327827e64a31"
+dependencies = [
+ "cmake",
+ "d4-arjun-sys",
+ "d4-cryptominisat-sys",
+ "gmp-mpfr-sys",
+ "libz-sys",
+]
+
+[[package]]
+name = "d4-oxide"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b5616f57f734eac693b09fe97fc42ed0bc5add66c442017c397f9d0a37b1243"
 dependencies = [
  "cxx",
  "cxx-build",
+ "d4-arjun-sys",
+ "d4-cadiback-sys",
+ "d4-cadical-sys",
+ "d4-cryptominisat-sys",
+ "d4-glucose-sys",
+ "d4-gpmc-sys",
+ "d4-sbva-sys",
  "glob",
- "mt-kahypar-sys",
+ "gmp-mpfr-sys",
+ "libz-sys",
  "pkg-config",
+]
+
+[[package]]
+name = "d4-sbva-sys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e959892432cd6aa46517d5e2de06a0cbc70a3a765077e428f1763d2b0817bef6"
+dependencies = [
+ "cmake",
 ]
 
 [[package]]
@@ -612,6 +702,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "gmp-mpfr-sys"
+version = "1.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0205cd82059bc63b63cf516d714352a30c44f2c74da9961dfda2617ae6b5918"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "goblin"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -726,6 +826,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-sys"
+version = "1.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2d16453e800a8cf6dd2fc3eb4bc99b786a9b90c663b8559a5b1a041bf89e472"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "link-cplusplus"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -792,12 +904,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "mt-kahypar-sys"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f998f740bfb7280489d8f16c0b8258463b07d919afc8eadad26ea5906d54da4"
 
 [[package]]
 name = "nom"
@@ -1505,6 +1611,12 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
+
+[[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
