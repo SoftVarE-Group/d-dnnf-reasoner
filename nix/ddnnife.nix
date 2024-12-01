@@ -74,7 +74,7 @@ let
       buildInputs =
         lib.optionals d4 [
           hostPkgs.boost.dev
-          hostPkgs.gmp.dev
+          hostPkgs.pkgsStatic.gmp.dev
           mt-kahypar.dev
         ]
         ++ lib.optionals hostPkgs.stdenv.isDarwin [ hostPkgs.libiconv ];
@@ -96,7 +96,7 @@ let
     }
     // lib.optionalAttrs hostPkgs.stdenv.hostPlatform.isWindows (
       let
-        # The default MinGW GCC in nix comes with mcfgthreads which seems to be unable
+        # The default MinGW GCC in Nix comes with mcfgthreads which seems to be unable
         # to produce static Rust binaries with C dependencies.
         cc = hostPkgs.buildPackages.wrapCC (
           hostPkgs.buildPackages.gcc-unwrapped.override ({
