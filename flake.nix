@@ -2,13 +2,13 @@
   description = "Packages and development environments for ddnnife";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane = {
-      url = "github:ipetkov/crane/v0.18.0";
+      url = "github:ipetkov/crane/v0.19.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     d4 = {
