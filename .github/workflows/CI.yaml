@@ -10,9 +10,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@v16
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v7
+        uses: DeterminateSystems/magic-nix-cache-action@v8
       - name: Check
         run: nix flake check -L
 
@@ -49,7 +49,7 @@ jobs:
         include:
           - target: { double: aarch64-linux, system: aarch64-linux, emulated: true, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-static, artifact: '' }
-          - target: { double: x86_64-linux, system: x86_64-linux, runner: ubuntu-24.04, docs: true }
+          - target: { double: x86_64-linux, system: x86_64-linux, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-static, artifact: '' }
           - target: { double: x86_64-windows, system: x86_64-linux, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-windows, artifact: '' }
@@ -63,11 +63,11 @@ jobs:
         if: ${{ matrix.target.emulated }}
         run: sudo apt-get install -y qemu-user-static
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@v16
         with:
           extra-conf: extra-platforms = ${{ matrix.target.system }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v7
+        uses: DeterminateSystems/magic-nix-cache-action@v8
       - name: Build
         run: nix build -L .#packages.${{ matrix.target.system }}.${{ matrix.variant.flake }}
       - name: Set interpreter
@@ -84,15 +84,3 @@ jobs:
         with:
           name: ddnnife-${{ matrix.target.double }}${{ matrix.variant.artifact }}
           path: result
-      - name: Docs
-        if: ${{ matrix.target.docs }}
-        run: |
-          nix build .#documentation
-          mkdir docs
-          cp -rL result/share/doc docs/rust
-      - name: Upload (docs)
-        if: ${{ matrix.target.docs }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pages-rust
-          path: docs

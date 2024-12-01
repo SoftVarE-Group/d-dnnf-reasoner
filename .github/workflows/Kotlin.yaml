@@ -38,11 +38,11 @@ jobs:
         if: ${{ matrix.target.emulated }}
         run: sudo apt-get install -y qemu-user-static
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@v16
         with:
           extra-conf: extra-platforms = ${{ matrix.target.double }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v7
+        uses: DeterminateSystems/magic-nix-cache-action@v8
       - name: Build
         run: |
           nix build -L .#packages.${{ matrix.target.double }}.libddnnife${{ matrix.variant.flake }}
@@ -78,7 +78,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Nix
-        uses: DeterminateSystems/nix-installer-action@v13
+        uses: DeterminateSystems/nix-installer-action@v16
       - name: Build (bindgen)
         run: |
           nix build -L .#bindgen
@@ -115,16 +115,3 @@ jobs:
         with:
           name: ddnnife-kotlin${{ matrix.variant.suffix }}
           path: bindings/kotlin/build/libs
-      - name: Docs
-        if: ${{ matrix.variant.suffix != '-d4' }}
-        run: |
-          cd bindings/kotlin
-          gradle dokkaHtml --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
-          mkdir docs
-          mv build/dokka/html docs/kotlin
-      - name: Upload (docs)
-        if: ${{ matrix.variant.suffix != '-d4' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pages-kotlin
-          path: bindings/kotlin/docs
