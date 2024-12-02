@@ -152,6 +152,10 @@ craneLib.${craneAction} (
 
     inherit cargoArtifacts;
   }
+  // lib.optionalAttrs hostPkgs.stdenv.isAarch64 {
+    # FIXME: Doc-tests currently fail on aarch64-{darwin, linuxy}.
+    cargoTestExtraArgs = "--workspace --all-targets";
+  }
   // lib.optionalAttrs pythonLib {
     buildPhaseCargoCommand = ''
       cd bindings/python
