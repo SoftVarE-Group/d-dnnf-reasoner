@@ -35,7 +35,7 @@ jobs:
             runner: macos-13
           - double: aarch64-darwin
             system: aarch64-darwin
-            runner: macos-latest
+            runner: macos-15
         variant:
           - flake: ddnnife
             artifact: ''

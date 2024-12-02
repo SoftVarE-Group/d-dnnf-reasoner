@@ -18,7 +18,7 @@ jobs:
             runner: ubuntu-24.04
           - double: aarch64-darwin
             jna: darwin-aarch64
-            runner: macos-latest
+            runner: macos-15
           - double: x86_64-darwin
             jna: darwin-x86-64
             runner: macos-13
