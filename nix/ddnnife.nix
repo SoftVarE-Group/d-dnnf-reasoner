@@ -87,13 +87,15 @@ let
           hostPkgs.boost.dev
           mt-kahypar.dev
         ]
-        ++ lib.optionals (d4 && !hostPkgs.stdenv.isLinux && !hostPkgs.stdenv.hostPlatform.isWindows) [
-          hostPkgs.gmp.dev
-          hostPkgs.mpfr.dev
-        ]
-        ++ lib.optionals (d4 && hostPkgs.stdenv.isLinux) [
+        ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isLinux) [
           hostPkgs.pkgsStatic.gmp.dev
           hostPkgs.pkgsStatic.mpfr.dev
+        ]
+        ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isDarwin) [
+          (hostPkgs.gmp.override {
+            withStatic = true;
+          })
+          hostPkgs.mpfr.dev
         ]
         ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isWindows) [
           (hostPkgs.gmp.override {
