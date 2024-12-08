@@ -38,6 +38,11 @@ struct Cli {
     #[arg(long, verbatim_doc_comment)]
     save_ddnnf: Option<String>,
 
+    /// Whether to use projected d-DNNF compilation for the input.
+    #[cfg(feature = "d4")]
+    #[arg(short, long, verbatim_doc_comment)]
+    projected: bool,
+
     /// Provides information about the type of nodes, their connection, and the different paths.
     #[arg(long, verbatim_doc_comment)]
     heuristics: bool,
@@ -173,6 +178,16 @@ fn main() {
 
     let mut ddnnf = if let Some(path) = &cli.input {
         // Read from file.
+        #[cfg(feature = "d4")]
+        {
+            if cli.projected {
+                dparser::build_ddnnf_projected(path, cli.total_features)
+            } else {
+                dparser::build_ddnnf(path, cli.total_features)
+            }
+        }
+
+        #[cfg(not(feature = "d4"))]
         dparser::build_ddnnf(path, cli.total_features)
     } else {
         // Read from stdin.
