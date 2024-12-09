@@ -21,6 +21,17 @@ let
   buildSystem = buildPkgs.stdenv.system;
   hostSystem = hostPkgs.stdenv.system;
 
+  # The default MinGW GCC in Nix comes with mcfgthreads which seems to be unable
+  # to produce static Rust binaries with C dependencies.
+  cc-windows = hostPkgs.buildPackages.wrapCC (
+    hostPkgs.buildPackages.gcc-unwrapped.override ({
+      threadsCross = {
+        model = "win32";
+        package = null;
+      };
+    })
+  );
+
   rust = import ./rust.nix { inherit fenix; };
   static = hostPkgs.hostPlatform.isStatic;
   target = if static then rust.map.${hostSystem}.static else rust.map.${hostSystem}.default;
@@ -28,7 +39,7 @@ let
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife/Cargo.toml; };
 
-  features-deps = lib.optionalString d4 "--features d4";
+  features-deps = lib.optionalString d4 "-vv --features d4";
   features =
     if (d4 || library) then
       lib.concatStrings (
@@ -74,14 +85,30 @@ let
       buildInputs =
         lib.optionals d4 [
           hostPkgs.boost.dev
-          hostPkgs.gmp.dev
           mt-kahypar.dev
+        ]
+        ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isLinux) [
+          hostPkgs.pkgsStatic.gmp.dev
+          hostPkgs.pkgsStatic.mpfr.dev
+        ]
+        ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isDarwin) [
+          (hostPkgs.gmp.override {
+            withStatic = true;
+          })
+          hostPkgs.mpfr.dev
+        ]
+        ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isWindows) [
+          (hostPkgs.gmp.override {
+            stdenv = hostPkgs.overrideCC hostPkgs.stdenv cc-windows;
+            withStatic = true;
+          })
+          hostPkgs.mpfr.dev
         ]
         ++ lib.optionals hostPkgs.stdenv.isDarwin [ hostPkgs.libiconv ];
 
       nativeBuildInputs =
         lib.optionals d4 [
-          buildPkgs.m4
+          buildPkgs.cmake
           buildPkgs.pkg-config
         ]
         ++ lib.optionals pythonLib [ buildPkgs.maturin ];
@@ -93,44 +120,30 @@ let
 
       doCheck = test;
     }
-    // lib.optionalAttrs hostPkgs.stdenv.hostPlatform.isWindows (
-      let
-        # The default MinGW GCC in nix comes with mcfgthreads which seems to be unable
-        # to produce static Rust binaries with C dependencies.
-        cc = hostPkgs.buildPackages.wrapCC (
-          hostPkgs.buildPackages.gcc-unwrapped.override ({
-            threadsCross = {
-              model = "win32";
-              package = null;
-            };
-          })
-        );
-      in
-      {
-        TARGET_CC = "${cc}/bin/${cc.targetPrefix}cc";
-        TARGET_CXX = "${cc}/bin/${cc.targetPrefix}cc";
+    // lib.optionalAttrs hostPkgs.stdenv.hostPlatform.isWindows {
+      TARGET_CC = "${cc-windows}/bin/${cc-windows.targetPrefix}cc";
+      TARGET_CXX = "${cc-windows}/bin/${cc-windows.targetPrefix}cc";
 
-        depsBuildBuild = [
-          cc
-          hostPkgs.windows.pthreads
-        ];
+      depsBuildBuild = [
+        cc-windows
+        hostPkgs.windows.pthreads
+      ];
 
-        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = (
-          buildPkgs.writeShellScript "wine-wrapped" ''
-            export WINEPREFIX=''$(mktemp -d)
-            export WINEDEBUG=-all
-            ${buildPkgs.wineWow64Packages.minimal}/bin/wine $@
-          ''
-        );
-      }
-    )
+      CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = (
+        buildPkgs.writeShellScript "wine-wrapped" ''
+          export WINEPREFIX=''$(mktemp -d)
+          export WINEDEBUG=-all
+          ${buildPkgs.wineWow64Packages.minimal}/bin/wine $@
+        ''
+      );
+    }
     // lib.optionalAttrs (d4 && hostPkgs.stdenv.system == "x86_64-darwin") {
       # FIXME: Tests with d4 are currently unable to run on x86_64-darwin.
       doCheck = false;
     }
     // lib.optionalAttrs (d4 && hostPkgs.stdenv.hostPlatform.isWindows) {
       # The Windows cross-build won't find the correct include and library directories by default.
-      CXXFLAGS = "-I ${hostPkgs.boost.dev}/include -I ${hostPkgs.gmp.dev}/include -I ${mt-kahypar.dev}/include";
+      CXXFLAGS = "-I ${hostPkgs.boost.dev}/include -I ${mt-kahypar.dev}/include";
       CARGO_BUILD_RUSTFLAGS = "-L ${mt-kahypar}/lib";
 
       # FIXME: Tests with d4 are currently unable to run on x86_64-windows.
@@ -153,7 +166,7 @@ craneLib.${craneAction} (
     inherit cargoArtifacts;
   }
   // lib.optionalAttrs hostPkgs.stdenv.isAarch64 {
-    # FIXME: Doc-tests currently fail on aarch64-{darwin, linuxy}.
+    # FIXME: Doc-tests currently fail on aarch64-{darwin, linux}.
     cargoTestExtraArgs = "--workspace --all-targets";
   }
   // lib.optionalAttrs pythonLib {

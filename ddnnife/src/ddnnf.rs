@@ -7,7 +7,6 @@ pub mod node;
 pub mod stream;
 
 use self::{clause_cache::ClauseCache, node::Node};
-use crate::parser::build_ddnnf;
 use itertools::Either;
 use num::BigInt;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -58,7 +57,18 @@ impl Ddnnf {
     /// Loads a d-DNNF from file.
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     fn from_file(path: String, features: Option<u32>) -> Self {
-        build_ddnnf(&path.clone(), features)
+        crate::parser::build_ddnnf(&path.clone(), features)
+    }
+
+    /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
+    ///
+    /// Panics when not including d4 as it is required for projected compilation.
+    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
+    fn from_file_projected(path: String, features: Option<u32>) -> Self {
+        #[cfg(feature = "d4")]
+        return crate::parser::build_ddnnf_projected(&path.clone(), features);
+        #[cfg(not(feature = "d4"))]
+        panic!("d4 is required for projected compilation.");
     }
 
     /// Returns the current count of the root node in the d-DNNF.

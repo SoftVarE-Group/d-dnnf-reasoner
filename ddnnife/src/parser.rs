@@ -115,6 +115,32 @@ pub fn build_ddnnf(path: &str, mut total_features: Option<u32>) -> Ddnnf {
     }
 }
 
+#[cfg(feature = "d4")]
+#[inline]
+pub fn build_ddnnf_projected(path: &str, total_features: Option<u32>) -> Ddnnf {
+    let temporary_ddnnf = NamedTempFile::new().expect("Failed to create temporary d-DNNF file.");
+
+    d4_oxide::compile_ddnnf_proj(
+        path.to_string(),
+        temporary_ddnnf
+            .path()
+            .to_str()
+            .expect("Failed to serialize temporary d-DNNF path.")
+            .to_string(),
+    );
+
+    let ddnnf = temporary_ddnnf
+        .reopen()
+        .expect("Failed to open temporary d-DNNF.");
+
+    let lines = BufReader::new(ddnnf)
+        .lines()
+        .map(|line| line.expect("Unable to read line"))
+        .collect::<Vec<String>>();
+
+    distribute_building(lines, total_features, None)
+}
+
 /// Chooses, depending on the first read line, which building implmentation to choose.
 /// Either the first line is a header and therefore the c2d format or total_features
 /// is supplied and its the d4 format.
