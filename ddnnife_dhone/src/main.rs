@@ -26,7 +26,6 @@ struct Cli {
 /// literals. We can resolve that issue by replacing the first occurence with a dummy value.
 /// The dummy ensures the validity of the counting algorithm for other literals and configurations
 /// that do not contain the doubled literal. We choose a true node as dummy.
-
 fn main() {
     let cli = Cli::parse();
 

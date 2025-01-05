@@ -72,7 +72,7 @@ pub(super) struct TInteractionIter<'a> {
     interaction: Vec<i32>,
 }
 
-impl<'a> StreamingIterator for TInteractionIter<'a> {
+impl StreamingIterator for TInteractionIter<'_> {
     type Item = [i32];
 
     fn advance(&mut self) {
