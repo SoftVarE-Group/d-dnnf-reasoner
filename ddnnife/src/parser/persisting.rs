@@ -1,5 +1,4 @@
 use std::{
-    cmp::max,
     collections::BTreeSet,
     fs::File,
     io::{LineWriter, Write},
@@ -135,7 +134,7 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
                     );
 
                     let mut children_series = children.clone();
-                    children_series.sort_by_key(|c1| compute_depth(ddnnf, *c1));
+                    children_series.sort_unstable();
 
                     if !children_series.is_empty() {
                         for (i, &child) in children_series.iter().enumerate() {
@@ -198,18 +197,6 @@ fn mermaidify_type(ddnnf: &Ddnnf, position: usize) -> String {
     );
     mm_node.push_str(&meta_info);
     mm_node
-}
-
-/// Computes the depth of any node in the current graph.
-/// Here, the depth is the length of the deepest path starting from position
-fn compute_depth(ddnnf: &Ddnnf, position: usize) -> usize {
-    match &ddnnf.nodes[position].ntype {
-        NodeType::And { children } | NodeType::Or { children } => children
-            .iter()
-            .fold(0, |acc, &x| max(acc + 1, compute_depth(ddnnf, x) + 1)),
-        NodeType::True => 0,
-        _ => 1,
-    }
 }
 
 fn marking_insert(marking: &[usize], position: usize) -> &str {
