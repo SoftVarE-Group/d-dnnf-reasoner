@@ -39,7 +39,7 @@ let
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife/Cargo.toml; };
 
-  features-deps = lib.optionalString d4 "-vv --features d4";
+  features-deps = lib.optionalString d4 "--features d4";
   features =
     if (d4 || library) then
       lib.concatStrings (
