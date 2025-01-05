@@ -7,12 +7,9 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane/v0.19.3";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    crane.url = "github:ipetkov/crane/v0.19.3";
     d4 = {
-      url = "github:SoftVarE-Group/d4v2/mt-kahypar";
+      url = "github:SoftVarE-Group/d4v2/2.1.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -183,6 +180,28 @@
           format = import ./nix/ddnnife.nix (defaultAttrs // { format = true; });
           lint = import ./nix/ddnnife.nix (d4Attrs // { lint = true; });
           deny = import ./nix/ddnnife.nix (defaultAttrs // { deny = true; });
+        }
+      );
+      devShells = lib.genAttrs systems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          d4Pkgs = d4.packages.${system};
+        in
+        {
+          default = pkgs.mkShell {
+            nativeBuildInputs = [
+              pkgs.cmake
+              pkgs.pkg-config
+            ];
+
+            buildInputs = [
+              pkgs.boost.dev
+              pkgs.pkgsStatic.gmp.dev
+              pkgs.pkgsStatic.mpfr.dev
+              d4Pkgs.mt-kahypar.dev
+            ];
+          };
         }
       );
     };
