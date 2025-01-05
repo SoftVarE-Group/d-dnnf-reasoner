@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 /// Every token gets an enum instance for the lexing progress
 pub enum TokenIdentifier {
     /// The header of the nnf file
@@ -17,10 +17,11 @@ pub enum TokenIdentifier {
     And,
     /// An inner node that contains exactly two child nodes
     Or,
-    /// A leaf node that countains a positive number of a variable
-    PositiveLiteral,
-    /// A leaf node that countains a negated number of a variable
-    NegativeLiteral,
+    /// A leaf node that countains a positive or negative number of a variable
+    Literal {
+        /// The number representing a feature in the FM
+        feature: i32,
+    },
     /// A special And node that has zero childs
     True,
     /// A special Or node that has zero childs
