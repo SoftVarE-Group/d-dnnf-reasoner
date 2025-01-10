@@ -46,6 +46,10 @@ struct Cli {
     /// Provides information about the type of nodes, their connection, and the different paths.
     #[arg(long, verbatim_doc_comment)]
     heuristics: bool,
+
+    /// Logging level for outputting warnings and information such as heuristics.
+    #[arg(short, long, verbatim_doc_comment, default_value_t=log::LevelFilter::Info)]
+    logging: log::LevelFilter,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -171,7 +175,9 @@ enum Operation {
 fn main() {
     let cli = Cli::parse();
 
-    pretty_env_logger::init();
+    pretty_env_logger::formatted_builder()
+        .filter_level(cli.logging)
+        .init();
 
     // create the ddnnf based of the input file that is required
     let time = Instant::now();
