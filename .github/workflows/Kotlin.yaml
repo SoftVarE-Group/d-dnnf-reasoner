@@ -11,8 +11,7 @@ jobs:
         target:
           - double: aarch64-linux
             jna: linux-aarch64
-            runner: ubuntu-24.04
-            emulated: true
+            runner: ubuntu-24.04-arm
           - double: x86_64-linux
             jna: linux-x86-64
             runner: ubuntu-24.04
@@ -34,15 +33,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: QEMU
-        if: ${{ matrix.target.emulated }}
-        run: sudo apt-get install -y qemu-user-static
       - name: Nix
         uses: DeterminateSystems/nix-installer-action@v16
-        with:
-          extra-conf: extra-platforms = ${{ matrix.target.double }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: Build
         run: |
           nix build -L .#packages.${{ matrix.target.double }}.libddnnife${{ matrix.variant.flake }}

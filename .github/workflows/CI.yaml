@@ -12,7 +12,7 @@ jobs:
       - name: Nix
         uses: DeterminateSystems/nix-installer-action@v16
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: Check
         run: nix flake check -L
 
@@ -22,19 +22,14 @@ jobs:
       matrix:
         target:
           - double: aarch64-linux                   # target we are building for
-            system: aarch64-linux                   # system we are building on
-            emulated: true                          # whether this build is being emulated
-            runner: ubuntu-24.04                    # GitHub runner the build is running on
+            runner: ubuntu-24.04-arm                # GitHub runner the build is running on
             interpreter: /lib/ld-linux-aarch64.so.1 # path to libc interpreter
           - double: x86_64-linux
-            system: x86_64-linux
             runner: ubuntu-24.04
             interpreter: /lib64/ld-linux-x86-64.so.2
           - double: x86_64-darwin
-            system: x86_64-darwin
             runner: macos-13
           - double: aarch64-darwin
-            system: aarch64-darwin
             runner: macos-15
         variant:
           - flake: ddnnife
@@ -47,29 +42,24 @@ jobs:
           - target: { double: aarch64-linux }
             variant: { flake: ddnnife }
         include:
-          - target: { double: aarch64-linux, system: aarch64-linux, emulated: true, runner: ubuntu-24.04 }
+          - target: { double: aarch64-linux, runner: ubuntu-24.04-arm }
             variant: { flake: ddnnife-static, artifact: '' }
-          - target: { double: x86_64-linux, system: x86_64-linux, runner: ubuntu-24.04 }
+          - target: { double: x86_64-linux, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-static, artifact: '' }
-          - target: { double: x86_64-windows, system: x86_64-linux, runner: ubuntu-24.04 }
+          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-windows, artifact: '' }
-          - target: { double: x86_64-windows, system: x86_64-linux, runner: ubuntu-24.04 }
+          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
             variant: { flake: ddnnife-windows-d4-bundled, artifact: '-d4' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: QEMU
-        if: ${{ matrix.target.emulated }}
-        run: sudo apt-get install -y qemu-user-static
       - name: Nix
         uses: DeterminateSystems/nix-installer-action@v16
-        with:
-          extra-conf: extra-platforms = ${{ matrix.target.system }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: Build
-        run: nix build -L .#packages.${{ matrix.target.system }}.${{ matrix.variant.flake }}
+        run: nix build -L .#${{ matrix.variant.flake }}
       - name: Set interpreter
         if: ${{ matrix.target.interpreter }}
         run: |

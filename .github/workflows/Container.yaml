@@ -13,26 +13,27 @@ jobs:
     strategy:
       matrix:
         target:
-          - double: aarch64-linux # target we are building for
-            architecture: arm64   # container architecture label
-            emulated: true        # whether this build is being emulated
+          - double: aarch64-linux    # target we are building for
+            architecture: arm64      # container architecture label
+            runner: ubuntu-24.04-arm # GitHub runner the build is running on
           - double: x86_64-linux
             architecture: amd64
-    runs-on: ubuntu-24.04
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: QEMU
-        if: ${{ matrix.target.emulated }}
-        run: sudo apt-get install -y qemu-user-static
       - name: Nix
         uses: DeterminateSystems/nix-installer-action@v16
-        with:
-          extra-conf: extra-platforms = ${{ matrix.target.double }}
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: Build
-        run: nix build -L .#packages.${{ matrix.target.double }}.container
+        run: nix build -L .#container
+      - name: Container policy
+        run: |
+          nix build --out-link skopeo nixpkgs#skopeo
+          mkdir -p $HOME/.config/containers
+          cp skopeo/etc/containers/default-policy.json $HOME/.config/containers/policy.json
       - name: Login
         run: nix run nixpkgs#skopeo -- login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
       - name: Push

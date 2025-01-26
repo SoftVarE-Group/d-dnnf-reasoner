@@ -11,6 +11,8 @@ jobs:
         target:
           - double: x86_64-linux
             runner: ubuntu-24.04
+          - double: aarch64-linux
+            runner: ubuntu-24.04-arm
           - double: x86_64-darwin
             runner: macos-13
           - double: aarch64-darwin
@@ -22,7 +24,7 @@ jobs:
       - name: Nix
         uses: DeterminateSystems/nix-installer-action@v16
       - name: Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
+        uses: DeterminateSystems/magic-nix-cache-action@v9
       - name: Build
         run: nix build -L .#python
       - name: Upload

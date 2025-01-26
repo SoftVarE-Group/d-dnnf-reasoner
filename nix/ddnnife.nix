@@ -173,12 +173,15 @@ craneLib.${craneAction} (
     buildPhaseCargoCommand = ''
       cd bindings/python
       maturin build --offline
+      cd ../..
     '';
 
     installPhaseCommand = ''
       mkdir -p $out
-      cp ../../target/wheels/* $out/
+      cp target/wheels/* $out/
     '';
+
+    doNotPostBuildInstallCargoBinaries = true;
   }
   # FIXME: libddnnife gets installed even on a non-library build.
   // lib.optionalAttrs (!library) { postInstall = "rm -rf $out/lib"; }
