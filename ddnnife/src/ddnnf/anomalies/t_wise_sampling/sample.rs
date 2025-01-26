@@ -1,7 +1,9 @@
+use super::t_iterator::TInteractionIter;
 use super::Config;
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::collections::HashSet;
 use std::iter;
+use streaming_iterator::StreamingIterator;
 
 /// Represents a (partial) sample of configs.
 /// The sample differentiates between complete and partial configs.
@@ -160,7 +162,7 @@ impl Sample {
     /// assert!(!sample.is_config_complete(&Config::from(&[1,2], 3)));
     /// ```
     pub fn is_config_complete(&self, config: &Config) -> bool {
-        let decided_literals = config.get_decided_literals().count();
+        let decided_literals = config.n_decided_literals;
         debug_assert!(
             decided_literals <= self.vars.len(),
             "Can not insert config with more vars than the sample defines"
@@ -209,6 +211,14 @@ impl Sample {
     pub fn covers(&self, interaction: &[i32]) -> bool {
         debug_assert!(!interaction.contains(&0));
         self.iter().any(|conf| conf.covers(interaction))
+    }
+
+    pub fn is_t_wise_covered(&self, config: &Config, t: usize) -> bool {
+        let literals: Vec<i32> = config.get_decided_literals().collect();
+        debug_assert!(!literals.contains(&0));
+
+        TInteractionIter::new(&literals, min(t, literals.len()))
+            .all(|interaction| self.covers(interaction))
     }
 }
 

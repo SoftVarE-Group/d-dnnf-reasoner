@@ -40,6 +40,13 @@ impl SamplingResult {
             SamplingResult::ResultWithSample(sample) => sample.is_empty(),
         }
     }
+
+    pub fn get_sample(&self) -> Option<&Sample> {
+        match self {
+            SamplingResult::ResultWithSample(sample) => Some(sample),
+            _ => None,
+        }
+    }
 }
 
 impl From<Sample> for SamplingResult {

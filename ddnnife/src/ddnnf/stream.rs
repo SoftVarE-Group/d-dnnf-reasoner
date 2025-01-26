@@ -18,6 +18,7 @@ use nom::IResult;
 use num::{BigInt, ToPrimitive};
 use workctl::WorkQueue;
 
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
 use crate::{util::*, Ddnnf};
 
@@ -186,6 +187,7 @@ impl Ddnnf {
         let mut values = Vec::new();
         let mut seed = 42;
         let mut limit = None;
+        let mut fitness = Vec::new();
         let mut add_clauses: Vec<BTreeSet<i32>> = Vec::new();
         let mut rmv_clauses: Vec<BTreeSet<i32>> = Vec::new();
         let mut total_features = self.number_of_variables;
@@ -247,6 +249,15 @@ impl Ddnnf {
                         Ok((numbers, len)) => {
                             param_index += len;
                             numbers
+                        }
+                        Err(e) => return e,
+                    };
+                }
+                "f" | "fitness" => {
+                    fitness = match get_floats(&args[param_index..]) {
+                        Ok(v) => {
+                            param_index += v.1;
+                            v.0
                         }
                         Err(e) => return e,
                     };
@@ -330,11 +341,11 @@ impl Ddnnf {
                         assumptions.push(could_be_core);
                         let with_cf = Ddnnf::execute_query(d, assumptions);
 
-                        if with_cf == without_cf {
-                            return Some(could_be_core.to_string());
+                        return if with_cf == without_cf {
+                            Some(could_be_core.to_string())
                         } else {
-                            return None;
-                        }
+                            None
+                        };
                     }
 
                     Some(format_vec(
@@ -398,7 +409,22 @@ impl Ddnnf {
             }
             "t-wise" => {
                 let limit_interpretation = limit.unwrap_or(1);
-                self.sample_t_wise(limit_interpretation).to_string()
+
+                let sample_result = if fitness.is_empty() {
+                    self.sample_t_wise(limit_interpretation)
+                } else if fitness.len() == self.number_of_variables as usize {
+                    let ext_ddnnf = ExtendedDdnnf {
+                        ddnnf: self.clone(),
+                        attrs: Default::default(),
+                        objective_fn_vals: Some(fitness),
+                    };
+
+                    ext_ddnnf.sample_t_wise(limit_interpretation)
+                } else {
+                    return format!("E5 error: Only {} fitness values were provided but d-DNNF contains {} variables.", fitness.len(), self.number_of_variables);
+                };
+
+                sample_result.to_string()
             }
             "clause-update" => {
                 if self.can_save_state() {
@@ -464,6 +490,28 @@ impl Ddnnf {
             other => format!("E2 error: the operation \"{}\" is not supported", other),
         }
     }
+}
+
+// parses floats into a vector of f64
+fn get_floats(params: &[&str]) -> Result<(Vec<f64>, usize), String> {
+    let mut floats = Vec::new();
+    let mut parsed_str_count = 0;
+    for &param in params.iter() {
+        if param.chars().any(|c| c.is_alphabetic()) {
+            return Ok((floats, parsed_str_count));
+        }
+        match param.parse::<f64>() {
+            Ok(number) => floats.push(number),
+            Err(e) => return Err(format!("E3 {}", e)),
+        }
+        parsed_str_count += 1;
+    }
+    if floats.is_empty() {
+        return Err(String::from(
+            "E4 error: option used but there was no value supplied",
+        ));
+    }
+    Ok((floats, parsed_str_count))
 }
 
 fn op_with_assumptions_and_vars<T: ToString>(
@@ -635,17 +683,12 @@ fn spawn_stdin_channel() -> Receiver<String> {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        collections::HashSet,
-        env,
-        fs::{self},
-    };
-
-    use itertools::Itertools;
-    use num::One;
-
     use super::*;
     use crate::parser::build_ddnnf;
+    use itertools::Itertools;
+    use num::One;
+    use std::collections::HashSet;
+    use std::{env, fs};
 
     #[test]
     fn handle_stream_msg_core() {
@@ -748,7 +791,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum() {
-        let mut _auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let _auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
@@ -920,21 +963,21 @@ mod test {
         let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", None);
 
         assert_eq!(
-            format!("E4 error: \"t\" can only be used in combination with \"clause-update\""),
+            "E4 error: \"t\" can only be used in combination with \"clause-update\"".to_string(),
             vp9.handle_stream_msg("update-clause t 43")
         );
         assert_eq!(
-            format!("E4 error: \"t\" must be set to a single positive number"),
+            "E4 error: \"t\" must be set to a single positive number".to_string(),
             vp9.handle_stream_msg("clause-update t 43 44")
         );
         assert_eq!(
-            format!("E4 error: key word is missing arguments"),
+            "E4 error: key word is missing arguments".to_string(),
             vp9.handle_stream_msg("clause-update add rmv")
         );
 
         let rc_before = vp9.handle_stream_msg("count").parse::<u64>().unwrap();
         assert_eq!(
-            format!(""),
+            "".to_string(),
             vp9.handle_stream_msg("clause-update t 45 add 43 44 45")
         );
 
@@ -945,13 +988,13 @@ mod test {
         );
 
         // Switch between the different states as much as needed
-        assert_eq!(format!(""), vp9.handle_stream_msg("undo-update"));
+        assert_eq!("".to_string(), vp9.handle_stream_msg("undo-update"));
         assert_eq!(
             rc_before,
             vp9.handle_stream_msg("count").parse::<u64>().unwrap()
         );
 
-        assert_eq!(format!(""), vp9.handle_stream_msg("undo-update"));
+        assert_eq!("".to_string(), vp9.handle_stream_msg("undo-update"));
         assert_eq!(
             rc_before * 7,
             vp9.handle_stream_msg("count").parse::<u64>().unwrap()

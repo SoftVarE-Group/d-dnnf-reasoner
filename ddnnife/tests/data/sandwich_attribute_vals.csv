@@ -1,0 +1,20 @@
+"(Feature ID,Integer)","(Feature Name,String)","(Calories,Integer)","(Price,Float)","(Organic Food,Bool)"
+1,Sandwich,,0.0,false
+2,Bread,,,
+3,Full Grain,203,1.99,true
+4,Flatbread,50,1.79,true
+5,Toast,313,1.79,false
+6,Cheese,,,
+7,Gouda,,,
+8,Sprinkled,72,0.49,true
+9,Slice,70,0.69,true
+10,Cheddar,81,0.69,false
+11,Cream Cheese,52,0.59,false
+12,Meat,,,
+13,Salami,116,1.29,true
+14,Ham,92,0.99,false
+15,Chicken Breast,56,1.39,true
+16,Vegetables,,,
+17,Cucumber,2,0.29,true
+18,Tomatoes,3,0.39,true
+19,Lettuce,2,0.39,true

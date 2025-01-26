@@ -1,6 +1,8 @@
 use super::{Config, Sample, SamplingResult};
 use crate::Ddnnf;
 
+pub mod attribute_similarity_merger;
+pub mod attribute_zipping_merger;
 pub mod similarity_merger;
 pub mod zipping_merger;
 
