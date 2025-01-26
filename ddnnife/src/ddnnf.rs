@@ -2,9 +2,9 @@ pub mod anomalies;
 pub mod clause_cache;
 pub mod counting;
 pub mod extended_ddnnf;
-pub mod heuristics;
 pub mod multiple_queries;
 pub mod node;
+pub mod statistics;
 pub mod stream;
 
 use self::{clause_cache::ClauseCache, node::Node};

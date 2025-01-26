@@ -22,3 +22,4 @@ ddnnife = { workspace = true }
 log = { workspace = true }
 mimalloc = { workspace = true }
 pretty_env_logger = "0.5"
+serde_json = "1.0"
