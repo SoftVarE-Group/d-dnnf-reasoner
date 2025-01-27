@@ -5,10 +5,13 @@ pub mod intermediate_representation;
 pub mod persisting;
 pub mod util;
 
-use crate::ddnnf::{node::Node, Ddnnf};
+use crate::ddnnf::{extended_ddnnf::Attribute, node::Node, Ddnnf};
 use c2d_lexer::{lex_line_c2d, C2DToken, TId};
 use core::panic;
+use csv::ReaderBuilder;
 use d4_lexer::{lex_line_d4, D4Token};
+use intermediate_representation::IntermediateGraph;
+use itertools::Itertools;
 use log::{error, warn};
 use num::BigInt;
 use petgraph::{
@@ -30,11 +33,10 @@ use std::{
 };
 
 #[cfg(feature = "d4")]
-use tempfile::NamedTempFile;
-
-use crate::parser::intermediate_representation::IntermediateGraph;
-#[cfg(feature = "d4")]
 use from_cnf::{check_for_cnf_header, CNFToken};
+
+#[cfg(feature = "d4")]
+use tempfile::NamedTempFile;
 
 type DdnnfGraph = StableGraph<TId, ()>;
 
@@ -638,6 +640,106 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
         parsed_queries.push((line_number, res));
     }
     parsed_queries
+}
+
+pub fn build_attributes(path: &str) -> HashMap<String, Attribute> {
+    let file = open_file_savely(path);
+    let mut reader = ReaderBuilder::new()
+        .has_headers(true)
+        .from_reader(BufReader::new(file));
+
+    let header = reader
+        .headers()
+        .expect("File must contain a header.")
+        .clone();
+    let records = reader
+        .records()
+        .map(|result| result.unwrap_or_else(|res| panic!("{:?} is not a valid record", res)))
+        .collect_vec();
+
+    let (id_idx, _) = header
+        .iter()
+        .find_position(|&column| column == "(Feature ID,Integer)")
+        .unwrap_or_else(|| panic!("File does not contain the column \"(Feature ID,Integer)\"."));
+    let record_ids = records.iter().map(|record| {
+        record
+            .get(id_idx)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Record {:?} has no value in column \"(Feature ID,Integer)\".",
+                    record
+                )
+            })
+            .parse::<u32>()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Record {:?} has no integer value in column \"(Feature ID,Integer)\".",
+                    record
+                )
+            })
+    });
+    let mut next_expected_id = 1;
+    for id in record_ids {
+        if id != next_expected_id {
+            panic!("Ids in column \"(Feature ID,Integer)\" must be in ascending order starting with \"1\" and increasing by one.")
+        }
+        next_expected_id += 1;
+    }
+
+    let regex = regex::Regex::new(r"^\((?<attr_name>[\w\s]+),(?<attr_type>[\w\s]+)\)$").unwrap();
+    header
+        .iter()
+        .map(|col_name| {
+            let groups = regex.captures(col_name).unwrap_or_else(|| {
+                panic!("Colum \"{col_name}\" must have format \"(<attr_name>,<attr_type>)\".")
+            });
+            (
+                groups["attr_name"].to_string(),
+                groups["attr_type"].to_string(),
+            )
+        })
+        .enumerate()
+        .filter(|(_, (attr_name, _))| attr_name != "Feature ID" && attr_name != "Feature Name")
+        .map(|(attr_idx, (attr_name, attr_type))| {
+            let attr_vals = records
+                .iter()
+                .map(|record| record.get(attr_idx))
+                .map(|entry| match entry {
+                    Some("") => None,
+                    other => other,
+                });
+
+            let attribute = match attr_type.as_str() {
+                "Integer" => Attribute::new_integer_attr(
+                    attr_vals
+                        .map(|opt_val| opt_val.map(|val| val.parse().unwrap()))
+                        .collect(),
+                    Some(0),
+                ),
+                "Float" => Attribute::new_float_attr(
+                    attr_vals
+                        .map(|opt_val| opt_val.map(|val| val.parse().unwrap()))
+                        .collect(),
+                    Some(0.0),
+                ),
+                "Bool" => Attribute::new_bool_attr(
+                    attr_vals
+                        .map(|opt_val| opt_val.map(|val| val.parse().unwrap()))
+                        .collect(),
+                    Some(false),
+                ),
+                "String" => Attribute::new_string_attr(
+                    attr_vals
+                        .map(|opt_val| opt_val.map(|val| val.to_string()))
+                        .collect(),
+                    Some("".to_string()),
+                ),
+                _ => panic!("Unexpected attribute type."),
+            };
+
+            (attr_name.to_string(), attribute)
+        })
+        .collect()
 }
 
 /// Tries to open a file.

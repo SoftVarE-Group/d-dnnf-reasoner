@@ -2,9 +2,11 @@ use super::covering_strategies::cover_with_caching;
 use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::util::rng;
 use crate::Ddnnf;
 use crate::NodeType;
+use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
@@ -12,9 +14,9 @@ use streaming_iterator::StreamingIterator;
 
 pub struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
     /// The d-DNNF to sample.
-    ddnnf: &'a Ddnnf,
+    pub(crate) ddnnf: &'a Ddnnf,
     /// Map that holds the [SamplingResult]s for the nodes.
-    partial_samples: HashMap<usize, SamplingResult>,
+    pub(crate) partial_samples: HashMap<usize, SamplingResult>,
     /// The merger for and nodes.
     and_merger: A,
     /// The merger for or nodes.
@@ -59,7 +61,12 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 &sat_solver,
             );
 
-            self.complete_partial_configs(&mut sample, root_id, &sat_solver);
+            complete_partial_configs(
+                &mut sample,
+                root_id,
+                &sat_solver,
+                self.ddnnf.number_of_variables as i32,
+            );
             return sample.into();
         }
 
@@ -73,7 +80,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     ///
     /// # Panics
     /// Panics if one child does not have a [SamplingResult] in [TWiseSampler::partial_samples].
-    fn partial_sample(&mut self, node_id: usize) -> SamplingResult {
+    pub(crate) fn partial_sample(&mut self, node_id: usize) -> SamplingResult {
         let node = self.ddnnf.nodes.get(node_id).expect("Node does not exist!");
 
         match &node.ntype {
@@ -146,39 +153,62 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                     .expect("Sample does not exist!");
             });
     }
+}
 
-    fn complete_partial_configs(&self, sample: &mut Sample, root: usize, sat_solver: &SatWrapper) {
-        let vars: Vec<i32> = (1..=self.ddnnf.number_of_variables as i32).collect();
-        for config in sample.partial_configs.iter_mut() {
-            for &var in vars.iter() {
-                if config.contains(var) || config.contains(-var) {
-                    continue;
-                }
+fn complete_partial_configs(
+    sample: &mut Sample,
+    root: usize,
+    sat_solver: &SatWrapper,
+    number_of_variables: i32,
+) {
+    let vars: Vec<i32> = (1..=number_of_variables).collect();
+    for config in sample.partial_configs.iter_mut() {
+        for &var in vars.iter() {
+            if config.contains(var) || config.contains(-var) {
+                continue;
+            }
 
-                config.update_sat_state(sat_solver, root);
+            config.update_sat_state(sat_solver, root);
 
-                // clone sat state so that we don't change the state that is cached in the config
-                let mut sat_state = config
-                    .get_sat_state()
-                    .cloned()
-                    .expect("sat state should exist after calling update_sat_state()");
+            // clone sat state so that we don't change the state that is cached in the config
+            let mut sat_state = config
+                .get_sat_state()
+                .cloned()
+                .expect("sat state should exist after calling update_sat_state()");
 
-                if sat_solver.is_sat_cached(&[var], &mut sat_state) {
-                    config.add(var);
-                } else {
-                    config.add(-var);
-                }
+            if sat_solver.is_sat_cached(&[var], &mut sat_state) {
+                config.add(var);
+            } else {
+                config.add(-var);
             }
         }
+    }
 
-        debug_assert!(sample
-            .iter()
-            .all(|config| !config.get_literals().contains(&0)));
+    debug_assert!(sample
+        .iter()
+        .all(|config| !config.get_literals().contains(&0)));
+}
+
+pub fn complete_partial_configs_optimal(sample: &mut Sample, ext_ddnnf: &ExtendedDdnnf) {
+    while let Some(config) = sample.partial_configs.pop() {
+        let literals = config.get_decided_literals().collect_vec();
+        let completed_config = ext_ddnnf
+            .calc_best_config(&literals[..])
+            .expect("Config should be exist");
+
+        debug_assert!(
+            completed_config.config.get_n_decided_literals() == sample.vars.len(),
+            "{:?} != {:?}",
+            completed_config.config.get_n_decided_literals(),
+            sample.vars.len()
+        );
+
+        sample.add(completed_config.config);
     }
 }
 
 #[inline]
-fn trim_and_resample(
+pub fn trim_and_resample(
     node_id: usize,
     sample: Sample,
     t: usize,
@@ -198,7 +228,7 @@ fn trim_and_resample(
     literals_to_resample.sort_unstable();
     literals_to_resample.shuffle(&mut rng());
 
-    let mut iter = TInteractionIter::new(&literals_to_resample, t);
+    let mut iter = TInteractionIter::new(&literals_to_resample, min(t, literals_to_resample.len()));
     while let Some(interaction) = iter.next() {
         cover_with_caching(
             &mut new_sample,
@@ -237,7 +267,8 @@ fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, HashSe
 #[inline]
 fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
     let mut unique_coverage = vec![0; sample.len()];
-    let mut iter = TInteractionIter::new(sample.get_literals(), t);
+    let mut iter =
+        TInteractionIter::new(sample.get_literals(), min(sample.get_literals().len(), t));
     while let Some(interaction) = iter.next() {
         if let Some(conf_index) = find_unique_covering_conf(sample, interaction) {
             unique_coverage[conf_index] += 1;
@@ -248,7 +279,7 @@ fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
     let mut sum: f64 = 0.0;
 
     for (index, config) in sample.iter().enumerate() {
-        let config_size = config.get_decided_literals().count();
+        let config_size = config.n_decided_literals;
         ranks[index] = unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
         sum += ranks[index];
     }

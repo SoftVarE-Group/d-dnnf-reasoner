@@ -1,4 +1,5 @@
 use super::{Config, Sample, SatWrapper};
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 
 /// Covering strategy that uses the sat state caching.
 pub fn cover_with_caching(
@@ -71,6 +72,70 @@ pub fn cover_with_caching_twise(
         let mut config = Config::from(interaction, number_of_vars);
         config.set_sat_state(interaction_sat_state);
         sample.add(config);
+    }
+}
+
+pub(super) fn cover_with_caching_sorted(
+    sample: &mut Sample,
+    interaction: &[i32],
+    sat_solver: &SatWrapper,
+    node_id: usize,
+    number_of_vars: usize,
+    ext_ddnnf: &ExtendedDdnnf,
+) {
+    debug_assert!(!interaction.iter().any(|x| *x == 0));
+    if sample.covers(interaction) {
+        return; // already covered
+    }
+    let mut interaction_sat_state = sat_solver.new_state();
+    if !sat_solver.is_sat_in_subgraph_cached(interaction, node_id, &mut interaction_sat_state) {
+        return; // interaction invalid
+    }
+
+    let fond_idx = cover(sample, interaction, sat_solver, node_id);
+
+    if let Some(index) = fond_idx {
+        let config = sample.partial_configs.get(index).expect("");
+        if sample.is_config_complete(config) {
+            // config is complete - remove it from the partial configs and insert it into the complete configs at the right index
+            let config = sample.partial_configs.remove(index);
+            ext_ddnnf.insert_config_sorted(config, &mut sample.complete_configs);
+        } else {
+            // config is still partial - shift it up or down until it is at the right index in partial configs
+            let config = &sample.partial_configs[index];
+            let config_val = ext_ddnnf.get_average_objective_fn_val_of_config(config);
+            let mut current_idx = index;
+
+            while current_idx > 0
+                && config_val
+                    > ext_ddnnf.get_average_objective_fn_val_of_config(
+                        &sample.partial_configs[current_idx - 1],
+                    )
+            {
+                sample.partial_configs.swap(current_idx, current_idx - 1);
+                current_idx -= 1;
+            }
+
+            while current_idx < sample.partial_configs.len() - 1
+                && config_val
+                    < ext_ddnnf.get_average_objective_fn_val_of_config(
+                        &sample.partial_configs[current_idx + 1],
+                    )
+            {
+                sample.partial_configs.swap(current_idx, current_idx + 1);
+                current_idx += 1;
+            }
+        }
+    } else {
+        // no config found - create new config and insert it into the complete/partial configs at the right index
+        let mut config = Config::from(interaction, number_of_vars);
+        config.set_sat_state(interaction_sat_state);
+
+        if sample.is_config_complete(&config) {
+            ext_ddnnf.insert_config_sorted(config, &mut sample.complete_configs);
+        } else {
+            ext_ddnnf.insert_config_sorted(config, &mut sample.partial_configs);
+        }
     }
 }
 

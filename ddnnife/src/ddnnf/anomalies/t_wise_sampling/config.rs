@@ -1,6 +1,7 @@
 use super::SatWrapper;
 use crate::util::format_vec;
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 
 /// Represents a (partial) configuration
 #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
@@ -10,6 +11,14 @@ pub struct Config {
     pub literals: Vec<i32>,
     pub sat_state: Option<Vec<bool>>,
     sat_state_complete: bool,
+    /// The number of decided literals
+    pub n_decided_literals: usize,
+}
+
+impl Hash for Config {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.literals.hash(state)
+    }
 }
 
 impl PartialEq for Config {
@@ -41,6 +50,7 @@ impl Config {
             literals: vec![0; number_of_variables],
             sat_state: None,
             sat_state_complete: false,
+            n_decided_literals: 0,
         };
         config.extend(literals.iter().copied());
         config
@@ -60,7 +70,7 @@ impl Config {
                 marker does not propagate upward to the AND. So the AND remains unmarked which
                 is wrong and may cause wrong results when SAT solving.
                  */
-                if left.get_decided_literals().count() >= right.get_decided_literals().count() {
+                if left.n_decided_literals >= right.n_decided_literals {
                     Some(left_state)
                 } else {
                     Some(right_state)
@@ -74,6 +84,7 @@ impl Config {
             literals: vec![0; number_of_variables],
             sat_state,
             sat_state_complete: false, // always false because we can not combine the states
+            n_decided_literals: 0,
         };
         config.extend(left.get_decided_literals());
         config.extend(right.get_decided_literals());
@@ -107,6 +118,12 @@ impl Config {
     /// Returns whether the cached sat state is complete (true) or incomplete (false)
     fn is_sat_state_complete(&self) -> bool {
         self.sat_state_complete
+    }
+
+    /// Returns the number of decided literals
+    pub fn get_n_decided_literals(&self) -> usize {
+        debug_assert!(self.n_decided_literals == self.get_decided_literals().count());
+        self.n_decided_literals
     }
 
     /// Uses the given [SatWrapper] to update the cached sat solver state in this config.
@@ -165,6 +182,14 @@ impl Config {
         debug_assert!(literal != 0);
         self.sat_state_complete = false;
         let index = literal.unsigned_abs() as usize - 1;
+        if self.literals[index] == 0 {
+            self.n_decided_literals += 1;
+        }
         self.literals[index] = literal;
+    }
+
+    /// Checks if the config is complete (all literals are decided)
+    pub fn is_complete(&self) -> bool {
+        self.n_decided_literals == self.literals.len()
     }
 }

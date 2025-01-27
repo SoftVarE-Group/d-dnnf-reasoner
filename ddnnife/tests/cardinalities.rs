@@ -1,9 +1,11 @@
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::parser;
 use file_diff::diff_files;
-use serial_test::serial;
 use std::fs::{self, File};
 use std::io::BufWriter;
+
+#[cfg(feature = "d4")]
+use serial_test::serial;
 
 #[test]
 fn card_of_features_c2d() {
