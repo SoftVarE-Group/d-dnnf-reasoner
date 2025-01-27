@@ -7,8 +7,13 @@ pub mod node;
 pub mod stream;
 
 use self::{clause_cache::ClauseCache, node::Node};
+use crate::parser::from_cnf::reduce_clause;
+use crate::parser::intermediate_representation::{
+    ClauseApplication, IncrementalStrategy, IntermediateGraph,
+};
 use itertools::Either;
 use num::BigInt;
+use std::cmp::max;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 type Clause = BTreeSet<i32>;
@@ -19,13 +24,15 @@ type EditOperation = (Vec<Clause>, Vec<Clause>);
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Ddnnf {
+    /// An intermediate representation that can be changed without destroying the structure
+    pub inter_graph: IntermediateGraph,
     /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
     /// The saved state to enable undoing and adapting the d-DNNF. Avoid exposing this field outside of this source file!
     cached_state: Option<ClauseCache>,
     /// Literals for upwards propagation
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
-    true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
+    pub true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
     /// The core/dead features of the model corresponding with this ddnnf
     pub core: HashSet<i32>,
     /// An interim save for the marking algorithm
@@ -40,6 +47,7 @@ impl Default for Ddnnf {
     #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     fn default() -> Self {
         Ddnnf {
+            inter_graph: IntermediateGraph::default(),
             nodes: Vec::new(),
             cached_state: None,
             literals: HashMap::new(),
@@ -90,27 +98,32 @@ impl Ddnnf {
 
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
-    pub fn new(
-        nodes: Vec<Node>,
-        literals: HashMap<i32, usize>,
-        true_nodes: Vec<usize>,
-        number_of_variables: u32,
-        clauses: Option<BTreeSet<BTreeSet<i32>>>,
-    ) -> Ddnnf {
+    pub fn new(mut inter_graph: IntermediateGraph, number_of_variables: u32) -> Ddnnf {
+        let dfs_ig = inter_graph.rebuild(None);
+        let clauses: BTreeSet<BTreeSet<i32>> = inter_graph
+            .cnf_clauses
+            .iter()
+            .map(|clause| clause.iter().copied().collect())
+            .collect();
+
         let mut ddnnf = Ddnnf {
-            nodes,
+            inter_graph,
+            nodes: dfs_ig.0,
+            literals: dfs_ig.1,
+            true_nodes: dfs_ig.2,
             cached_state: None,
-            literals,
-            true_nodes,
             core: HashSet::new(),
             md: Vec::new(),
             number_of_variables,
             max_worker: 4,
         };
+
         ddnnf.calculate_core();
-        if let Some(c) = clauses {
-            ddnnf.update_cached_state(Either::Right(c), Some(number_of_variables));
+
+        if !clauses.is_empty() {
+            ddnnf.update_cached_state(Either::Right(clauses), Some(number_of_variables));
         }
+
         ddnnf
     }
 
@@ -187,10 +200,109 @@ impl Ddnnf {
         }
     }
 
+    /// We invalidate all collected data that belongs to the dDNNF and build it again
+    /// by doing a DFS. That is necessary if we altered the intermedidate graph in any way.
+    pub fn rebuild(&mut self) {
+        let dfs_ig = self.inter_graph.rebuild(None);
+        self.nodes = dfs_ig.0;
+        self.literals = dfs_ig.1;
+        self.true_nodes = dfs_ig.2;
+
+        self.get_core();
+        self.md.clear();
+        // The highest absolute value of literals must be is also the number of variables because
+        // there are no gaps in the feature to number mapping
+        self.number_of_variables = self
+            .literals
+            .keys()
+            .fold(0, |acc, x| max(acc, x.unsigned_abs()));
+
+        let clauses: BTreeSet<BTreeSet<i32>> = self
+            .inter_graph
+            .cnf_clauses
+            .iter()
+            .map(|clause| clause.iter().copied().collect())
+            .collect();
+
+        if !clauses.is_empty() {
+            self.update_cached_state(Either::Right(clauses), Some(self.number_of_variables));
+        }
+    }
+
+    /// Takes a list of clauses. Each clause consists out of one or multiple variables that are conjuncted.
+    /// The clauses are disjuncted.
+    /// Example: [[1, -2, 3], [4]] would represent (1 ∨ ¬2 ∨ 3) ∧ (4)
+    pub fn prepare_and_apply_incremental_edit(
+        &mut self,
+        edit_operations: Vec<(Vec<i32>, ClauseApplication)>,
+    ) -> IncrementalStrategy {
+        let mut edit_lits = HashSet::new();
+        let mut op_add = Vec::new();
+        let mut op_rmv = Vec::new();
+        for (clause, application) in edit_operations {
+            match reduce_clause(&clause, &HashSet::new()) {
+                Some(reduced_clause) => {
+                    if reduced_clause.is_empty() {
+                        continue;
+                    }
+                    edit_lits.extend(reduced_clause.iter());
+                    match application {
+                        ClauseApplication::Add => op_add.push(reduced_clause),
+                        ClauseApplication::Remove => op_rmv.push(reduced_clause),
+                    }
+                }
+                None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
+            }
+        }
+        let strategy = self
+            .inter_graph
+            .apply_incremental_edit((edit_lits, (op_add, op_rmv)));
+        self.rebuild();
+        strategy
+    }
+
     // Returns the current temp count of the root node in the ddnnf.
     // That value is changed during computations
     fn rt(&self) -> BigInt {
         self.nodes[self.nodes.len() - 1].temp.clone()
+    }
+
+    /// Computes the total number of nodes in the dDNNF
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Computes the total number of edges in the dDNNF
+    pub fn edge_count(&self) -> usize {
+        use crate::NodeType::*;
+        let mut total_edges = 0;
+
+        for node in self.nodes.iter() {
+            match &node.ntype {
+                And { children } | Or { children } => {
+                    total_edges += children.len();
+                }
+                _ => (),
+            }
+        }
+        total_edges
+    }
+
+    /// Computes the sharing of nodes in the dDNNF.
+    /// We define sharing as #nodes / #nodes as tree
+    pub fn sharing(&self) -> f64 {
+        use crate::NodeType::*;
+        let mut sub_nodes = vec![0_u64; self.node_count()];
+
+        for (index, node) in self.nodes.iter().enumerate() {
+            match &node.ntype {
+                And { children } | Or { children } => {
+                    sub_nodes[index] = children.iter().fold(0, |acc, &i| acc + sub_nodes[i]) + 1
+                }
+                _ => sub_nodes[index] = 1,
+            }
+        }
+        self.node_count() as f64 / sub_nodes.last().unwrap().to_owned() as f64
     }
 
     /// Determines the positions of the inverted featueres
@@ -240,11 +352,11 @@ mod test {
         let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
 
         assert_eq!(
-            vec![3, 2, 6],
+            vec![4, 2, 9],
             ddnnf.map_features_opposing_indexes(&[1, 2, 3, 4])
         );
         assert_eq!(
-            vec![0, 1, 4, 5],
+            vec![0, 1, 5, 8],
             ddnnf.map_features_opposing_indexes(&[-1, -2, -3, -4])
         );
     }
