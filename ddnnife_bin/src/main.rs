@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use ddnnife::ddnnf::anomalies::t_wise_sampling::SamplingResult;
+use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::parser::{
     self as dparser,
@@ -169,6 +170,13 @@ enum Operation {
         /// The default is no assumption.
         #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
         assumptions: Vec<i32>,
+    },
+    /// Outputs statistics about the d-DNNF as JSON.
+    #[clap(verbatim_doc_comment)]
+    Statistics {
+        /// Whether to pretty-print the JSON output
+        #[arg(short, long, default_value_t = true, verbatim_doc_comment)]
+        pretty: bool,
     },
 }
 
@@ -384,6 +392,16 @@ fn main() {
             Operation::Mermaid { assumptions } => {
                 write_as_mermaid_md(&mut ddnnf, assumptions, &mut writer).unwrap();
             }
+            Operation::Statistics { pretty } => {
+                let statistics = Statistics::from(&ddnnf);
+
+                if *pretty {
+                    serde_json::to_writer_pretty(&mut writer, &statistics)
+                } else {
+                    serde_json::to_writer(&mut writer, &statistics)
+                }
+                .expect("Unable to serialize statistics.");
+            }
         }
 
         writer.flush().unwrap();
@@ -396,11 +414,6 @@ fn main() {
             "The smooth d-DNNF was written into the c2d format in {}.",
             path
         );
-    }
-
-    // prints heuristics
-    if cli.heuristics {
-        ddnnf.print_all_heuristics();
     }
 }
 

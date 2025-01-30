@@ -1,3 +1,4 @@
+use ddnnife::ddnnf::statistics::{ChildConnections, NodeCount, Paths, Statistics};
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::parser;
 use file_diff::diff_files;
@@ -120,7 +121,32 @@ fn card_of_pc_cnf() {
 }
 
 #[test]
-fn heuristics_test() {
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
-    ddnnf.print_all_heuristics();
+fn statistics() {
+    let ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
+
+    assert_eq!(
+        Statistics::from(&ddnnf),
+        Statistics {
+            nodes: NodeCount {
+                total: 12919,
+                and: 5952,
+                or: 2220,
+                literal: 4747,
+                r#true: 0,
+                r#false: 0,
+            },
+            child_connections: ChildConnections {
+                total: 45817,
+                and: 41377,
+                or: 4440,
+            },
+            paths: Paths {
+                amount: 4654070,
+                shortest: 2,
+                longest: 80,
+                mean: 48.733250896527124,
+                deviation: 10.01568894204091,
+            },
+        }
+    );
 }

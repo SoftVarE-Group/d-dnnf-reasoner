@@ -536,6 +536,7 @@ dependencies = [
  "rand_distr",
  "rand_pcg",
  "regex",
+ "serde",
  "serial_test",
  "streaming-iterator",
  "tempfile",
@@ -553,6 +554,7 @@ dependencies = [
  "log",
  "mimalloc",
  "pretty_env_logger",
+ "serde_json",
 ]
 
 [[package]]
