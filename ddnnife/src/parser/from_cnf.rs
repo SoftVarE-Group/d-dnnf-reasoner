@@ -9,7 +9,7 @@ use nom::{
     combinator::{map, recognize, value},
     multi::many1,
     sequence::{preceded, terminated},
-    IResult,
+    IResult, Parser,
 };
 use std::cmp::max;
 use std::collections::{BTreeSet, HashSet};
@@ -34,7 +34,7 @@ use crate::util::format_vec;
 /// We are only interested in the header, because it contains the information about the number of features.
 #[inline]
 pub fn check_for_cnf_header(line: &str) -> IResult<&str, CNFToken> {
-    alt((lex_comment, lex_header, lex_clause))(line)
+    alt((lex_comment, lex_header, lex_clause)).parse(line)
 }
 
 // lexes the head of a CNF file of the format p cnf #FEATURES #CLAUSES
@@ -48,7 +48,8 @@ fn lex_header(line: &str) -> IResult<&str, CNFToken> {
                 clauses: nums[1],
             }
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // identifies a CNF clause by finding a sequence of (signed) numbers
@@ -58,12 +59,13 @@ fn lex_clause(line: &str) -> IResult<&str, CNFToken> {
         |out: &str| CNFToken::Clause {
             features: split_numbers(out).into_iter().collect(),
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // identifies a CNF comment by its leading 'c'
 fn lex_comment(line: &str) -> IResult<&str, CNFToken> {
-    value(CNFToken::Comment, char('c'))(line)
+    value(CNFToken::Comment, char('c')).parse(line)
 }
 
 /// Appends the given clause to the CNF file. This function also updates the Header by incrementing

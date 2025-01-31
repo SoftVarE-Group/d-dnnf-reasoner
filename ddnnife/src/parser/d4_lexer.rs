@@ -5,7 +5,7 @@ use nom::{
     combinator::{map, recognize, value},
     multi::many_m_n,
     sequence::{pair, preceded, terminated},
-    IResult,
+    IResult, Parser,
 };
 
 use D4Token::*;
@@ -34,7 +34,7 @@ pub enum D4Token {
 /// to least occuring, to lex faster
 #[inline]
 pub fn lex_line_d4(line: &str) -> IResult<&str, D4Token> {
-    alt((lex_edge, lex_or, lex_and, lex_true, lex_false))(line)
+    alt((lex_edge, lex_or, lex_and, lex_true, lex_false)).parse(line)
 }
 
 // Lexes an Edge Node with the format "F T F1 F2 F3 ... 0" with F being the from and T being the to node of the edge.
@@ -60,37 +60,38 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                 features: ws_numbers[2..ws_numbers.len()].to_vec(),
             }
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // lexes multiple sequences of signed numbers
 pub(super) fn parse_signed_alt_space1_number1(line: &str) -> IResult<&str, (&str, &str)> {
-    alt((pair(digit1, space1), pair(neg_digit1, space1)))(line)
+    alt((pair(digit1, space1), pair(neg_digit1, space1))).parse(line)
 }
 
 // lexes a sequence of numbers that start with a minues sign
 fn neg_digit1(line: &str) -> IResult<&str, &str> {
-    recognize(pair(char('-'), digit1))(line)
+    recognize(pair(char('-'), digit1)).parse(line)
 }
 
 // Lexes an And node which is a inner node with the format "a N 0" with N as Node number.
 fn lex_and(line: &str) -> IResult<&str, D4Token> {
-    value(And, preceded(tag("a "), digit1))(line)
+    value(And, preceded(tag("a "), digit1)).parse(line)
 }
 
 // Lexes an Or node which is a inner node with the format "o N 0" with N as Node number.
 fn lex_or(line: &str) -> IResult<&str, D4Token> {
-    value(Or, preceded(tag("o "), digit1))(line)
+    value(Or, preceded(tag("o "), digit1)).parse(line)
 }
 
 // Lexes a True node which is a leaf node with the format "t N 0" with N as Node number.
 fn lex_true(line: &str) -> IResult<&str, D4Token> {
-    value(True, preceded(tag("t "), digit1))(line)
+    value(True, preceded(tag("t "), digit1)).parse(line)
 }
 
 // Lexes a False node which is a leaf node with the format "f N 0"  with N as Node number.
 fn lex_false(line: &str) -> IResult<&str, D4Token> {
-    value(False, preceded(tag("f "), digit1))(line)
+    value(False, preceded(tag("f "), digit1)).parse(line)
 }
 
 #[cfg(test)]

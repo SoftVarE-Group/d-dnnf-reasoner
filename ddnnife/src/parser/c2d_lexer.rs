@@ -5,7 +5,7 @@ use nom::{
     combinator::{map, recognize, value},
     multi::many1,
     sequence::{pair, preceded},
-    IResult,
+    IResult, Parser,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -90,7 +90,8 @@ pub fn lex_line_c2d(line: &str) -> IResult<&str, C2DToken> {
         lex_or,
         lex_positive_literal,
         lex_negative_literal,
-    ))(line)
+    ))
+    .parse(line)
 }
 
 // Lexes the header and only the header with the format "nnf v e n" where v is the number of nodes in the NNF,
@@ -106,7 +107,8 @@ fn lex_header(line: &str) -> IResult<&str, C2DToken> {
                 variables: nums[2],
             }
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // Lexes a And node which is a inner node with the format "A c i1 i2 ... ic" where c is the number
@@ -119,7 +121,8 @@ fn lex_and(line: &str) -> IResult<&str, C2DToken> {
             nums.remove(0); // remove information about number of children
             And { children: nums }
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // Lexes a Or node which is a inner node with the format "O j c i1 i2" with i1 and i2 as childs.
@@ -135,14 +138,16 @@ fn lex_or(line: &str) -> IResult<&str, C2DToken> {
                 children: nums,
             }
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // Lexes a positive Literal node which is a leaf node with the format "L i1" with i1 as the variable number.
 fn lex_positive_literal(line: &str) -> IResult<&str, C2DToken> {
     map(preceded(tag("L "), recognize(digit1)), |s: &str| Literal {
         feature: s.parse::<i32>().unwrap(),
-    })(line)
+    })
+    .parse(line)
 }
 
 // Lexes a negative Literal node which is a leaf node with the format "L i1" with i1 as the variable number.
@@ -152,17 +157,18 @@ fn lex_negative_literal(line: &str) -> IResult<&str, C2DToken> {
         |s: &str| Literal {
             feature: s.parse::<i32>().unwrap(),
         },
-    )(line)
+    )
+    .parse(line)
 }
 
 // Lexes a True node which is a leaf node with the format "A 0".
 fn lex_true(line: &str) -> IResult<&str, C2DToken> {
-    value(True, tag("A 0"))(line)
+    value(True, tag("A 0")).parse(line)
 }
 
 // Lexes a False node which is a leaf node with the format "O 0 0".
 fn lex_false(line: &str) -> IResult<&str, C2DToken> {
-    value(False, tag("O 0 0"))(line)
+    value(False, tag("O 0 0")).parse(line)
 }
 
 // Returns a closure that lexes exactly one number which consists of multiple digits to form an T
@@ -182,7 +188,7 @@ pub(super) fn split_numbers<T: std::str::FromStr>(out: &str) -> Vec<T> {
 
 // parses an alternating sequence of one space and multiple digits which form a number
 pub(super) fn parse_alt_space1_number1(input: &str) -> IResult<&str, &str> {
-    recognize(many1(pair(char(' '), digit1)))(input)
+    recognize(many1(pair(char(' '), digit1))).parse(input)
 }
 
 #[allow(non_snake_case)]

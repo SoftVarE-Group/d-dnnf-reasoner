@@ -13,8 +13,8 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{char, digit1};
 use nom::combinator::{map_res, opt, recognize};
-use nom::sequence::{pair, tuple};
-use nom::IResult;
+use nom::sequence::pair;
+use nom::{IResult, Parser};
 use num::{BigInt, ToPrimitive};
 use workctl::WorkQueue;
 
@@ -601,7 +601,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
         }
 
         fn signed_number(input: &str) -> IResult<&str, &str> {
-            recognize(pair(opt(char('-')), digit1))(input)
+            recognize(pair(opt(char('-')), digit1)).parse(input)
         }
 
         // try parsing by starting with the most specific combination and goind
@@ -609,7 +609,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
         let range: IResult<&str, Vec<i32>> = alt((
             // limited range
             map_res(
-                tuple((signed_number, tag(".."), signed_number)),
+                (signed_number, tag(".."), signed_number),
                 |s: (&str, &str, &str)| {
                     match (s.0.parse::<i32>(), s.2.parse::<i32>()) {
                         // start and stop are inclusive (removing the '=' would make stop exclusive)
@@ -630,7 +630,8 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
                 Ok(v) => Ok(vec![v]),
                 Err(e) => Err(e),
             }),
-        ))(param);
+        ))
+        .parse(param);
 
         match range {
             // '0' isn't valid in this context and gets removed
