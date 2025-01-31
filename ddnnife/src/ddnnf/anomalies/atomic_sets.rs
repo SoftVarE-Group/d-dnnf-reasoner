@@ -287,13 +287,9 @@ fn sort_and_clean_atomicsets(atomic_sets: &mut Vec<Vec<i16>>) {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, iter::FromIterator};
-
-    use serial_test::serial;
-
-    use crate::parser::build_ddnnf;
-
     use super::*;
+    use crate::parser::build_ddnnf;
+    use std::{collections::HashSet, iter::FromIterator};
 
     #[test]
     fn union_find_operations() {
@@ -340,7 +336,6 @@ mod test {
 
     #[cfg(feature = "d4")]
     #[test]
-    #[serial]
     fn brute_force_wo_cross() {
         let ddnnfs: Vec<Ddnnf> = vec![
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
@@ -360,7 +355,6 @@ mod test {
 
     #[cfg(feature = "d4")]
     #[test]
-    #[serial]
     fn brute_force_cross() {
         let ddnnfs: Vec<Ddnnf> = vec![
             build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),

@@ -883,7 +883,6 @@ impl IntermediateGraph {
 mod test {
     use num::BigInt;
     use rand::rngs::StdRng;
-    use serial_test::serial;
     use std::{
         collections::HashSet,
         fs::{self, File},
@@ -930,7 +929,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn closest_unsplittable_and() {
         let bridge_comparison = |mut ddnnf: Ddnnf,
                                  input: Vec<Vec<i32>>,
@@ -1047,7 +1045,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses_small_models() {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",
@@ -1061,7 +1058,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses_medium_models() {
         let ddnnf_file_paths = vec!["tests/data/kc_axTLS.cnf", "tests/data/toybox.cnf"];
 
@@ -1071,7 +1067,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn transform_to_cnf_from_starting_cnf_clauses_big_models_auto1() {
         check_for_cardinality_correctness("tests/data/auto1.cnf", 10);
     }
@@ -1087,7 +1082,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn undo_clause_remove() {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",
@@ -1135,7 +1129,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn undo_clause_add() {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",
@@ -1181,7 +1174,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn incremental_adding_clause() {
         let ddnnf_file_paths = vec![(
             "tests/data/VP9.cnf",
@@ -1215,7 +1207,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn adding_new_features() {
         let mut ddnnf = build_ddnnf("tests/data/small_ex.cnf", None);
         assert_eq!(4, ddnnf.number_of_variables);
@@ -1237,7 +1228,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn adding_unit_clause() {
         // small example, missing the "1 0" unit clause
         const CNF_PATH: &str = "tests/data/.small_missing_unit.cnf";
@@ -1274,7 +1264,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn build_model_clause_by_clause() {
         let ddnnf_file_paths = vec![
             "tests/data/VP9.cnf",

@@ -60,7 +60,6 @@ impl Ddnnf {
 #[cfg(test)]
 mod test {
     use file_diff::diff_files;
-    use serial_test::serial;
     use std::fs::{self, File};
 
     use crate::parser::build_ddnnf;
@@ -100,7 +99,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn test_card_of_features_pd() {
         const PD_FILE: &str = "./tests/data/cof_pd.csv";
         const SHOULD_FILE: &str = "./tests/data/VP9_sb_fs.csv";

@@ -112,7 +112,6 @@ mod test {
     use super::FixedFifo;
     use crate::parser::build_ddnnf;
     use crate::parser::intermediate_representation::ClauseApplication;
-    use serial_test::serial;
     use std::{collections::HashSet, sync::Arc};
 
     #[test]
@@ -163,7 +162,6 @@ mod test {
 
     #[cfg(feature = "d4")]
     #[test]
-    #[serial]
     fn metrics() {
         let ddnnf_small_ex = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
         assert_eq!(12, ddnnf_small_ex.node_count());
@@ -177,7 +175,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn rebuild_ddnnf() {
         let mut ddnnfs = Vec::new();
         ddnnfs.push(build_ddnnf("tests/data/auto1_c2d.nnf", None));
@@ -203,7 +200,6 @@ mod test {
     }
 
     #[test]
-    #[serial]
     fn incremental_applying_clause() {
         let ddnnf_file_paths = vec![
             ("tests/data/small_ex_c2d.nnf", 4, vec![4]),
