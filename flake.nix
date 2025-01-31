@@ -150,7 +150,10 @@
 
           container = pkgs.dockerTools.buildLayeredImage {
             name = "ddnnife";
-            contents = [ self.packages.${system}.ddnnife-d4 ];
+            contents = [
+              self.packages.${system}.ddnnife-d4
+              (pkgs.runCommand "create-tmp" { } "install -dm 1777 $out/tmp")
+            ];
             config = {
               Entrypoint = [ "/bin/ddnnife" ];
               Labels = {
