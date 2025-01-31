@@ -5,9 +5,6 @@ use file_diff::diff_files;
 use std::fs::{self, File};
 use std::io::BufWriter;
 
-#[cfg(feature = "d4")]
-use serial_test::serial;
-
 #[test]
 fn card_of_features_c2d() {
     let c2d_out = "./tests/data/auto1_c2d_fs.csv";
@@ -38,7 +35,6 @@ fn card_of_features_d4() {
 
 #[cfg(feature = "d4")]
 #[test]
-#[serial]
 fn card_of_features_cnf() {
     let cnf_out = "./tests/data/auto1_cnf_fs.csv";
     let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1.cnf", None);
@@ -98,7 +94,6 @@ fn card_of_pc_d4() {
 
 #[cfg(feature = "d4")]
 #[test]
-#[serial]
 fn card_of_pc_cnf() {
     let cnf_out = "./tests/data/auto1_cnf_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
