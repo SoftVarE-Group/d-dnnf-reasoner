@@ -1,5 +1,4 @@
 use super::SatWrapper;
-use crate::util::format_vec;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 
@@ -39,7 +38,20 @@ impl Extend<i32> for Config {
 
 impl Display for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", format_vec(self.literals.iter()))
+        let last_index = self.literals.len() - 1;
+
+        self.literals
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, literal)| {
+                literal.fmt(f)?;
+
+                if index == last_index {
+                    return Ok(());
+                }
+
+                write!(f, " ")
+            })
     }
 }
 

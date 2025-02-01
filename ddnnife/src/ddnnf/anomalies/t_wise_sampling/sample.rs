@@ -2,6 +2,7 @@ use super::t_iterator::TInteractionIter;
 use super::Config;
 use std::cmp::{min, Ordering};
 use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 use std::iter;
 use streaming_iterator::StreamingIterator;
 
@@ -40,6 +41,22 @@ impl Extend<Config> for Sample {
         for config in iter {
             self.add(config);
         }
+    }
+}
+
+impl Display for Sample {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let last_index = self.len() - 1;
+
+        self.iter().enumerate().try_for_each(|(index, config)| {
+            config.fmt(f)?;
+
+            if index == last_index {
+                return Ok(());
+            }
+
+            writeln!(f)
+        })
     }
 }
 

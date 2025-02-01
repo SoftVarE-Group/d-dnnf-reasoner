@@ -1,5 +1,4 @@
 use super::Sample;
-use crate::util::format_vec_separated_by;
 use std::fmt;
 
 /// An abstraction over the result of sampling as it might be invalid or empty.
@@ -62,10 +61,9 @@ impl From<Sample> for SamplingResult {
 impl fmt::Display for SamplingResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SamplingResult::Empty | SamplingResult::Void => write!(f, ""),
-            SamplingResult::ResultWithSample(sample) => {
-                write!(f, "{}", format_vec_separated_by(sample.iter(), ";"))
-            }
+            SamplingResult::Empty => write!(f, "true"),
+            SamplingResult::Void => write!(f, "false"),
+            SamplingResult::ResultWithSample(sample) => sample.fmt(f),
         }
     }
 }
