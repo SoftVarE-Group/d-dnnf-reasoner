@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use ddnnife::ddnnf::anomalies::t_wise_sampling::SamplingResult;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::parser::{
@@ -277,28 +276,9 @@ fn main() {
                 }
             }
             Operation::TWise { t } => {
-                match ddnnf.sample_t_wise(*t) {
-                    /*
-                    Writing "true" and "false" to the file does not really fit the format of the file but we
-                    want to somehow distinguish between true and false sampling results.
-                    True means that the feature model contains no variables and therefore an empty sample
-                    covers all t-wise interactions.
-                    False means that the feature model is void.
-                    */
-                    SamplingResult::Empty => writer.write_all("true".as_bytes()).unwrap(),
-                    SamplingResult::Void => writer.write_all("false".as_bytes()).unwrap(),
-                    SamplingResult::ResultWithSample(sample) => {
-                        let mut csv_writer = csv::Writer::from_writer(writer);
-
-                        sample.iter().enumerate().for_each(|(index, config)| {
-                            csv_writer
-                                .serialize(&(index, format_vec(config.get_literals().iter())))
-                                .unwrap();
-                        });
-
-                        writer = csv_writer.into_inner().unwrap();
-                    }
-                }
+                writer
+                    .write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())
+                    .unwrap();
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Operation::Count { features } => {
