@@ -9,7 +9,7 @@ use num::{BigInt, BigRational, ToPrimitive, Zero};
 use once_cell::sync::Lazy;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use rand_distr::{Binomial, Distribution, WeightedAliasIndex};
+use rand_distr::{weighted::WeightedAliasIndex, Binomial, Distribution};
 use rand_pcg::{Lcg64Xsh32, Pcg32};
 
 use crate::Ddnnf;

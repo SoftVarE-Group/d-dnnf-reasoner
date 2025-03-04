@@ -4,9 +4,6 @@ use std::iter;
 #[cfg(any(feature = "deterministic", test))]
 use rand::prelude::{SeedableRng, StdRng};
 
-#[cfg(not(any(feature = "deterministic", test)))]
-use rand::thread_rng;
-
 pub fn format_vec_separated_by<T: ToString>(
     vals: impl Iterator<Item = T>,
     separator: &str,
@@ -39,7 +36,7 @@ pub fn rng() -> impl Rng {
 #[cfg(not(any(feature = "deterministic", test)))]
 #[inline]
 pub fn rng() -> impl Rng {
-    thread_rng()
+    rand::rng()
 }
 
 pub fn zip_assumptions_variables<'a>(
