@@ -449,7 +449,6 @@ dependencies = [
  "serde",
  "streaming-iterator",
  "tempfile",
- "uniffi",
  "workctl",
 ]
 
@@ -480,6 +479,16 @@ dependencies = [
  "clap",
  "ddnnife",
  "mimalloc",
+]
+
+[[package]]
+name = "ddnnife_ffi"
+version = "0.7.0"
+dependencies = [
+ "ddnnife",
+ "itertools",
+ "num",
+ "uniffi",
 ]
 
 [[package]]

@@ -10,7 +10,6 @@ use streaming_iterator::StreamingIterator;
 /// The sample differentiates between complete and partial configs.
 /// A config is complete (in the context of this sample) if it contains all variables this sample
 /// defines. Otherwise the config is partial.
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Sample {
     /// Configs that contain all variables of this sample

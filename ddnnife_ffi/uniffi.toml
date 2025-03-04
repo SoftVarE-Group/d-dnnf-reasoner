@@ -1,0 +1,20 @@
+[bindings.kotlin]
+package_name = "de.softvare.ddnnife"
+
+[bindings.python]
+cdylib_name = "ddnnife"
+
+[bindings.kotlin.custom_types.BigInt]
+type_name = "BigInteger"
+imports = ["java.math.BigInteger"]
+into_custom = "BigInteger({})"
+from_custom = "{}.toByteArray()"
+
+[bindings.python.custom_types.BigInt]
+into_custom = "int.from_bytes({}, 'big')"
+from_custom = "{}.to_bytes()"
+
+[bindings.kotlin.custom_types.HashSetu32]
+type_name = "HashSet<UInt>"
+into_custom = "HashSet({})"
+from_custom = "{}.toList()"
