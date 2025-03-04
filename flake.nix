@@ -9,7 +9,7 @@
     };
     crane.url = "github:ipetkov/crane/v0.20.0";
     d4 = {
-      url = "github:SoftVarE-Group/d4v2/2.1.1";
+      url = "github:SoftVarE-Group/d4v2/2.2.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
