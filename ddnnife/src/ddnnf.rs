@@ -23,7 +23,6 @@ type EditOperation = (Vec<Clause>, Vec<Clause>);
 
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct Ddnnf {
     /// An intermediate representation that can be changed without destroying the structure
     pub inter_graph: IntermediateGraph,
@@ -43,9 +42,7 @@ pub struct Ddnnf {
     pub max_worker: u16,
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl Default for Ddnnf {
-    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
     fn default() -> Self {
         Ddnnf {
             inter_graph: IntermediateGraph::default(),
@@ -58,42 +55,6 @@ impl Default for Ddnnf {
             number_of_variables: 0,
             max_worker: 4,
         }
-    }
-}
-
-#[cfg_attr(feature = "uniffi", uniffi::export)]
-impl Ddnnf {
-    /// Loads a d-DNNF from file.
-    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    fn from_file(path: String, features: Option<u32>) -> Self {
-        crate::parser::build_ddnnf(&path.clone(), features)
-    }
-
-    /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
-    ///
-    /// Panics when not including d4 as it is required for projected compilation.
-    #[cfg_attr(feature = "uniffi", uniffi::constructor)]
-    fn from_file_projected(path: String, features: Option<u32>) -> Self {
-        #[cfg(feature = "d4")]
-        return crate::parser::build_ddnnf_projected(&path.clone(), features);
-        #[cfg(not(feature = "d4"))]
-        panic!("d4 is required for projected compilation.");
-    }
-
-    /// Returns the current count of the root node in the d-DNNF.
-    ///
-    /// This value is the same during all computations.
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub fn rc(&self) -> BigInt {
-        self.nodes[self.nodes.len() - 1].count.clone()
-    }
-
-    /// Returns the core features of this d-DNNF.
-    ///
-    /// This is only calculated once at creation of the d-DNNF.
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
-    pub fn get_core(&self) -> HashSet<i32> {
-        self.core.clone()
     }
 }
 
@@ -126,6 +87,35 @@ impl Ddnnf {
         }
 
         ddnnf
+    }
+
+    /// Loads a d-DNNF from file.
+    pub fn from_file(path: String, features: Option<u32>) -> Self {
+        crate::parser::build_ddnnf(&path.clone(), features)
+    }
+
+    /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
+    ///
+    /// Panics when not including d4 as it is required for projected compilation.
+    pub fn from_file_projected(path: String, features: Option<u32>) -> Self {
+        #[cfg(feature = "d4")]
+        return crate::parser::build_ddnnf_projected(&path.clone(), features);
+        #[cfg(not(feature = "d4"))]
+        panic!("d4 is required for projected compilation.");
+    }
+
+    /// Returns the current count of the root node in the d-DNNF.
+    ///
+    /// This value is the same during all computations.
+    pub fn rc(&self) -> BigInt {
+        self.nodes[self.nodes.len() - 1].count.clone()
+    }
+
+    /// Returns the core features of this d-DNNF.
+    ///
+    /// This is only calculated once at creation of the d-DNNF.
+    pub fn get_core(&self) -> HashSet<i32> {
+        self.core.clone()
     }
 
     /// Checks if the creation of a cached state is valid.

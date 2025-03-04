@@ -5,7 +5,6 @@ build-backend = "maturin"
 [tool.maturin]
 profile = "release"
 bindings = "uniffi"
-features = ["uniffi"]
-manifest-path = "../../ddnnife/Cargo.toml"
+manifest-path = "../../ddnnife_ffi/Cargo.toml"
 frozen = true
 strip = true

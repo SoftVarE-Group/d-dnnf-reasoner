@@ -1,0 +1,20 @@
+[package]
+name = "ddnnife_ffi"
+description = "ddnnife FFI bindings"
+version = "0.7.0"
+authors = ["Heiko Raab <heiko.raab@uni-ulm-de>", "Chico Sundermann <chico.sundermann@uni-ulm.de>", "Jan Baudisch <jan.baudisch@uni-ulm.de>"]
+edition = "2021"
+license = "LGPL-3.0-or-later"
+workspace = ".."
+
+[lib]
+name = "ddnnife"
+crate-type = ["cdylib"]
+
+[features]
+d4 = ["ddnnife/d4"]
+
+[dependencies]
+ddnnife = { workspace = true }
+uniffi = { workspace = true }
+num = { workspace = true }

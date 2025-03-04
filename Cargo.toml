@@ -4,6 +4,7 @@ members = [
     "ddnnife_bin",
     "ddnnife_bindgen",
     "ddnnife_dhone",
+    "ddnnife_ffi",
 ]
 
 resolver = "2"
@@ -14,6 +15,7 @@ csv = "1"
 ddnnife = { path = "ddnnife" }
 log = "0.4"
 mimalloc = "0.1"
+num = "0.4"
 uniffi = { version = "0.29" }
 
 [profile.release]

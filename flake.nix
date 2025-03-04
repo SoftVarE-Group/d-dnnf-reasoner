@@ -96,8 +96,7 @@
 
           libAttrs = {
             name = "libddnnife";
-            component = "ddnnife";
-            library = true;
+            component = "ddnnife_ffi";
             test = false;
           };
         in
