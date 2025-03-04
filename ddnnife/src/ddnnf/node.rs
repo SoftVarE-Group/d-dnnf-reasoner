@@ -3,7 +3,6 @@ use NodeType::{And, False, Literal, Or, True};
 
 /// Represents all types of Nodes with its different parts
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Node {
     pub(crate) marker: bool,
     /// The cardinality of the node for the cardinality of a feature model
@@ -19,7 +18,6 @@ pub struct Node {
 }
 
 /// The Type of the Node declares how we handle the computation for the different types of cardinalities
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeType {
     /// The cardinality of an And node is always the product of its childs

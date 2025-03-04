@@ -1,72 +1,7 @@
-use crate::parser::persisting::write_ddnnf_to_file;
-use crate::util;
-use crate::{Ddnnf, UniffiCustomTypeConverter};
-use itertools::Itertools;
+use crate::Ddnnf;
+use ddnnife::util;
 use num::BigInt;
-use std::collections::HashSet;
 use std::sync::Mutex;
-
-uniffi::custom_type!(BigInt, Vec<u8>);
-
-impl UniffiCustomTypeConverter for BigInt {
-    type Builtin = Vec<u8>;
-
-    fn into_custom(value: Self::Builtin) -> uniffi::Result<Self> {
-        Ok(BigInt::from_signed_bytes_be(&value))
-    }
-
-    fn from_custom(custom: Self) -> Self::Builtin {
-        custom.to_signed_bytes_be()
-    }
-}
-
-uniffi::custom_type!(usize, u64);
-
-impl UniffiCustomTypeConverter for usize {
-    type Builtin = u64;
-
-    fn into_custom(value: Self::Builtin) -> uniffi::Result<Self> {
-        Ok(value as usize)
-    }
-
-    fn from_custom(custom: Self) -> Self::Builtin {
-        custom as u64
-    }
-}
-
-type HashSetu32 = HashSet<u32>;
-type Vecu32 = Vec<u32>;
-
-uniffi::custom_type!(HashSetu32, Vecu32);
-
-impl UniffiCustomTypeConverter for HashSet<u32> {
-    type Builtin = Vec<u32>;
-
-    fn into_custom(value: Self::Builtin) -> uniffi::Result<Self> {
-        Ok(value.into_iter().collect())
-    }
-
-    fn from_custom(custom: Self) -> Self::Builtin {
-        custom.into_iter().collect()
-    }
-}
-
-type HashSeti32 = HashSet<i32>;
-type Veci32 = Vec<i32>;
-
-uniffi::custom_type!(HashSeti32, Veci32);
-
-impl UniffiCustomTypeConverter for HashSet<i32> {
-    type Builtin = Vec<i32>;
-
-    fn into_custom(value: Self::Builtin) -> uniffi::Result<Self> {
-        Ok(value.into_iter().collect())
-    }
-
-    fn from_custom(custom: Self) -> Self::Builtin {
-        custom.into_iter().collect()
-    }
-}
 
 /// A mutable version of a d-DNNF, required for some computations.
 ///
@@ -75,21 +10,6 @@ impl UniffiCustomTypeConverter for HashSet<i32> {
 /// Converting into and out from the mutable version will create new instances.
 #[derive(uniffi::Object)]
 pub struct DdnnfMut(pub Mutex<Ddnnf>);
-
-#[uniffi::export]
-impl Ddnnf {
-    /// Creates a mutable copy of this d-DNNF.
-    #[uniffi::method]
-    fn as_mut(&self) -> DdnnfMut {
-        DdnnfMut(Mutex::new(self.clone()))
-    }
-
-    /// Saves this d-DNNF to the given file.
-    #[uniffi::method]
-    fn save(&self, path: &str) {
-        write_ddnnf_to_file(self, path).unwrap();
-    }
-}
 
 #[uniffi::export]
 impl DdnnfMut {
@@ -102,7 +22,7 @@ impl DdnnfMut {
     /// Computes the cardinality of this d-DNNF.
     #[uniffi::method]
     fn count(&self, assumptions: &[i32]) -> BigInt {
-        self.0.lock().unwrap().execute_query(assumptions)
+        self.0.lock().unwrap().0.execute_query(assumptions)
     }
 
     /// Computes the cardinality of this d-DNNF for multiple variables.
@@ -110,48 +30,54 @@ impl DdnnfMut {
     fn count_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<BigInt> {
         let mut ddnnf = self.0.lock().unwrap();
         util::zip_assumptions_variables(assumptions, variables)
-            .map(|assumptions| ddnnf.execute_query(&assumptions))
+            .map(|assumptions| ddnnf.0.execute_query(&assumptions))
             .collect()
     }
 
     /// Computes whether this d-DNNF is satisfiable.
     #[uniffi::method]
     fn is_sat(&self, assumptions: &[i32]) -> bool {
-        self.0.lock().unwrap().sat(assumptions)
+        self.0.lock().unwrap().0.sat(assumptions)
     }
 
     /// Computes the core features of this d-DNNF.
     #[uniffi::method]
     fn core(&self, assumptions: &[i32]) -> Vec<i32> {
-        self.0.lock().unwrap().core_with_assumptions(assumptions)
+        self.0.lock().unwrap().0.core_with_assumptions(assumptions)
     }
 
     /// Computes the core features of this d-DNNF for multiple variables.
     #[uniffi::method]
     fn core_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
         let mut ddnnf = self.0.lock().unwrap();
-        util::zip_assumptions_variables(assumptions, variables)
-            .flat_map(|assumptions| ddnnf.core_with_assumptions(&assumptions).into_iter())
-            .sorted()
-            .dedup()
-            .collect()
+
+        let mut core: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+            .flat_map(|assumptions| ddnnf.0.core_with_assumptions(&assumptions).into_iter())
+            .collect();
+
+        core.sort();
+        core.dedup();
+        core
     }
 
     /// Computes the dead features of this d-DNNF.
     #[uniffi::method]
     fn dead(&self, assumptions: &[i32]) -> Vec<i32> {
-        self.0.lock().unwrap().dead_with_assumptions(assumptions)
+        self.0.lock().unwrap().0.dead_with_assumptions(assumptions)
     }
 
     /// Computes the dead features of this d-DNNF for multiple variables.
     #[uniffi::method]
     fn dead_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
         let mut ddnnf = self.0.lock().unwrap();
-        util::zip_assumptions_variables(assumptions, variables)
-            .flat_map(|assumptions| ddnnf.dead_with_assumptions(&assumptions).into_iter())
-            .sorted()
-            .dedup()
-            .collect()
+
+        let mut dead: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+            .flat_map(|assumptions| ddnnf.0.dead_with_assumptions(&assumptions).into_iter())
+            .collect();
+
+        dead.sort();
+        dead.dedup();
+        dead
     }
 
     /// Generates satisfiable configurations for this d-DNNF.
@@ -161,6 +87,7 @@ impl DdnnfMut {
         self.0
             .lock()
             .unwrap()
+            .0
             .enumerate(&mut assumptions, amount)
             .unwrap_or_default()
     }
@@ -171,6 +98,7 @@ impl DdnnfMut {
         self.0
             .lock()
             .unwrap()
+            .0
             .uniform_random_sampling(assumptions, amount, seed)
             .unwrap_or_default()
     }
@@ -189,6 +117,7 @@ impl DdnnfMut {
         self.0
             .lock()
             .unwrap()
+            .0
             .get_atomic_sets(candidates, assumptions, cross)
     }
 }

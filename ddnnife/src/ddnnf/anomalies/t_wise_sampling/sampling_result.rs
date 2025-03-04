@@ -2,7 +2,6 @@ use super::Sample;
 use std::fmt;
 
 /// An abstraction over the result of sampling as it might be invalid or empty.
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SamplingResult {
     /// An empty result that is *valid* (a regular sample containing 0 configurations).
