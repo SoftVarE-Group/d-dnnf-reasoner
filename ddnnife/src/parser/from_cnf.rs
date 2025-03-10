@@ -15,6 +15,7 @@ use std::cmp::max;
 use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::process::exit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,7 +71,7 @@ fn lex_comment(line: &str) -> IResult<&str, CNFToken> {
 
 /// Appends the given clause to the CNF file. This function also updates the Header by incrementing
 /// the number of clauses as well as the number of variables if necessary.
-pub fn add_clause_cnf(path: &str, clause: &[i32]) {
+pub fn add_clause_cnf(path: &Path, clause: &[i32]) {
     let file = File::open(path).unwrap();
     let lines = BufReader::new(file).lines();
     let mut manipulated_cnf = Vec::new();
@@ -124,7 +125,7 @@ pub fn remove_tail_clauses_cnf(path: &str, total_features: Option<usize>, amount
 }
 
 /// Removes a specific clause from the CNF. Also removes duplicates. Does update the Header accordingly.
-pub fn remove_clause_cnf(path: &str, clause: &[i32], total_features: Option<usize>) {
+pub fn remove_clause_cnf(path: &Path, clause: &[i32], total_features: Option<usize>) {
     let mut file = File::open(path).unwrap();
     let lines = BufReader::new(file).lines();
     let mut manipulated_cnf = Vec::new();
@@ -152,7 +153,7 @@ pub fn remove_clause_cnf(path: &str, clause: &[i32], total_features: Option<usiz
 }
 
 /// Reads a CNF file and returns all the contained clauses.
-pub fn get_all_clauses_cnf(path: &str) -> Vec<Vec<i32>> {
+pub fn get_all_clauses_cnf(path: &Path) -> Vec<Vec<i32>> {
     let file = File::open(path).unwrap();
     let lines = BufReader::new(file).lines();
     let mut clauses = Vec::new();

@@ -4,11 +4,12 @@ use ddnnife::parser;
 use file_diff::diff_files;
 use std::fs::{self, File};
 use std::io::BufWriter;
+use std::path::Path;
 
 #[test]
 fn card_of_features_c2d() {
-    let c2d_out = "./tests/data/auto1_c2d_fs.csv";
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
+    let c2d_out = Path::new("./tests/data/auto1_c2d_fs.csv");
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
     ddnnf.card_of_each_feature_csv(c2d_out).unwrap_or_default();
 
     let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
@@ -21,8 +22,8 @@ fn card_of_features_c2d() {
 
 #[test]
 fn card_of_features_d4() {
-    let d4_out = "./tests/data/auto1_d4_fs.csv";
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
+    let d4_out = Path::new("./tests/data/auto1_d4_fs.csv");
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1_d4.nnf"), Some(2513));
     ddnnf.card_of_each_feature_csv(d4_out).unwrap_or_default();
 
     let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
@@ -36,8 +37,8 @@ fn card_of_features_d4() {
 #[cfg(feature = "d4")]
 #[test]
 fn card_of_features_cnf() {
-    let cnf_out = "./tests/data/auto1_cnf_fs.csv";
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1.cnf", None);
+    let cnf_out = Path::new("./tests/data/auto1_cnf_fs.csv");
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1.cnf"), None);
     ddnnf.card_of_each_feature_csv(cnf_out).unwrap_or_default();
 
     let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
@@ -52,11 +53,11 @@ fn card_of_features_cnf() {
 fn card_of_pc_c2d() {
     let c2d_out = "./tests/data/auto1_c2d_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
-    let config_file = "./tests/data/auto1.config";
+    let config_file = Path::new("./tests/data/auto1.config");
 
     let output = BufWriter::new(File::create(c2d_out).expect("Unable to create file"));
 
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("tests/data/auto1_c2d.nnf", None);
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1_c2d.nnf"), None);
     ddnnf.max_worker = 1;
     ddnnf
         .operate_on_queries(Ddnnf::execute_query, config_file, output)
@@ -74,11 +75,11 @@ fn card_of_pc_c2d() {
 fn card_of_pc_d4() {
     let d4_out = "./tests/data/auto1_d4_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
-    let config_file = "./tests/data/auto1.config";
+    let config_file = Path::new("./tests/data/auto1.config");
 
     let output = BufWriter::new(File::create(d4_out).expect("Unable to create file"));
 
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
     ddnnf.max_worker = 1;
     ddnnf
         .operate_on_queries(Ddnnf::execute_query, config_file, output)
@@ -97,11 +98,11 @@ fn card_of_pc_d4() {
 fn card_of_pc_cnf() {
     let cnf_out = "./tests/data/auto1_cnf_pc.csv";
     let sb_file_path = "./tests/data/auto1_sb_pc.csv";
-    let config_file = "./tests/data/auto1.config";
+    let config_file = Path::new("./tests/data/auto1.config");
 
     let output = BufWriter::new(File::create(cnf_out).expect("Unable to create file"));
 
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("tests/data/auto1.cnf", None);
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1.cnf"), None);
     ddnnf.max_worker = 1;
     ddnnf
         .operate_on_queries(Ddnnf::execute_query, config_file, output)
@@ -117,7 +118,7 @@ fn card_of_pc_cnf() {
 
 #[test]
 fn statistics() {
-    let ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_c2d.nnf", None);
+    let ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
 
     assert_eq!(
         Statistics::from(&ddnnf),

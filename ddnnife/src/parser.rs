@@ -46,10 +46,11 @@ type DdnnfGraph = StableGraph<TId, ()>;
 /// # Examples
 ///
 /// ```
+/// use std::path::Path;
 /// use ddnnife::parser;
 /// use ddnnife::Ddnnf;
 ///
-/// let file_path = "./tests/data/small_ex_c2d.nnf";
+/// let file_path = Path::new("./tests/data/small_ex_c2d.nnf");
 ///
 /// let ddnnfx: Ddnnf = parser::build_ddnnf(file_path, None);
 /// ```
@@ -59,7 +60,7 @@ type DdnnfGraph = StableGraph<TId, ()>;
 /// The function panics for an invalid file path.
 #[inline]
 #[allow(unused_mut)]
-pub fn build_ddnnf(path: &str, mut total_features: Option<u32>) -> Ddnnf {
+pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
     let mut cnf_path = None;
     let mut ddnnf = File::open(path).expect("Failed to open input file.");
     let mut clauses: BTreeSet<BTreeSet<i32>> = BTreeSet::new();
@@ -81,7 +82,9 @@ pub fn build_ddnnf(path: &str, mut total_features: Option<u32>) -> Ddnnf {
                                 .expect("Failed to create temporary d-DNNF file.");
 
                             d4_oxide::compile_ddnnf(
-                                path.to_string(),
+                                path.to_str()
+                                    .expect("Failed to serialize path.")
+                                    .to_string(),
                                 temporary_ddnnf
                                     .path()
                                     .to_str()
@@ -122,11 +125,13 @@ pub fn build_ddnnf(path: &str, mut total_features: Option<u32>) -> Ddnnf {
 
 #[cfg(feature = "d4")]
 #[inline]
-pub fn build_ddnnf_projected(path: &str, total_features: Option<u32>) -> Ddnnf {
+pub fn build_ddnnf_projected(path: &Path, total_features: Option<u32>) -> Ddnnf {
     let temporary_ddnnf = NamedTempFile::new().expect("Failed to create temporary d-DNNF file.");
 
     d4_oxide::compile_ddnnf_proj(
-        path.to_string(),
+        path.to_str()
+            .expect("Failed to serialize path.")
+            .to_string(),
         temporary_ddnnf
             .path()
             .to_str()
@@ -153,7 +158,7 @@ pub fn build_ddnnf_projected(path: &str, total_features: Option<u32>) -> Ddnnf {
 pub fn distribute_building(
     lines: Vec<String>,
     total_features: Option<u32>,
-    cnf_path: Option<&str>,
+    cnf_path: Option<&Path>,
 ) -> Ddnnf {
     use C2DToken::*;
 
@@ -249,7 +254,7 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
 fn build_d4_ddnnf(
     lines: Vec<String>,
     total_features_opt: Option<u32>,
-    cnf_path: Option<&str>,
+    cnf_path: Option<&Path>,
 ) -> Ddnnf {
     let mut ddnnf_graph = DdnnfGraph::new();
 
@@ -610,9 +615,10 @@ fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
 ///
 /// # Example
 /// ```
+/// use std::path::Path;
 /// use ddnnife::parser::parse_queries_file;
 ///
-/// let config_path = "./tests/data/auto1.config";
+/// let config_path = Path::new("./tests/data/auto1.config");
 /// let queries: Vec<(usize, Vec<i32>)> = parse_queries_file(config_path);
 ///
 /// assert_eq!((0, vec![1044, 885]), queries[0]);
@@ -622,7 +628,7 @@ fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
 /// # Panic
 ///
 /// Panics for a path to a non existing file
-pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
+pub fn parse_queries_file(path: &Path) -> Vec<(usize, Vec<i32>)> {
     let file = open_file_savely(path);
 
     let lines = BufReader::new(file)
@@ -642,7 +648,7 @@ pub fn parse_queries_file(path: &str) -> Vec<(usize, Vec<i32>)> {
     parsed_queries
 }
 
-pub fn build_attributes(path: &str) -> HashMap<String, Attribute> {
+pub fn build_attributes(path: &Path) -> HashMap<String, Attribute> {
     let file = open_file_savely(path);
     let mut reader = ReaderBuilder::new()
         .has_headers(true)
@@ -744,14 +750,14 @@ pub fn build_attributes(path: &str) -> HashMap<String, Attribute> {
 
 /// Tries to open a file.
 /// If an error occurs the program prints the error and exists.
-pub fn open_file_savely(path: &str) -> File {
+pub fn open_file_savely(path: &Path) -> File {
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
     match File::open(path) {
         Ok(x) => x,
         Err(err) => {
             // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-            error!("The following error code occured while trying to open the file {}:\n{}\nAborting...", path, err);
+            error!("The following error code occured while trying to open the file {}:\n{}\nAborting...", path.to_str().expect("Failed to serialize path."), err);
             process::exit(1);
         }
     }

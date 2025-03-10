@@ -223,10 +223,11 @@ impl ExtendedDdnnf {
 mod test {
     use super::*;
     use crate::parser::{build_attributes, build_ddnnf};
+    use std::path::Path;
 
     pub fn build_sandwich_ext_ddnnf() -> ExtendedDdnnf {
-        let ddnnf = build_ddnnf("tests/data/sandwich.nnf", Some(19));
-        let attributes = build_attributes("tests/data/sandwich_attribute_vals.csv");
+        let ddnnf = build_ddnnf(Path::new("tests/data/sandwich.nnf"), Some(19));
+        let attributes = build_attributes(Path::new("tests/data/sandwich_attribute_vals.csv"));
         ExtendedDdnnf::new(ddnnf, attributes)
     }
 

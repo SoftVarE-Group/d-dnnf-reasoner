@@ -1,5 +1,13 @@
 mod fixed_fifo;
 
+use itertools::{Either, Itertools};
+use petgraph::{
+    algo::is_cyclic_directed,
+    stable_graph::NodeIndex,
+    visit::{Dfs, DfsPostOrder, NodeIndexable},
+    Direction::{Incoming, Outgoing},
+};
+use std::path::Path;
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -7,14 +15,6 @@ use std::{
     ops::Not,
     panic,
     sync::Arc,
-};
-
-use itertools::{Either, Itertools};
-use petgraph::{
-    algo::is_cyclic_directed,
-    stable_graph::NodeIndex,
-    visit::{Dfs, DfsPostOrder, NodeIndexable},
-    Direction::{Incoming, Outgoing},
 };
 
 use self::fixed_fifo::{ConflictFn, FixedFifo};
@@ -143,7 +143,7 @@ impl IntermediateGraph {
         number_of_variables: u32,
         literals_nx: HashMap<i32, NodeIndex>,
         literal_children: HashMap<NodeIndex, HashSet<i32>>,
-        cnf_path: Option<&str>,
+        cnf_path: Option<&Path>,
     ) -> IntermediateGraph {
         debug_assert!(!is_cyclic_directed(&graph));
         let mut inter_graph = IntermediateGraph {
@@ -595,7 +595,7 @@ impl IntermediateGraph {
                 .unwrap();
         }
 
-        let sup = build_ddnnf(inter_cnf.path().to_str().unwrap(), None);
+        let sup = build_ddnnf(inter_cnf.path(), None);
         self.switch_sub_dag(edit, Either::Right(sup.inter_graph));
 
         self.rebuild(None);
@@ -667,7 +667,7 @@ impl IntermediateGraph {
         let cnf_flat = cnf.join("");
         inter_cnf.write_all(cnf_flat.as_bytes()).unwrap();
 
-        let mut sup = build_ddnnf(inter_cnf.path().to_str().unwrap(), None);
+        let mut sup = build_ddnnf(inter_cnf.path(), None);
 
         // reindex the new sub DAG
         let mut dfs = DfsPostOrder::new(&sup.inter_graph.graph, sup.inter_graph.root);
@@ -881,14 +881,6 @@ impl IntermediateGraph {
 #[cfg(feature = "d4")]
 #[cfg(test)]
 mod test {
-    use num::BigInt;
-    use rand::rngs::StdRng;
-    use std::{
-        collections::HashSet,
-        fs::{self, File},
-        io::Write,
-    };
-
     use crate::{
         parser::{
             build_ddnnf,
@@ -896,6 +888,14 @@ mod test {
             intermediate_representation::ClauseApplication,
         },
         Ddnnf,
+    };
+    use num::BigInt;
+    use rand::rngs::StdRng;
+    use std::path::Path;
+    use std::{
+        collections::HashSet,
+        fs::{self, File},
+        io::Write,
     };
 
     use super::{IncrementalEdit, IncrementalStrategy};
@@ -953,7 +953,7 @@ mod test {
             }
         };
 
-        let ddnnf_vp9 = build_ddnnf("tests/data/VP9.cnf", Some(42));
+        let ddnnf_vp9 = build_ddnnf(Path::new("tests/data/VP9.cnf"), Some(42));
         let input_vp9 = vec![
             vec![],
             vec![4],
@@ -977,8 +977,7 @@ mod test {
 
     fn check_for_cardinality_correctness(path: &str, break_point: usize) {
         let temp_file = tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
-        let temp_file_path_buf = temp_file.path().to_path_buf();
-        let temp_file_path = temp_file_path_buf.to_str().unwrap();
+        let temp_file_path = temp_file.path();
         fs::copy(path, temp_file_path).unwrap();
 
         let mut clauses = get_all_clauses_cnf(temp_file_path);
@@ -987,7 +986,7 @@ mod test {
         use rand::prelude::SliceRandom;
         clauses.shuffle(&mut rng);
 
-        let mut ddnnf_w = build_ddnnf(temp_file_path, None);
+        let mut ddnnf_w = build_ddnnf(&temp_file_path, None);
         let mut card_of_features_w: Vec<BigInt> = Vec::new();
         for feature in 1_i32..ddnnf_w.number_of_variables as i32 {
             card_of_features_w.push(ddnnf_w.execute_query(&[feature]));
@@ -1071,7 +1070,7 @@ mod test {
         check_for_cardinality_correctness("tests/data/auto1.cnf", 10);
     }
 
-    fn assert_cardinalities(ddnnf: &mut Ddnnf, temp_file_path: &str) {
+    fn assert_cardinalities(ddnnf: &mut Ddnnf, temp_file_path: &Path) {
         let mut ddnnf_control = build_ddnnf(temp_file_path, None);
         for feature in 1_i32..ddnnf.number_of_variables as i32 {
             assert_eq!(
@@ -1093,8 +1092,7 @@ mod test {
             println!("***************** Model {path} *****************");
 
             let temp_file = tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
-            let temp_file_path_buf = temp_file.path().to_path_buf();
-            let temp_file_path = temp_file_path_buf.to_str().unwrap();
+            let temp_file_path = temp_file.path();
             fs::copy(path, temp_file_path).unwrap();
 
             let mut ddnnf = build_ddnnf(temp_file_path, None);
@@ -1140,8 +1138,7 @@ mod test {
             println!("***************** Model {path} *****************");
 
             let temp_file = tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
-            let temp_file_path_buf = temp_file.path().to_path_buf();
-            let temp_file_path = temp_file_path_buf.to_str().unwrap();
+            let temp_file_path = temp_file.path();
             fs::copy(path, temp_file_path).unwrap();
 
             for clause in get_all_clauses_cnf(temp_file_path).into_iter() {
@@ -1176,8 +1173,8 @@ mod test {
     #[test]
     fn incremental_adding_clause() {
         let ddnnf_file_paths = vec![(
-            "tests/data/VP9.cnf",
-            "tests/data/VP9_wo_-4-5.cnf",
+            Path::new("tests/data/VP9.cnf"),
+            Path::new("tests/data/VP9_wo_-4-5.cnf"),
             42,
             vec![-4, -5],
         )];
@@ -1208,7 +1205,7 @@ mod test {
 
     #[test]
     fn adding_new_features() {
-        let mut ddnnf = build_ddnnf("tests/data/small_ex.cnf", None);
+        let mut ddnnf = build_ddnnf(Path::new("tests/data/small_ex.cnf"), None);
         assert_eq!(4, ddnnf.number_of_variables);
         assert_eq!(BigInt::from(4), ddnnf.rc());
 
@@ -1230,13 +1227,13 @@ mod test {
     #[test]
     fn adding_unit_clause() {
         // small example, missing the "1 0" unit clause
-        const CNF_PATH: &str = "tests/data/.small_missing_unit.cnf";
+        let cnf_path = Path::new("tests/data/.small_missing_unit.cnf");
         let cnf_flat = "p cnf 4 2\n2 3 0\n-2 -3 0\n";
-        let mut cnf_file = File::create(CNF_PATH).unwrap();
+        let mut cnf_file = File::create(cnf_path).unwrap();
         cnf_file.write_all(cnf_flat.as_bytes()).unwrap();
 
-        let mut ddnnf_sb = build_ddnnf("tests/data/small_ex_c2d.nnf", Some(4));
-        let mut ddnnf_missing_clause1 = build_ddnnf(CNF_PATH, None);
+        let mut ddnnf_sb = build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), Some(4));
+        let mut ddnnf_missing_clause1 = build_ddnnf(Path::new(cnf_path), None);
         let mut ddnnf_missing_clause2 = ddnnf_missing_clause1.clone();
 
         ddnnf_missing_clause1.inter_graph.add_unit_clause(1); // add the unit clause directly
@@ -1260,22 +1257,21 @@ mod test {
         assert_eq!(sb_enumeration, ms1_enumeration);
         assert_eq!(sb_enumeration, ms2_enumeration);
 
-        fs::remove_file(CNF_PATH).unwrap();
+        fs::remove_file(cnf_path).unwrap();
     }
 
     #[test]
     fn build_model_clause_by_clause() {
         let ddnnf_file_paths = vec![
-            "tests/data/VP9.cnf",
-            "tests/data/X264.cnf",
-            "tests/data/HiPAcc.cnf",
+            Path::new("tests/data/VP9.cnf"),
+            Path::new("tests/data/X264.cnf"),
+            Path::new("tests/data/HiPAcc.cnf"),
         ];
 
         for ddnnf_file_path in ddnnf_file_paths {
             let mut temp_file = tempfile::Builder::new().suffix(".cnf").tempfile().unwrap();
-            let temp_file_path_buf = temp_file.path().to_path_buf();
-            let temp_file_path = temp_file_path_buf.to_str().unwrap();
             temp_file.write_all("p cnf 0 0\n".as_bytes()).unwrap();
+            let temp_file_path = temp_file.path();
 
             fn check_empirical_equivalence(ddnnf_target: &mut Ddnnf, other: &mut Ddnnf) {
                 for feature in 1_i32..ddnnf_target.number_of_variables as i32 {

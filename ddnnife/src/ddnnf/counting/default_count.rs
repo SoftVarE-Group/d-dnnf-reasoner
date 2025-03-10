@@ -92,13 +92,14 @@ impl Ddnnf {
 #[cfg(test)]
 mod test {
     use crate::parser::build_ddnnf;
+    use std::path::Path;
 
     use super::*;
 
     #[test]
     fn operate_on_single_feature() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         for i in 1..=vp9.number_of_variables as i32 {
             assert_eq!(

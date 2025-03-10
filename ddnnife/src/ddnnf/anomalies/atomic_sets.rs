@@ -289,6 +289,7 @@ fn sort_and_clean_atomicsets(atomic_sets: &mut Vec<Vec<i16>>) {
 mod test {
     use super::*;
     use crate::parser::build_ddnnf;
+    use std::path::Path;
     use std::{collections::HashSet, iter::FromIterator};
 
     #[test]
@@ -338,9 +339,9 @@ mod test {
     #[test]
     fn brute_force_wo_cross() {
         let ddnnfs: Vec<Ddnnf> = vec![
-            build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
-            build_ddnnf("tests/data/KC_axTLS.cnf", None),
-            build_ddnnf("tests/data/toybox.cnf", None),
+            build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42)),
+            build_ddnnf(Path::new("tests/data/KC_axTLS.cnf"), None),
+            build_ddnnf(Path::new("tests/data/toybox.cnf"), None),
         ];
 
         for mut ddnnf in ddnnfs {
@@ -357,9 +358,9 @@ mod test {
     #[test]
     fn brute_force_cross() {
         let ddnnfs: Vec<Ddnnf> = vec![
-            build_ddnnf("tests/data/VP9_d4.nnf", Some(42)),
-            build_ddnnf("tests/data/KC_axTLS.cnf", None),
-            build_ddnnf("tests/data/toybox.cnf", None),
+            build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42)),
+            build_ddnnf(Path::new("tests/data/KC_axTLS.cnf"), None),
+            build_ddnnf(Path::new("tests/data/toybox.cnf"), None),
         ];
 
         for mut ddnnf in ddnnfs {
@@ -395,7 +396,7 @@ mod test {
 
     #[test]
     fn atomic_sets_vp9() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         // make sure that the results are reproducible
         for _ in 0..3 {
@@ -418,7 +419,7 @@ mod test {
 
     #[test]
     fn atomic_sets_auto1() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         // ensure reproducible
         for _ in 0..3 {
@@ -463,8 +464,8 @@ mod test {
 
     #[test]
     fn empty_candidates() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.get_atomic_sets(Some(vec![]), &[], false).is_empty());
         assert!(auto1.get_atomic_sets(Some(vec![]), &[], false).is_empty());
@@ -472,7 +473,7 @@ mod test {
 
     #[test]
     fn candidates_and_assumptions_for_core() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let vp9_default_as = vp9.get_atomic_sets(None, &[], false);
         let vp9_core = vp9.core.clone().into_iter().collect_vec();
@@ -505,7 +506,7 @@ mod test {
 
     #[test]
     fn candidates_and_assumptions() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
         let assumptions = vec![10, 20, 35];
         let atomic_sets = auto1
             .get_atomic_sets(Some((1..=50).collect_vec()), &[10, 20, 35], false)

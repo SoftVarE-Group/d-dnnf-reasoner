@@ -88,11 +88,7 @@ impl ClauseCache {
             .tempfile()
             .expect("Failed to create a temporary file");
 
-        let temp_path = temp_file
-            .path()
-            .to_str()
-            .expect("Failed to convert path to string while trying to save as CNF!");
-
+        let temp_path = temp_file.path();
         write_cnf_to_file(&self.clauses, self.total_features.unwrap(), temp_path)
             .expect("Failed to save updated CNF to file");
 

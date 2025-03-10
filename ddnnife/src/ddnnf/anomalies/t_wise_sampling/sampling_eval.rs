@@ -148,9 +148,9 @@ mod test {
     fn compare_sampling() {
         let mut rng = StdRng::seed_from_u64(1337);
         let n_features = 998;
-        let vp9: Ddnnf = build_ddnnf("tests/data/busybox_1_28_0.dimacs.nnf", Some(n_features));
+        let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/busybox_1_28_0.dimacs.nnf"), Some(n_features));
         // let n_features = 42;
-        // let vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(n_features));
+        // let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(n_features));
         let mut ext_ddnnf = ExtendedDdnnf {
             ddnnf: vp9,
             attrs: Default::default(),

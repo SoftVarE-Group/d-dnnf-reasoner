@@ -140,13 +140,13 @@ impl ExtendedDdnnf {
 
 #[cfg(test)]
 mod test {
-    use itertools::Itertools;
-    use std::collections::HashSet;
-
     use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
     use crate::ddnnf::anomalies::t_wise_sampling::Sample;
     use crate::ddnnf::extended_ddnnf::optimal_configs::test::build_sandwich_ext_ddnnf_with_objective_function_values;
     use crate::{parser::build_ddnnf, Ddnnf};
+    use itertools::Itertools;
+    use std::collections::HashSet;
+    use std::path::Path;
     use streaming_iterator::StreamingIterator;
 
     fn check_validity_of_sample(sample: &Sample, ddnnf: &Ddnnf, t: usize) {
@@ -187,7 +187,7 @@ mod test {
 
     #[test]
     fn ddnnf_t_wise_sampling_validity_small_model() {
-        let vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         for t in 1..=4 {
             check_validity_of_sample(vp9.sample_t_wise(t).get_sample().unwrap(), &vp9, t);
@@ -196,7 +196,7 @@ mod test {
 
     #[test]
     fn ddnnf_t_wise_sampling_validity_big_model() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
         let t = 1;
 
         check_validity_of_sample(auto1.sample_t_wise(t).get_sample().unwrap(), &mut auto1, t);

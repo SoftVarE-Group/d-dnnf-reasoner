@@ -3,20 +3,21 @@ use ddnnife::parser::{self, persisting::write_ddnnf_to_file};
 use file_diff::diff_files;
 use std::fs;
 use std::fs::File;
+use std::path::Path;
 
 #[test]
 fn card_of_features_normal_and_reloaded_test() {
     // default way to compute card of features with a d-DNNF in d4 standard
-    let d4_out = "./tests/data/auto1_d4_fs.csv";
-    let mut ddnnf: Ddnnf = parser::build_ddnnf("./tests/data/auto1_d4.nnf", Some(2513));
+    let d4_out = Path::new("./tests/data/auto1_d4_fs.csv");
+    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1_d4.nnf"), Some(2513));
     ddnnf.card_of_each_feature_csv(d4_out).unwrap_or_default();
 
     // save nnf in c2d format
-    let saved_nnf = "./tests/data/auto1_d4_to_c2d.nnf";
+    let saved_nnf = Path::new("./tests/data/auto1_d4_to_c2d.nnf");
     write_ddnnf_to_file(&ddnnf, saved_nnf).unwrap();
 
     // compute the cardinality of features for the saved file
-    let saved_out = "./tests/data/auto1_d4_to_c2d_fs.csv";
+    let saved_out = Path::new("./tests/data/auto1_d4_to_c2d_fs.csv");
     let mut ddnnf: Ddnnf = parser::build_ddnnf(saved_nnf, None);
     ddnnf
         .card_of_each_feature_csv(saved_out)

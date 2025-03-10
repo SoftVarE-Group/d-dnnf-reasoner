@@ -9,6 +9,7 @@ use ddnnife::util::format_vec;
 use log::info;
 use std::fs::File;
 use std::io::{self, stdout, BufRead, BufReader, BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 #[global_allocator]
@@ -19,11 +20,11 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 struct Cli {
     /// Input path, stdin when not given.
     #[arg(short, long)]
-    input: Option<String>,
+    input: Option<PathBuf>,
 
     /// Output path, stdout when not given.
     #[arg(short, long)]
-    output: Option<String>,
+    output: Option<PathBuf>,
 
     /// Choose one of the available
     #[clap(subcommand)]
@@ -36,7 +37,7 @@ struct Cli {
 
     /// Save the smooth ddnnf in the c2d format.
     #[arg(long)]
-    save_ddnnf: Option<String>,
+    save_ddnnf: Option<PathBuf>,
 
     /// Whether to use projected d-DNNF compilation for the input.
     #[cfg(feature = "d4")]
@@ -70,7 +71,7 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        queries_input_file: String,
+        queries_input_file: PathBuf,
         /// Specify how many threads should be used.
         /// Possible values are between 1 and 32.
         #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4)]
@@ -81,7 +82,7 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        queries_input_file: String,
+        queries_input_file: PathBuf,
         /// Specify how many threads should be used.
         /// Possible values are between 1 and 32.
         #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4)]
@@ -100,7 +101,7 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        queries_input_file: String,
+        queries_input_file: PathBuf,
     },
     /// Computes t-wise samples
     TWise {
@@ -386,14 +387,14 @@ fn main() {
         write_ddnnf_to_file(&ddnnf, &path).unwrap();
         info!(
             "The smooth d-DNNF was written into the c2d format in {}.",
-            path
+            path.to_str().expect("Failed to serialize path.")
         );
     }
 }
 
 fn compute_queries<T: ToString + Ord + Send + 'static>(
     ddnnf: &mut Ddnnf,
-    queries_file: &str,
+    queries_file: &Path,
     output: impl Write,
     operation: fn(&mut Ddnnf, query: &[i32]) -> T,
 ) {

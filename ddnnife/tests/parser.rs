@@ -1,12 +1,14 @@
 use ddnnife::ddnnf::{node::NodeType::*, Ddnnf};
 use ddnnife::parser;
 use num::BigInt;
+use std::path::Path;
 
 #[test]
 fn ddnnf_parsing_test() {
-    let ddnnf_d4: Ddnnf = parser::build_ddnnf("./tests/data/small_ex_d4.nnf", Some(4));
+    let ddnnf_d4: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/small_ex_d4.nnf"), Some(4));
 
-    let mut ddnnf_c2d: Ddnnf = parser::build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
+    let mut ddnnf_c2d: Ddnnf =
+        parser::build_ddnnf(Path::new("./tests/data/small_ex_c2d.nnf"), None);
 
     assert_eq!(ddnnf_c2d.number_of_variables, 4);
     assert_eq!(ddnnf_c2d.rc(), BigInt::from(4));

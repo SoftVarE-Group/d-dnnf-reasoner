@@ -92,13 +92,14 @@ pub fn new_sat_mark_state(number_of_nodes: usize) -> Vec<bool> {
 mod test {
     use crate::parser::build_ddnnf;
     use num::BigInt;
+    use std::path::Path;
 
     use super::*;
 
     #[test]
     fn sat_urs() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         // Uniform random samples produce an SATISFIABLE complete configuration.
         for sample in vp9.uniform_random_sampling(&[], 1000, 42).unwrap().iter() {
@@ -111,8 +112,8 @@ mod test {
 
     #[test]
     fn sat_card_of_features() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         // If the count is greater than zero, there has to be at least on satisfiable configuration.
         // Vice versa, if the count is equal to zero, the query should be identified as unsatisfiable.
