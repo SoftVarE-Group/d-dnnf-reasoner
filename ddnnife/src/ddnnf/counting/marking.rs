@@ -242,10 +242,11 @@ impl Ddnnf {
 #[cfg(test)]
 mod test {
     use crate::parser::build_ddnnf;
+    use std::path::Path;
 
     #[test]
     fn marking_nodes() {
-        let mut ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        let mut ddnnf = build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), None);
 
         ddnnf.mark_assumptions(&[0]);
         assert_eq!(vec![11], ddnnf.md);

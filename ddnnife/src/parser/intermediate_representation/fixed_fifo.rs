@@ -112,6 +112,7 @@ mod test {
     use super::FixedFifo;
     use crate::parser::build_ddnnf;
     use crate::parser::intermediate_representation::ClauseApplication;
+    use std::path::Path;
     use std::{collections::HashSet, sync::Arc};
 
     #[test]
@@ -163,12 +164,12 @@ mod test {
     #[cfg(feature = "d4")]
     #[test]
     fn metrics() {
-        let ddnnf_small_ex = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        let ddnnf_small_ex = build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), None);
         assert_eq!(12, ddnnf_small_ex.node_count());
         assert_eq!(11, ddnnf_small_ex.edge_count());
         assert!((1.0 - ddnnf_small_ex.sharing()).abs() < 1e-7);
 
-        let ddnnf_x264 = build_ddnnf("tests/data/VP9.cnf", None);
+        let ddnnf_x264 = build_ddnnf(Path::new("tests/data/VP9.cnf"), None);
         assert_eq!(148, ddnnf_x264.node_count());
         assert_eq!(185, ddnnf_x264.edge_count());
         assert!((148.0 / (185.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
@@ -177,10 +178,13 @@ mod test {
     #[test]
     fn rebuild_ddnnf() {
         let mut ddnnfs = Vec::new();
-        ddnnfs.push(build_ddnnf("tests/data/auto1_c2d.nnf", None));
-        ddnnfs.push(build_ddnnf("tests/data/auto1_d4.nnf", Some(2513)));
-        ddnnfs.push(build_ddnnf("tests/data/VP9_d4.nnf", Some(42)));
-        ddnnfs.push(build_ddnnf("tests/data/small_ex_c2d.nnf", None));
+        ddnnfs.push(build_ddnnf(Path::new("tests/data/auto1_c2d.nnf"), None));
+        ddnnfs.push(build_ddnnf(
+            Path::new("tests/data/auto1_d4.nnf"),
+            Some(2513),
+        ));
+        ddnnfs.push(build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42)));
+        ddnnfs.push(build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), None));
 
         for ddnnf in ddnnfs {
             let mut rebuild_clone = ddnnf.clone();
@@ -202,8 +206,8 @@ mod test {
     #[test]
     fn incremental_applying_clause() {
         let ddnnf_file_paths = vec![
-            ("tests/data/small_ex_c2d.nnf", 4, vec![4]),
-            //("tests/data/VP9_d4.nnf", 42, vec![vec![4, 5]])
+            (Path::new("tests/data/small_ex_c2d.nnf"), 4, vec![4]),
+            //(Path::new("tests/data/VP9_d4.nnf"), 42, vec![vec![4, 5]])
         ];
 
         for (path, features, clause) in ddnnf_file_paths {

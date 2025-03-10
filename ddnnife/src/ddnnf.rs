@@ -16,6 +16,7 @@ use itertools::Either;
 use num::BigInt;
 use std::cmp::max;
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::path::Path;
 
 type Clause = BTreeSet<i32>;
 type ClauseSet = BTreeSet<Clause>;
@@ -90,16 +91,16 @@ impl Ddnnf {
     }
 
     /// Loads a d-DNNF from file.
-    pub fn from_file(path: String, features: Option<u32>) -> Self {
-        crate::parser::build_ddnnf(&path.clone(), features)
+    pub fn from_file(path: &Path, features: Option<u32>) -> Self {
+        crate::parser::build_ddnnf(path, features)
     }
 
     /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
     ///
     /// Panics when not including d4 as it is required for projected compilation.
-    pub fn from_file_projected(path: String, features: Option<u32>) -> Self {
+    pub fn from_file_projected(path: &Path, features: Option<u32>) -> Self {
         #[cfg(feature = "d4")]
-        return crate::parser::build_ddnnf_projected(&path.clone(), features);
+        return crate::parser::build_ddnnf_projected(path, features);
         #[cfg(not(feature = "d4"))]
         panic!("d4 is required for projected compilation.");
     }
@@ -312,12 +313,13 @@ impl Ddnnf {
     ///
     /// # Example
     /// ```
+    /// use std::path::Path;
     /// use ddnnife::Ddnnf;
     /// use ddnnife::parser::*;
     /// use num::BigInt;
     ///
     /// // create a ddnnf
-    /// let file_path = "./tests/data/small_ex_c2d.nnf";
+    /// let file_path = Path::new("./tests/data/small_ex_c2d.nnf");
     /// let mut ddnnf: Ddnnf = build_ddnnf(file_path, None);
     ///
     /// assert_eq!(BigInt::from(1), ddnnf.execute_query(&vec![3,4]));
@@ -337,10 +339,11 @@ impl Ddnnf {
 #[cfg(test)]
 mod test {
     use crate::parser::build_ddnnf;
+    use std::path::Path;
 
     #[test]
     fn features_opposing_indexes() {
-        let ddnnf = build_ddnnf("tests/data/small_ex_c2d.nnf", None);
+        let ddnnf = build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), None);
 
         assert_eq!(
             vec![4, 2, 9],

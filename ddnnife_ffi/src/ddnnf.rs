@@ -3,6 +3,7 @@ use ddnnife::ddnnf;
 use ddnnife::parser::persisting::write_ddnnf_to_file;
 use num::BigInt;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Mutex;
 
 /// A wrapped version of a d-DNNF.
@@ -14,7 +15,7 @@ impl Ddnnf {
     /// Loads a d-DNNF from file.
     #[uniffi::constructor]
     fn from_file(path: String, features: Option<u32>) -> Self {
-        Self(ddnnf::Ddnnf::from_file(path, features))
+        Self(ddnnf::Ddnnf::from_file(Path::new(&path), features))
     }
 
     /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
@@ -22,7 +23,10 @@ impl Ddnnf {
     /// Panics when not including d4 as it is required for projected compilation.
     #[uniffi::constructor]
     fn from_file_projected(path: String, features: Option<u32>) -> Self {
-        Self(ddnnf::Ddnnf::from_file_projected(path, features))
+        Self(ddnnf::Ddnnf::from_file_projected(
+            Path::new(&path),
+            features,
+        ))
     }
 
     /// Returns the current count of the root node in the d-DNNF.
@@ -44,7 +48,7 @@ impl Ddnnf {
     /// Saves this d-DNNF to the given file.
     #[uniffi::method]
     fn save(&self, path: &str) {
-        write_ddnnf_to_file(&self.0, path).unwrap();
+        write_ddnnf_to_file(&self.0, Path::new(&path)).unwrap();
     }
 
     /// Creates a mutable copy of this d-DNNF.

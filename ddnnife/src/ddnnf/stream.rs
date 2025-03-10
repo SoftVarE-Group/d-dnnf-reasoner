@@ -459,7 +459,7 @@ impl Ddnnf {
                 }
 
                 if args[0] == "save-ddnnf" {
-                    match write_ddnnf_to_file(self, path.to_str().unwrap()) {
+                    match write_ddnnf_to_file(self, path) {
                         Ok(_) => String::from(""),
                         Err(e) => format!(
                             "E6 error: {} while trying to write ddnnf to {}",
@@ -476,7 +476,7 @@ impl Ddnnf {
                     match write_cnf_to_file(
                         &self.cached_state.as_mut().unwrap().clauses,
                         total_features,
-                        path.to_str().unwrap(),
+                        path,
                     ) {
                         Ok(_) => String::from(""),
                         Err(e) => format!(
@@ -693,8 +693,8 @@ mod test {
 
     #[test]
     fn handle_stream_msg_core() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let binding = auto1.handle_stream_msg("core");
         let res = binding.split(' ').collect::<Vec<&str>>();
@@ -740,7 +740,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_count() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert_eq!(
             ["1161956426034856869593248790737503394254270990971132154082514918252601863499017129746491423758041981416261653822705296328530201469664767205987091228498329600000000000000000000000",
@@ -766,7 +766,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_sat() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert_eq!(
             String::from("true;true;false"),
@@ -792,8 +792,8 @@ mod test {
 
     #[test]
     fn handle_stream_msg_enum() {
-        let _auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let _auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let binding = vp9.handle_stream_msg("enum a 1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 l 10");
         let res: Vec<&str> = binding.split(';').collect_vec();
@@ -853,8 +853,8 @@ mod test {
 
     #[test]
     fn handle_stream_msg_random() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         assert_eq!(
             String::from("E3 error: invalid digit found in string"),
@@ -913,7 +913,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_atomic() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9_d4.nnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         assert_eq!(
             String::from("E4 error: the option \"sets\" is not valid in this context"),
@@ -961,7 +961,7 @@ mod test {
     #[cfg(feature = "d4")]
     #[test]
     fn handle_stream_msg_clause_update() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", None);
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9.cnf"), None);
 
         assert_eq!(
             "E4 error: \"t\" can only be used in combination with \"clause-update\"".to_string(),
@@ -1031,7 +1031,7 @@ mod test {
     #[cfg(feature = "d4")]
     #[test]
     fn handle_stream_msg_save() {
-        let mut vp9: Ddnnf = build_ddnnf("tests/data/VP9.cnf", Some(42));
+        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9.cnf"), Some(42));
         let binding = env::current_dir().unwrap();
         let working_dir = binding.to_str().unwrap();
         let file_formats = vec!["ddnnf", "cnf"];
@@ -1082,7 +1082,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_other() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert_eq!(
             String::from("exit"),
@@ -1092,7 +1092,7 @@ mod test {
 
     #[test]
     fn handle_stream_msg_error() {
-        let mut auto1: Ddnnf = build_ddnnf("tests/data/auto1_d4.nnf", Some(2513));
+        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
         assert_eq!(
             String::from("E4 error: got an empty msg"),
             auto1.handle_stream_msg("")

@@ -1,4 +1,5 @@
 use crate::{parser, Ddnnf};
+use std::path::Path;
 use std::{error::Error, io::Write, sync::mpsc, thread};
 use workctl::WorkQueue;
 
@@ -10,7 +11,7 @@ impl Ddnnf {
     pub fn operate_on_queries<T: ToString + Ord + Send + 'static>(
         &mut self,
         operation: fn(&mut Ddnnf, &[i32]) -> T,
-        path_in: &str,
+        path_in: &Path,
         output: impl Write,
     ) -> Result<(), Box<dyn Error>> {
         if self.max_worker == 1 {
@@ -29,7 +30,7 @@ impl Ddnnf {
     fn queries_single_thread<T: ToString>(
         &mut self,
         operation: fn(&mut Ddnnf, &[i32]) -> T,
-        path_in: &str,
+        path_in: &Path,
         mut output: impl Write,
     ) -> Result<(), Box<dyn Error>> {
         let work_queue: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
@@ -52,7 +53,7 @@ impl Ddnnf {
     fn queries_multi_thread<T: ToString + Ord + Send + 'static>(
         &mut self,
         operation: fn(&mut Ddnnf, &[i32]) -> T,
-        path_in: &str,
+        path_in: &Path,
         mut output: impl Write,
     ) -> Result<(), Box<dyn Error>> {
         let work: Vec<(usize, Vec<i32>)> = parser::parse_queries_file(path_in);
@@ -159,14 +160,18 @@ mod test {
 
     #[test]
     fn card_multi_queries() {
-        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
+        let mut ddnnf: Ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), Some(42));
 
         let output =
             BufWriter::new(File::create("./tests/data/pcs.csv").expect("Unable to create file"));
 
         ddnnf.max_worker = 1;
         ddnnf
-            .queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", output)
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                Path::new("./tests/data/VP9.config"),
+                output,
+            )
             .unwrap();
 
         let output =
@@ -174,7 +179,11 @@ mod test {
 
         ddnnf.max_worker = 4;
         ddnnf
-            .queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", output)
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                Path::new("./tests/data/VP9.config"),
+                output,
+            )
             .unwrap();
 
         let mut is_single = File::open("./tests/data/pcs.csv").unwrap();
@@ -198,13 +207,13 @@ mod test {
 
     #[test]
     fn sat_multi_queries() {
-        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
+        let mut ddnnf: Ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), Some(42));
 
         let output =
             BufWriter::new(File::create("./tests/data/sat.csv").expect("Unable to create file"));
 
         ddnnf
-            .operate_on_queries(Ddnnf::sat, "./tests/data/VP9.config", output)
+            .operate_on_queries(Ddnnf::sat, Path::new("./tests/data/VP9.config"), output)
             .unwrap();
 
         let sat_results = File::open("./tests/data/sat.csv").unwrap();
@@ -235,21 +244,29 @@ mod test {
 
     #[test]
     fn test_equality_single_and_multi() {
-        let mut ddnnf: Ddnnf = build_ddnnf("./tests/data/VP9_d4.nnf", Some(42));
+        let mut ddnnf: Ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), Some(42));
         ddnnf.max_worker = 1;
 
         let output =
             BufWriter::new(File::create("./tests/data/pcs1.csv").expect("Unable to create file"));
 
         ddnnf
-            .queries_single_thread(Ddnnf::execute_query, "./tests/data/VP9.config", output)
+            .queries_single_thread(
+                Ddnnf::execute_query,
+                Path::new("./tests/data/VP9.config"),
+                output,
+            )
             .unwrap();
 
         let output =
             BufWriter::new(File::create("./tests/data/pcm1.csv").expect("Unable to create file"));
 
         ddnnf
-            .queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", output)
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                Path::new("./tests/data/VP9.config"),
+                output,
+            )
             .unwrap();
 
         ddnnf.max_worker = 4;
@@ -258,7 +275,11 @@ mod test {
             BufWriter::new(File::create("./tests/data/pcm4.csv").expect("Unable to create file"));
 
         ddnnf
-            .queries_multi_thread(Ddnnf::execute_query, "./tests/data/VP9.config", output)
+            .queries_multi_thread(
+                Ddnnf::execute_query,
+                Path::new("./tests/data/VP9.config"),
+                output,
+            )
             .unwrap();
 
         let mut is_single = File::open("./tests/data/pcs1.csv").unwrap();

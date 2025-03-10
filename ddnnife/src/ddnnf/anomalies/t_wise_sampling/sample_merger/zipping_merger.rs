@@ -178,6 +178,7 @@ mod test {
 
     use super::*;
     use std::collections::HashSet;
+    use std::path::Path;
 
     #[test]
     fn test_zip_samples() {
@@ -210,7 +211,7 @@ mod test {
 
     #[test]
     fn test_zipping_merger() {
-        let ddnnf = build_ddnnf("./tests/data/small_ex_c2d.nnf", None);
+        let ddnnf = build_ddnnf(Path::new("./tests/data/small_ex_c2d.nnf"), None);
         let node = ddnnf.nodes.len() - 1;
         let sat_solver = SatWrapper::new(&ddnnf);
 
