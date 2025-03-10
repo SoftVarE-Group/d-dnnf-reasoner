@@ -141,8 +141,8 @@ let
   cargoArtifacts = craneLib.buildDepsOnly (
     crate
     // {
-      # The FFI crate should not be part of the pre-built dependencies as it is not compatible with every target.
-      cargoExtraArgs = "--workspace --exclude ddnnife_ffi";
+      # The FFI crates should not be part of the pre-built dependencies.
+      cargoExtraArgs = "${features} --workspace --exclude ddnnife_bindgen --exclude ddnnife_ffi";
     }
   );
 in
