@@ -7,7 +7,7 @@ version = "0.7.0"
 plugins {
     java
     kotlin("jvm") version "2.0.0"
-    id("org.jetbrains.dokka") version "1.9.20"
+    id("org.jetbrains.dokka") version "2.0.0"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -20,13 +20,13 @@ repositories {
 }
 
 dependencies {
-    implementation("net.java.dev.jna:jna:5.14.0")
+    implementation("net.java.dev.jna:jna:5.16.0")
     testImplementation(kotlin("test"))
 }
 
 buildscript {
     dependencies {
-        classpath("net.java.dev.jna:jna:5.14.0")
+        classpath("net.java.dev.jna:jna:5.16.0")
     }
 }
 
