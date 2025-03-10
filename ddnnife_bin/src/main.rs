@@ -15,14 +15,14 @@ use std::time::Instant;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
-#[command(name = "ddnnife", version, arg_required_else_help(true))]
+#[command(version, arg_required_else_help(true))]
 struct Cli {
     /// Input path, stdin when not given.
-    #[arg(short, long, verbatim_doc_comment)]
+    #[arg(short, long)]
     input: Option<String>,
 
     /// Output path, stdout when not given.
-    #[arg(short, long, verbatim_doc_comment)]
+    #[arg(short, long)]
     output: Option<String>,
 
     /// Choose one of the available
@@ -31,24 +31,24 @@ struct Cli {
 
     /// The number of total features.
     /// This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.
-    #[arg(short, long, verbatim_doc_comment)]
+    #[arg(short, long)]
     total_features: Option<u32>,
 
     /// Save the smooth ddnnf in the c2d format.
-    #[arg(long, verbatim_doc_comment)]
+    #[arg(long)]
     save_ddnnf: Option<String>,
 
     /// Whether to use projected d-DNNF compilation for the input.
     #[cfg(feature = "d4")]
-    #[arg(short, long, verbatim_doc_comment)]
+    #[arg(short, long)]
     projected: bool,
 
     /// Provides information about the type of nodes, their connection, and the different paths.
-    #[arg(long, verbatim_doc_comment)]
+    #[arg(long)]
     heuristics: bool,
 
     /// Logging level for outputting warnings and information such as heuristics.
-    #[arg(short, long, verbatim_doc_comment, default_value_t=log::LevelFilter::Info)]
+    #[arg(short, long, default_value_t=log::LevelFilter::Info)]
     logging: log::LevelFilter,
 }
 
@@ -60,7 +60,7 @@ enum Operation {
         /// (positive number to include, negative to exclude). Can be one or multiple features.
         /// A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace.
         /// The default is no assumption. The Output gets displayed on the terminal.
-        #[arg(num_args = 0.., allow_negative_numbers = true, verbatim_doc_comment)]
+        #[arg(num_args = 0.., allow_negative_numbers = true)]
         features: Option<Vec<i32>>,
     },
     /// Computes the cardinality of a single feature for all features. Is single threaded.
@@ -70,11 +70,10 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        #[arg(verbatim_doc_comment)]
         queries_input_file: String,
         /// Specify how many threads should be used.
         /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4, verbatim_doc_comment)]
+        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4)]
         jobs: u16,
     },
     /// Computes multiple SAT queries.
@@ -82,11 +81,10 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        #[arg(verbatim_doc_comment)]
         queries_input_file: String,
         /// Specify how many threads should be used.
         /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4, verbatim_doc_comment)]
+        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4)]
         jobs: u16,
     },
 
@@ -94,7 +92,7 @@ enum Operation {
     Stream {
         /// Specify how many threads should be used.
         /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 1, verbatim_doc_comment)]
+        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 1)]
         jobs: u16,
     },
     /// Evaluates multiple queries of the stream format from a file.
@@ -102,7 +100,6 @@ enum Operation {
         /// Path to a file that may contain multiple queries.
         /// Queries are split by new rows and consist of feature numbers ∈ ℤ that can be negated.
         /// Feature numbers are separated by a space.
-        #[arg(verbatim_doc_comment)]
         queries_input_file: String,
     },
     /// Computes t-wise samples
@@ -113,7 +110,7 @@ enum Operation {
         /// all possible combinations of two input parameters.
         /// The higher the value of 't', the more comprehensive the testing will be,
         /// but also the larger the number of test cases required.
-        #[clap(short, verbatim_doc_comment, default_value_t = 2)]
+        #[clap(short, default_value_t = 2)]
         t: usize,
     },
     /// Computes core, dead, false-optional features, and atomic sets.
@@ -125,17 +122,17 @@ enum Operation {
         /// Can be one or multiple. A feature f has to be ∈ ℤ
         /// and the only allowed seperator is a whitespace.
         /// The default is no assumption.
-        #[arg(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
+        #[arg(short, long, allow_negative_numbers = true, num_args = 0..)]
         assumptions: Vec<i32>,
         /// Restrictes the potential sets to the result features mentioned.
         /// The default are all features of the model.
-        #[clap(short, long, allow_negative_numbers = false, num_args = 0.., verbatim_doc_comment)]
+        #[clap(short, long, allow_negative_numbers = false, num_args = 0..)]
         candidates: Option<Vec<u32>>,
         /// Without the cross flag,
         /// we only consider atomic set candidates of included features.
         /// With the cross flag,
         /// we consider included and excluded feature candidates.
-        #[clap(long, verbatim_doc_comment)]
+        #[clap(long)]
         cross: bool,
     },
     /// Generates uniform random sample
@@ -145,7 +142,7 @@ enum Operation {
         /// Can be one or multiple. A feature f has to be ∈ ℤ
         /// and the only allowed seperator is a whitespace.
         /// The default is no assumption.
-        #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
+        #[clap(short, long, allow_negative_numbers = true, num_args = 0..)]
         assumptions: Vec<i32>,
         /// Reusing the same seed yields the same urs.
         #[clap(short, long, default_value_t = 42)]
@@ -155,10 +152,8 @@ enum Operation {
         number: usize,
     },
     /// Computes the core and dead features.
-    #[clap(verbatim_doc_comment)]
     Core,
     /// Transforms the smooth d-DNNF into the mermaid.md format.
-    #[clap(verbatim_doc_comment)]
     Mermaid {
         /// The numbers of the features that should be included or excluded
         /// (positive number to include, negative to exclude).
@@ -167,14 +162,13 @@ enum Operation {
         /// Can be one or multiple. A feature f has to be ∈ ℤ
         /// and the only allowed seperator is a whitespace.
         /// The default is no assumption.
-        #[clap(short, long, allow_negative_numbers = true, num_args = 0.., verbatim_doc_comment)]
+        #[clap(short, long, allow_negative_numbers = true, num_args = 0..)]
         assumptions: Vec<i32>,
     },
     /// Outputs statistics about the d-DNNF as JSON.
-    #[clap(verbatim_doc_comment)]
     Statistics {
         /// Whether to pretty-print the JSON output
-        #[arg(short, long, default_value_t = true, verbatim_doc_comment)]
+        #[arg(short, long)]
         pretty: bool,
     },
 }
