@@ -3,7 +3,6 @@ use serde::Serialize;
 
 /// Various statistics about a d-DNNF.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Statistics {
     /// The amount of nodes in the d-DNNF per node type.
     pub nodes: NodeCount,
@@ -23,10 +22,8 @@ impl From<&Ddnnf> for Statistics {
     }
 }
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl Ddnnf {
     /// Generates various statistics about this d-DNNF.
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub fn statistics(&self) -> Statistics {
         Statistics::from(self)
     }
@@ -34,7 +31,6 @@ impl Ddnnf {
 
 /// The amount of nodes in a d-DNNF per node type.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct NodeCount {
     pub total: usize,
     pub and: usize,
@@ -65,7 +61,6 @@ impl From<&Ddnnf> for NodeCount {
 
 /// The amount of child connections in a d-DNNF.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ChildConnections {
     /// The total amount of child connection.
     pub total: usize,
@@ -93,7 +88,6 @@ impl From<&Ddnnf> for ChildConnections {
 
 /// Path length information about a d-DNNF.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Serialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct Paths {
     /// The total amount of paths.
     pub amount: usize,

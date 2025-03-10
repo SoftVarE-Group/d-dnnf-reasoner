@@ -10,7 +10,6 @@ use streaming_iterator::StreamingIterator;
 /// The sample differentiates between complete and partial configs.
 /// A config is complete (in the context of this sample) if it contains all variables this sample
 /// defines. Otherwise the config is partial.
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Sample {
     /// Configs that contain all variables of this sample
@@ -18,10 +17,10 @@ pub struct Sample {
     /// Configs that do not contain all variables of this sample
     pub partial_configs: Vec<Config>,
     /// The variables that Configs of this sample may contain
-    pub(super) vars: HashSet<u32>,
+    pub vars: HashSet<u32>,
     /// The literals that actually occur in this sample, this is not a HashSet because we want
     /// a stable iteration order.
-    pub(super) literals: Vec<i32>,
+    pub literals: Vec<i32>,
 }
 
 impl PartialOrd<Self> for Sample {

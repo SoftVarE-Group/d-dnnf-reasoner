@@ -7,7 +7,6 @@
   component ? "",
   name ? "ddnnife",
   d4 ? false,
-  library ? pythonLib,
   pythonLib ? false,
   test ? true,
   deny ? false,
@@ -39,18 +38,7 @@ let
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife/Cargo.toml; };
 
-  features-deps = lib.optionalString d4 "--features d4";
-  features =
-    if (d4 || library) then
-      lib.concatStrings (
-        [
-          "--features"
-          " "
-        ]
-        ++ [ (lib.concatStringsSep "," (lib.optionals d4 [ "d4" ] ++ lib.optionals library [ "uniffi" ])) ]
-      )
-    else
-      "";
+  features = lib.optionalString d4 "--features d4";
 
   craneAction =
     if deny then
@@ -113,7 +101,7 @@ let
         ]
         ++ lib.optionals pythonLib [ buildPkgs.maturin ];
 
-      cargoExtraArgs = features-deps;
+      cargoExtraArgs = features;
 
       CARGO_BUILD_TARGET = target;
       TARGET_CC = "${hostPkgs.stdenv.cc}/bin/${hostPkgs.stdenv.cc.targetPrefix}cc";
@@ -150,7 +138,13 @@ let
       doCheck = false;
     };
 
-  cargoArtifacts = craneLib.buildDepsOnly crate;
+  cargoArtifacts = craneLib.buildDepsOnly (
+    crate
+    // {
+      # The FFI crate should not be part of the pre-built dependencies as it is not compatible with every target.
+      cargoExtraArgs = "--workspace --exclude ddnnife_ffi";
+    }
+  );
 in
 craneLib.${craneAction} (
   crate
@@ -183,7 +177,5 @@ craneLib.${craneAction} (
 
     doNotPostBuildInstallCargoBinaries = true;
   }
-  # FIXME: libddnnife gets installed even on a non-library build.
-  // lib.optionalAttrs (!library) { postInstall = "rm -rf $out/lib"; }
   // lib.optionalAttrs lint { cargoClippyExtraArgs = "--all-features -- --deny warnings"; }
 )

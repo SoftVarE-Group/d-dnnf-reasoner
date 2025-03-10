@@ -27,10 +27,8 @@ use t_wise_sampler::TWiseSampler;
 use t_wise_sampler::{complete_partial_configs_optimal, trim_and_resample};
 use SamplingResult::ResultWithSample;
 
-#[cfg_attr(feature = "uniffi", uniffi::export)]
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
-    #[cfg_attr(feature = "uniffi", uniffi::method)]
     pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
         // Setup everything needed for the sampling process.
         let sat_solver = SatWrapper::new(self);
