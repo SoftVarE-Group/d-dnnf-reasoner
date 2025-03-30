@@ -5,3 +5,5 @@ pub use crate::parser::d4_lexer;
 
 pub mod ddnnf;
 pub use crate::ddnnf::{node::*, Ddnnf};
+
+pub mod cnf;

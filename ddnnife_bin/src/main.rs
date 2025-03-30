@@ -6,6 +6,7 @@ use ddnnife::parser::{
     persisting::{write_as_mermaid_md, write_ddnnf_to_file},
 };
 use ddnnife::util::format_vec;
+use ddnnife_cnf::Cnf;
 use log::info;
 use std::fs::File;
 use std::io::{self, stdout, BufRead, BufReader, BufWriter, Write};
@@ -172,6 +173,8 @@ enum Operation {
         #[arg(short, long)]
         pretty: bool,
     },
+    /// Converts a d-DNNF into a CNF by using Tseitin transformations.
+    ToCnf,
 }
 
 fn main() {
@@ -376,6 +379,11 @@ fn main() {
                     serde_json::to_writer(&mut writer, &statistics)
                 }
                 .expect("Unable to serialize statistics.");
+            }
+            Operation::ToCnf => {
+                writer
+                    .write_all(Cnf::from(&ddnnf).to_string().as_bytes())
+                    .unwrap();
             }
         }
 

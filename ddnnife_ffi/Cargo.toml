@@ -16,5 +16,6 @@ d4 = ["ddnnife/d4"]
 
 [dependencies]
 ddnnife = { workspace = true }
+ddnnife_cnf = { workspace = true }
 uniffi = { workspace = true }
 num = { workspace = true }

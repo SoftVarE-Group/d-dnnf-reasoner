@@ -430,6 +430,7 @@ dependencies = [
  "csv",
  "cxx",
  "d4-oxide",
+ "ddnnife_cnf",
  "file_diff",
  "itertools",
  "log",
@@ -454,6 +455,7 @@ dependencies = [
  "clap",
  "csv",
  "ddnnife",
+ "ddnnife_cnf",
  "log",
  "mimalloc",
  "pretty_env_logger",
@@ -466,6 +468,10 @@ version = "1.0.0"
 dependencies = [
  "uniffi",
 ]
+
+[[package]]
+name = "ddnnife_cnf"
+version = "0.1.0"
 
 [[package]]
 name = "ddnnife_dhone"
@@ -481,6 +487,7 @@ name = "ddnnife_ffi"
 version = "0.9.0"
 dependencies = [
  "ddnnife",
+ "ddnnife_cnf",
  "num",
  "uniffi",
 ]

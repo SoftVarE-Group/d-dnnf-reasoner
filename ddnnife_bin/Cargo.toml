@@ -19,6 +19,7 @@ deterministic = ["ddnnife/deterministic"]
 clap = { workspace = true }
 csv = { workspace = true }
 ddnnife = { workspace = true }
+ddnnife_cnf = { workspace = true }
 log = { workspace = true }
 mimalloc = { workspace = true }
 pretty_env_logger = "0.5"

@@ -7,6 +7,12 @@ uniffi::custom_type!(usize, u64, {
     try_lift: |builtin| Ok(builtin as usize),
 });
 
+uniffi::custom_type!(isize, i64, {
+    remote,
+    lower: |custom| custom as i64,
+    try_lift: |builtin| Ok(builtin as isize),
+});
+
 uniffi::custom_type!(BigInt, Vec<u8>, {
     remote,
     lower: |bigint| bigint.to_signed_bytes_be(),
