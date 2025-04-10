@@ -74,4 +74,13 @@ internal class Ddnnf {
             }
         }
     }
+
+    @Test
+    fun cnf() {
+        val cnf = ddnnf.toCnf()
+        val serialized = cnf.serialize()
+        assertEquals(2830u, cnf.numVariables())
+        assertEquals(7481, cnf.clauses().size)
+        assertEquals(110642, serialized.length)
+    }
 }
