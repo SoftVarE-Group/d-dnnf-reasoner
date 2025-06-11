@@ -106,7 +106,7 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/lib
         run: |
           cd bindings/kotlin
-          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen -Pjna.debug_load=true
+          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
