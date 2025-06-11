@@ -121,14 +121,10 @@
           dependencies-d4 = d4.packages.${system}.dependencies;
           dependencies-d4-windows = d4.packages.${system}.dependencies-windows;
 
-          bindgen = import ./nix/ddnnife.nix (
-            defaultAttrs
-            // {
-              name = "bindgen";
-              component = "ddnnife_bindgen";
-              test = false;
-            }
-          );
+          bindgen = pkgs.callPackage ./nix/bindgen.nix {
+            inherit fenix;
+            inherit crane;
+          };
 
           python = import ./nix/ddnnife.nix (
             defaultAttrs
