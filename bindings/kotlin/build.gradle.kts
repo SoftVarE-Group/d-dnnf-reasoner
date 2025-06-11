@@ -6,13 +6,9 @@ version = "0.9.0"
 
 plugins {
     java
-    kotlin("jvm") version "2.0.0"
+    kotlin("jvm") version "2.1.21"
     id("org.jetbrains.dokka") version "2.0.0"
     id("com.github.johnrengelman.shadow") version "8.1.1"
-}
-
-kotlin {
-    jvmToolchain(17)
 }
 
 repositories {
@@ -26,7 +22,7 @@ dependencies {
 
 buildscript {
     dependencies {
-        classpath("net.java.dev.jna:jna:5.16.0")
+        classpath("net.java.dev.jna:jna:5.17.0")
     }
 }
 
@@ -45,7 +41,7 @@ if (!onlyCurrent) {
 // OS specific directories for the native library.
 // This only covers the current platform used for generation.
 val os: OperatingSystem = OperatingSystem.current()
-val resourcePrefix = Platform.RESOURCE_PREFIX;
+val resourcePrefix: String = Platform.RESOURCE_PREFIX
 val libraryDest = "${generatedResources}/${resourcePrefix}"
 val libraryName: String = os.getSharedLibraryName("ddnnife")
 
@@ -78,7 +74,7 @@ if (onlyCurrent) {
     tasks.register<Exec>("buildRust") {
         group = "Build"
         description = "Compiles the Rust crate."
-        commandLine("cargo", "build", "--release", "--package", "ddnnife", "--features", "uniffi")
+        commandLine("cargo", "build", "--release", "--package", "ddnnife_ffi")
     }
 
     tasks.named("nativeLibrary") {

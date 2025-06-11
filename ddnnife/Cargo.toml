@@ -23,7 +23,7 @@ log = { workspace = true }
 nom = "8"
 num = { workspace = true }
 once_cell = "1"
-petgraph = "0.7"
+petgraph = "0.8"
 rand = "0.9"
 rand_distr = "0.5"
 rand_pcg = "0.9"
