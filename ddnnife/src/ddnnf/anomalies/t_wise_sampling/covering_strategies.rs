@@ -10,7 +10,7 @@ pub fn cover_with_caching(
     number_of_vars: usize,
 ) {
     debug_assert!(
-        !interaction.iter().any(|&x| x == 0),
+        !interaction.contains(&0),
         "Interaction contains undecided literals: {:?}",
         interaction
     );
@@ -49,7 +49,7 @@ pub fn cover_with_caching_twise(
     number_of_vars: usize,
 ) {
     debug_assert!(
-        !interaction.iter().any(|&x| x == 0),
+        !interaction.contains(&0),
         "Interaction contains undecided literals: {:?}",
         interaction
     );
@@ -83,7 +83,7 @@ pub(super) fn cover_with_caching_sorted(
     number_of_vars: usize,
     ext_ddnnf: &ExtendedDdnnf,
 ) {
-    debug_assert!(!interaction.iter().any(|x| *x == 0));
+    debug_assert!(!interaction.contains(&0));
     if sample.covers(interaction) {
         return; // already covered
     }

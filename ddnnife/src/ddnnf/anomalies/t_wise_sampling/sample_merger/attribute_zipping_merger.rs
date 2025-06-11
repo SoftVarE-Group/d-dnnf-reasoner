@@ -41,8 +41,8 @@ impl SampleMerger for AttributeZippingMerger<'_> {
         let left_literals: Vec<i32> = left.get_literals().to_vec();
         let right_literals: Vec<i32> = right.get_literals().to_vec();
 
-        debug_assert!(!left_literals.iter().any(|x| *x == 0));
-        debug_assert!(!right_literals.iter().any(|x| *x == 0));
+        debug_assert!(!left_literals.contains(&0));
+        debug_assert!(!right_literals.contains(&0));
 
         let mut interactions_to_cover = Vec::new();
 
