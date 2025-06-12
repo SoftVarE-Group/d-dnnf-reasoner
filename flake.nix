@@ -76,22 +76,34 @@
       packages = lib.genAttrs systems (
         system:
         let
+          # Shorthands for different package sets.
           pkgs = nixpkgs.legacyPackages.${system};
           pkgs-windows = pkgs.pkgsCross.mingwW64;
+          pkgs-d4 = d4.packages.${system};
+          pkgs-self = self.packages.${system};
+
+          rust = import ./nix/rust.nix {
+            inherit pkgs;
+            inherit fenix;
+            inherit crane;
+          };
+
+          rustAttrs.rust = rust;
 
           defaultAttrs = {
             buildPkgs = pkgs;
             inherit fenix;
             inherit crane;
             component = "ddnnife_bin";
+            mt-kahypar = pkgs-d4.mt-kahypar;
           };
 
+          d4Attrs.d4 = true;
           staticAttrs.hostPkgs = pkgs.pkgsStatic;
-          windowsAttrs.hostPkgs = pkgs-windows;
 
-          d4Attrs = defaultAttrs // {
-            d4 = true;
-            mt-kahypar = d4.packages.${system}.mt-kahypar;
+          windowsAttrs = {
+            hostPkgs = pkgs-windows;
+            mt-kahypar = pkgs-d4.mt-kahypar-windows;
           };
 
           libAttrs = {
@@ -99,32 +111,66 @@
             component = "ddnnife_ffi";
             test = false;
           };
+
+          kotlinAttrs = {
+            inherit rust;
+            libddnnife = pkgs-self.libddnnife;
+            bindgen = pkgs-self.bindgen;
+            ddnnife-kotlin = pkgs-self.kotlin;
+          };
         in
         {
-          default = self.packages.${system}.ddnnife-d4;
+          default = pkgs-self.ddnnife-d4;
 
           ddnnife = import ./nix/ddnnife.nix defaultAttrs;
           ddnnife-static = import ./nix/ddnnife.nix (defaultAttrs // staticAttrs);
 
-          ddnnife-d4 = import ./nix/ddnnife.nix d4Attrs;
+          ddnnife-d4 = import ./nix/ddnnife.nix (defaultAttrs // d4Attrs);
           ddnnife-d4-bundled = bundled-d4 pkgs;
 
           ddnnife-windows = import ./nix/ddnnife.nix (defaultAttrs // windowsAttrs);
           ddnnife-windows-d4 = import ./nix/ddnnife.nix (
-            d4Attrs // windowsAttrs // { mt-kahypar = d4.packages.${system}.mt-kahypar-windows; }
+            defaultAttrs // d4Attrs // windowsAttrs
           );
           ddnnife-windows-d4-bundled = bundled-d4 pkgs-windows;
 
+          dependencies-d4 = pkgs-d4.dependencies;
+          dependencies-d4-windows = pkgs-d4.dependencies-windows;
+
+          bindgen = pkgs.callPackage ./nix/bindgen.nix rustAttrs;
+
           libddnnife = import ./nix/ddnnife.nix (defaultAttrs // libAttrs);
-          libddnnife-d4 = import ./nix/ddnnife.nix (d4Attrs // libAttrs);
+          libddnnife-d4 = import ./nix/ddnnife.nix (defaultAttrs // d4Attrs // libAttrs);
 
-          dependencies-d4 = d4.packages.${system}.dependencies;
-          dependencies-d4-windows = d4.packages.${system}.dependencies-windows;
+          libddnnife-windows = import ./nix/ddnnife.nix (defaultAttrs // libAttrs // windowsAttrs);
+          libddnnife-d4-windows = import ./nix/ddnnife.nix (
+            defaultAttrs // d4Attrs // libAttrs // windowsAttrs
+          );
 
-          bindgen = pkgs.callPackage ./nix/bindgen.nix {
-            inherit fenix;
-            inherit crane;
-          };
+          kotlin = pkgs.callPackage ./nix/kotlin.nix kotlinAttrs;
+          kotlin-d4 = pkgs.callPackage ./nix/kotlin.nix (
+            kotlinAttrs
+            // {
+              libddnnife = pkgs-self.libddnnife-d4;
+              ddnnife-kotlin = pkgs-self.kotlin-d4;
+            }
+          );
+
+          kotlin-windows = pkgs-windows.callPackage ./nix/kotlin.nix (
+            kotlinAttrs
+            // {
+              libddnnife = pkgs-self.libddnnife-windows;
+              ddnnife-kotlin = pkgs-self.kotlin-windows;
+            }
+          );
+
+          kotlin-d4-windows = pkgs-windows.callPackage ./nix/kotlin.nix (
+            kotlinAttrs
+            // {
+              libddnnife = pkgs-self.libddnnife-d4-windows;
+              ddnnife-kotlin = pkgs-self.kotlin-d4-windows;
+            }
+          );
 
           python = import ./nix/ddnnife.nix (
             defaultAttrs
@@ -146,7 +192,7 @@
           container = pkgs.dockerTools.buildLayeredImage {
             name = "ddnnife";
             contents = [
-              self.packages.${system}.ddnnife-d4
+              pkgs-self.ddnnife-d4
               (pkgs.runCommand "create-tmp" { } "install -dm 1777 $out/tmp")
             ];
             config = {

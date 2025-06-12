@@ -10,25 +10,26 @@ jobs:
       matrix:
         target:
           - double: aarch64-linux
-            jna: linux-aarch64
             runner: ubuntu-24.04-arm
           - double: x86_64-linux
-            jna: linux-x86-64
             runner: ubuntu-24.04
           - double: aarch64-darwin
-            jna: darwin-aarch64
             runner: macos-15
           - double: x86_64-darwin
-            jna: darwin-x86-64
             runner: macos-13
         variant:
-          - flake: ''
+          - flake: 'kotlin'
             artifact: ''
-          - flake: '-d4'
-            artifact: 'd4-'
+          - flake: 'kotlin-d4'
+            artifact: '-d4'
         exclude:
           - target: { double: x86_64-darwin }
-            variant: { flake: '-d4' }
+            variant: { flake: 'kotlin-d4' }
+        include:
+          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
+            variant: { flake: kotlin-windows, artifact: '' }
+          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
+            variant: { flake: kotlin-d4-windows, artifact: '-d4' }
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -41,74 +42,9 @@ jobs:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
-        run: |
-          nix build -L .#packages.${{ matrix.target.double }}.libddnnife${{ matrix.variant.flake }}
-          mkdir -p libraries/${{ matrix.target.jna }}
-          cp -L result/lib/*ddnnife* libraries/${{ matrix.target.jna }}/
+        run: nix build -L .#${{ matrix.variant.flake }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.variant.artifact }}libddnnife-${{ matrix.target.double }}
-          path: libraries
-      - name: Build (dependencies)
-        if: ${{ matrix.variant.flake == '-d4' }}
-        run: nix build -L .#packages.${{ matrix.target.double }}.dependencies-d4
-      - name: Upload (dependencies)
-        if: ${{ matrix.variant.flake == '-d4' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependencies-d4-libddnnife-${{ matrix.target.double }}
+          name: ddnnife-kotlin-${{ matrix.target.double }}${{ matrix.variant.artifact }}
           path: result
-
-  Package:
-    needs: Library
-    strategy:
-      fail-fast: false
-      matrix:
-        variant:
-          - prefix: ''
-            suffix: ''
-          - prefix: 'd4-'
-            suffix: '-d4'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Nix
-        uses: cachix/install-nix-action@v30
-      - name: Build (bindgen)
-        run: |
-          nix build -L .#bindgen
-          cp -L result/bin/uniffi-bindgen .
-      - name: Download (libraries)
-        uses: actions/download-artifact@v4
-        with:
-          path: libraries
-          pattern: ${{ matrix.variant.prefix }}libddnnife-*
-          merge-multiple: true
-      - name: Download (dependencies)
-        if: ${{ matrix.variant.suffix == '-d4' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: dependencies-d4-libddnnife-x86_64-linux
-      - name: Build
-        run: |
-          cd bindings/kotlin
-          gradle shadowJar --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
-      - name: Test
-        if: ${{ matrix.variant.suffix != '-d4' }}
-        run: |
-          cd bindings/kotlin
-          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
-      - name: Test
-        if: ${{ matrix.variant.suffix == '-d4' }}
-        env:
-          LD_LIBRARY_PATH: ${{ github.workspace }}/lib
-        run: |
-          cd bindings/kotlin
-          gradle test --no-daemon -Plibraries=../../libraries -Pbindgen=../../uniffi-bindgen
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: ddnnife-kotlin${{ matrix.variant.suffix }}
-          path: bindings/kotlin/build/libs

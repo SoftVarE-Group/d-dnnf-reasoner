@@ -1,5 +1,9 @@
-{ fenix }:
 {
+  pkgs,
+  fenix,
+  crane,
+}:
+rec {
   # Rust target triple mappings for the target platforms.
   map = {
     aarch64-darwin.default = "aarch64-apple-darwin";
@@ -22,4 +26,18 @@
       fenix.packages.${system}.stable.defaultToolchain
       fenix.packages.${system}.targets.${target}.stable.rust-std
     ];
+
+  # Constructs a Rust toolchain for the current system.
+  toolchainDefault =
+    let
+      system = pkgs.stdenv.buildPlatform.system;
+      target = pkgs.stdenv.buildPlatform.rust.rustcTarget;
+    in
+    fenix.packages.${system}.combine [
+      fenix.packages.${system}.stable.defaultToolchain
+      fenix.packages.${system}.targets.${target}.stable.rust-std
+    ];
+
+  # Constructs a craneLib for the current system.
+  craneLib = (crane.mkLib pkgs).overrideToolchain toolchainDefault;
 }

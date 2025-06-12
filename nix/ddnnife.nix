@@ -31,7 +31,12 @@ let
     })
   );
 
-  rust = import ./rust.nix { inherit fenix; };
+  rust = import ./rust.nix {
+    pkgs = null;
+    inherit fenix;
+    inherit crane;
+  };
+
   static = hostPkgs.hostPlatform.isStatic;
   target = if static then rust.map.${hostSystem}.static else rust.map.${hostSystem}.default;
   craneLib = (crane.mkLib buildPkgs).overrideToolchain (rust.toolchain buildSystem target);

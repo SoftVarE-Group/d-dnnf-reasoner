@@ -29,21 +29,39 @@ buildscript {
 // Directory structure for generated files.
 val generatedResources = "${layout.buildDirectory.get()}/main/resources"
 
-// When no library folder is passed, we only target the current system and directly use Rust to build the library.
-val onlyCurrent = !hasProperty("libraries")
+val singleLibrary = hasProperty("library")
+val multipleLibraries = hasProperty("libraries")
 
-// Otherwise, extract the path to the pre-built libraries.
-var librariesPath = ""
-if (!onlyCurrent) {
-    librariesPath = property("libraries").toString()
+// When no library oder library folder is passed, we only target the current system and directly use Rust to build the library.
+val onlyCurrent = !singleLibrary && !multipleLibraries
+
+val resourcePrefix = if (hasProperty("generatePrefix")) {
+    property("generatePrefix").toString()
+} else {
+    Platform.RESOURCE_PREFIX
 }
 
-// OS specific directories for the native library.
-// This only covers the current platform used for generation.
-val os: OperatingSystem = OperatingSystem.current()
-val resourcePrefix: String = Platform.RESOURCE_PREFIX
+val libraryName = if (hasProperty("generateLib")) {
+    property("generateLib").toString()
+} else {
+    OperatingSystem.current().getSharedLibraryName("ddnnife")
+}
+
 val libraryDest = "${generatedResources}/${resourcePrefix}"
-val libraryName: String = os.getSharedLibraryName("ddnnife")
+
+var librariesPath = ""
+
+if (onlyCurrent) {
+    librariesPath = "../../target/release/${libraryName}"
+}
+
+if (singleLibrary) {
+    librariesPath = property("library").toString()
+}
+
+if (multipleLibraries) {
+    librariesPath = property("libraries").toString()
+}
 
 // The bindgen tool can be passed via the `bindgen` property, otherwise we invoke it via cargo.
 val bindgen = if (hasProperty("bindgen")) {
@@ -56,10 +74,12 @@ tasks.register<Copy>("nativeLibrary") {
     group = "Build"
     description = "Copies the native library."
 
-    if (onlyCurrent) {
-        from("../../target/release/${libraryName}")
+    if (onlyCurrent || singleLibrary) {
+        from(librariesPath)
         into(libraryDest)
-    } else {
+    }
+
+    if (multipleLibraries) {
         from(librariesPath)
         into(generatedResources)
     }
@@ -86,7 +106,7 @@ tasks.register<Exec>("generateBindings") {
     group = "Build"
     description = "Generates the Kotlin uniffi bindings for the Rust crate."
     commandLine(bindgen)
-    args("generate", "--language", "kotlin", "--out-dir", "${layout.projectDirectory}/src/main/kotlin", "--library", "${libraryDest}/${libraryName}", "--no-format")
+    args("generate", "--language", "kotlin", "--out-dir", "${layout.projectDirectory}/src/main/kotlin", "--library", "${libraryDest}/${libraryName}", "--metadata-no-deps", "--no-format")
 
     dependsOn("nativeLibrary")
 }
