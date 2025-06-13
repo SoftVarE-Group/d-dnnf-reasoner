@@ -52,5 +52,5 @@ stdenv.mkDerivation {
     let
       jar = "ddnnife-${version}-all.jar";
     in
-    "install -D bindings/kotlin/build/libs/${jar} $out/share/ddnnife/${jar}";
+    "install -D bindings/kotlin/build/libs/${jar} $out/${jar}";
 }
