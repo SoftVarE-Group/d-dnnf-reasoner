@@ -1,11 +1,11 @@
-import de.softvare.ddnnife.Ddnnf
-import de.softvare.ddnnife.SamplingResult
+package de.softvare.ddnnife
+
 import java.math.BigInteger
-import kotlin.test.assertEquals
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.fail
 
-internal class Ddnnf {
+internal class DdnnfTest {
     private val ddnnf = Ddnnf.fromFile("../../example_input/busybox-1.18.0_c2d.nnf", null)
     private val features = 854
 
@@ -21,7 +21,8 @@ internal class Ddnnf {
     fun count() {
         // Only the root count.
         val count = ddnnf.rc()
-        val expected = BigInteger("2061138519356781760670618805653750167349287991336595876373542198990734653489713239449032049664199494301454199336000050382457451123894821886472278234849758979132037884598159833615564800000000000000000000")
+        val expected =
+            BigInteger("2061138519356781760670618805653750167349287991336595876373542198990734653489713239449032049664199494301454199336000050382457451123894821886472278234849758979132037884598159833615564800000000000000000000")
         assertEquals(count, expected)
 
         // The count for a given assumption.
@@ -65,9 +66,11 @@ internal class Ddnnf {
 
     @Test
     fun tWise() {
-        when(val sample = ddnnf.sampleTWise(1u)) {
+        val result = ddnnf.sampleTWise(1u)
+        when(result) {
             is SamplingResult.ResultWithSample -> {
-                assertEquals(features, sample.v1.vars.size)
+                val sample = result.v1
+                assertEquals(features, sample.vars.size)
             }
             else -> {
                 fail("T-wise sample is invalid.")

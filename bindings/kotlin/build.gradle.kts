@@ -6,9 +6,8 @@ version = "0.9.0"
 
 plugins {
     java
-    kotlin("jvm") version "2.1.21"
-    id("org.jetbrains.dokka") version "2.0.0"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    kotlin("jvm") version "2.+"
+    id("com.github.johnrengelman.shadow") version "8.+"
 }
 
 repositories {
@@ -16,13 +15,14 @@ repositories {
 }
 
 dependencies {
-    implementation("net.java.dev.jna:jna:5.16.0")
+    implementation("net.java.dev.jna:jna:5.+")
     testImplementation(kotlin("test"))
+    testImplementation("junit:junit:4.+")
 }
 
 buildscript {
     dependencies {
-        classpath("net.java.dev.jna:jna:5.17.0")
+        classpath("net.java.dev.jna:jna:5.+")
     }
 }
 
@@ -35,13 +35,13 @@ val multipleLibraries = hasProperty("libraries")
 // When no library oder library folder is passed, we only target the current system and directly use Rust to build the library.
 val onlyCurrent = !singleLibrary && !multipleLibraries
 
-val resourcePrefix = if (hasProperty("generatePrefix")) {
+val resourcePrefix: String = if (hasProperty("generatePrefix")) {
     property("generatePrefix").toString()
 } else {
     Platform.RESOURCE_PREFIX
 }
 
-val libraryName = if (hasProperty("generateLib")) {
+val libraryName: String = if (hasProperty("generateLib")) {
     property("generateLib").toString()
 } else {
     OperatingSystem.current().getSharedLibraryName("ddnnife")
