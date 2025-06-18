@@ -6,7 +6,7 @@ version = "0.9.0"
 
 plugins {
     java
-    kotlin("jvm") version "2.+"
+    kotlin("jvm") version "2.1.+"
     id("com.github.johnrengelman.shadow") version "8.+"
 }
 
