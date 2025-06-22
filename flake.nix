@@ -2,14 +2,14 @@
   description = "Packages and development environments for ddnnife";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane.url = "github:ipetkov/crane/v0.20.3";
     d4 = {
-      url = "github:SoftVarE-Group/d4v2/2.2.0";
+      url = "github:SoftVarE-Group/d4v2/2.3.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -129,9 +129,7 @@
           ddnnife-d4-bundled = bundled-d4 pkgs;
 
           ddnnife-windows = import ./nix/ddnnife.nix (defaultAttrs // windowsAttrs);
-          ddnnife-windows-d4 = import ./nix/ddnnife.nix (
-            defaultAttrs // d4Attrs // windowsAttrs
-          );
+          ddnnife-windows-d4 = import ./nix/ddnnife.nix (defaultAttrs // d4Attrs // windowsAttrs);
           ddnnife-windows-d4-bundled = bundled-d4 pkgs-windows;
 
           dependencies-d4 = pkgs-d4.dependencies;

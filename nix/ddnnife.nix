@@ -77,7 +77,6 @@ let
 
       buildInputs =
         lib.optionals d4 [
-          hostPkgs.boost.dev
           mt-kahypar.dev
         ]
         ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isLinux) [
@@ -90,12 +89,14 @@ let
           })
           hostPkgs.mpfr.dev
         ]
+        ++ lib.optionals (d4 && !hostPkgs.stdenv.hostPlatform.isWindows) [ hostPkgs.boost.dev ]
         ++ lib.optionals (d4 && hostPkgs.stdenv.hostPlatform.isWindows) [
           (hostPkgs.gmp.override {
             stdenv = hostPkgs.overrideCC hostPkgs.stdenv cc-windows;
             withStatic = true;
           })
           hostPkgs.mpfr.dev
+          hostPkgs.boost183.dev
         ]
         ++ lib.optionals hostPkgs.stdenv.isDarwin [ hostPkgs.libiconv ];
 
@@ -136,7 +137,7 @@ let
     }
     // lib.optionalAttrs (d4 && hostPkgs.stdenv.hostPlatform.isWindows) {
       # The Windows cross-build won't find the correct include and library directories by default.
-      CXXFLAGS = "-I ${hostPkgs.boost.dev}/include -I ${mt-kahypar.dev}/include";
+      CXXFLAGS = "-I ${hostPkgs.boost183.dev}/include -I ${mt-kahypar.dev}/include";
       CARGO_BUILD_RUSTFLAGS = "-L ${mt-kahypar}/lib";
 
       # FIXME: Tests with d4 are currently unable to run on x86_64-windows.
