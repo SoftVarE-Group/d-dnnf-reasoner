@@ -450,9 +450,9 @@ dependencies = [
 
 [[package]]
 name = "d4-oxide"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcd9a12d51f8c70c7430e6748e1b63626b0c21dbf3ad4b79e994876776427668"
+checksum = "866a4876bf75f6e7ea78b8e0f906e0b904f7f502af5def6dc05f160baadd2c06"
 dependencies = [
  "cxx",
  "cxx-build",
