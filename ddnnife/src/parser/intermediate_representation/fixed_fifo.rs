@@ -161,20 +161,6 @@ mod test {
         assert_eq!(2, fsb_ir_cache._len());
     }
 
-    #[cfg(feature = "d4")]
-    #[test]
-    fn metrics() {
-        let ddnnf_small_ex = build_ddnnf(Path::new("tests/data/small_ex_c2d.nnf"), None);
-        assert_eq!(12, ddnnf_small_ex.node_count());
-        assert_eq!(11, ddnnf_small_ex.edge_count());
-        assert!((1.0 - ddnnf_small_ex.sharing()).abs() < 1e-7);
-
-        let ddnnf_x264 = build_ddnnf(Path::new("tests/data/VP9.cnf"), None);
-        assert_eq!(148, ddnnf_x264.node_count());
-        assert_eq!(185, ddnnf_x264.edge_count());
-        assert!((148.0 / (185.0 + 1.0) - ddnnf_x264.sharing()).abs() < 1e-7);
-    }
-
     #[test]
     fn rebuild_ddnnf() {
         let mut ddnnfs = Vec::new();

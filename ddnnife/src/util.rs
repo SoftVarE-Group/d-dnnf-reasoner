@@ -1,19 +1,8 @@
-use num::BigInt;
 use rand::Rng;
 use std::iter;
 
 #[cfg(any(feature = "deterministic", test))]
 use rand::prelude::{SeedableRng, StdRng};
-
-#[cfg(feature = "d4")]
-pub fn count(input: String) -> BigInt {
-    d4_oxide::count(input)
-}
-
-#[cfg(feature = "d4")]
-pub fn count_projected(input: String) -> BigInt {
-    d4_oxide::count_proj(input)
-}
 
 pub fn format_vec_separated_by<T: ToString>(
     vals: impl Iterator<Item = T>,

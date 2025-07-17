@@ -23,20 +23,13 @@ use petgraph::{
 use std::{
     cell::RefCell,
     cmp::max,
-    collections::{BTreeSet, HashMap, HashSet},
-    ffi::OsStr,
+    collections::{HashMap, HashSet},
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
     process,
     rc::Rc,
 };
-
-#[cfg(feature = "d4")]
-use from_cnf::{check_for_cnf_header, CNFToken};
-
-#[cfg(feature = "d4")]
-use tempfile::NamedTempFile;
 
 type DdnnfGraph = StableGraph<TId, ()>;
 
@@ -63,57 +56,6 @@ type DdnnfGraph = StableGraph<TId, ()>;
 pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
     let mut cnf_path = None;
     let mut ddnnf = File::open(path).expect("Failed to open input file.");
-    let mut clauses: BTreeSet<BTreeSet<i32>> = BTreeSet::new();
-
-    if let Some(extension) = Path::new(path).extension().and_then(OsStr::to_str) {
-        if extension == "dimacs" || extension == "cnf" {
-            #[cfg(feature = "d4")]
-            {
-                let file = open_file_savely(path);
-                let lines = BufReader::new(file).lines();
-                for line in lines {
-                    let line = line.expect("Unable to read line");
-                    match check_for_cnf_header(line.as_str()).unwrap().1 {
-                        CNFToken::Header {
-                            features: total_features_header,
-                            clauses: _,
-                        } => {
-                            let temporary_ddnnf = NamedTempFile::new()
-                                .expect("Failed to create temporary d-DNNF file.");
-
-                            d4_oxide::compile_ddnnf(
-                                path.to_str()
-                                    .expect("Failed to serialize path.")
-                                    .to_string(),
-                                temporary_ddnnf
-                                    .path()
-                                    .to_str()
-                                    .expect("Failed to serialize temporary d-DNNF path.")
-                                    .to_string(),
-                            );
-
-                            cnf_path = Some(path);
-
-                            total_features = Some(total_features_header as u32);
-
-                            ddnnf = temporary_ddnnf
-                                .reopen()
-                                .expect("Failed to open temporary d-DNNF.");
-                        }
-                        CNFToken::Clause { features } => {
-                            clauses.insert(features);
-                        }
-                        CNFToken::Comment => (),
-                    }
-                }
-            }
-
-            #[cfg(not(feature = "d4"))]
-            {
-                panic!("CNF to d-DNNF compilation is only possible when including d4.");
-            }
-        }
-    }
 
     let lines = BufReader::new(ddnnf)
         .lines()
@@ -121,34 +63,6 @@ pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
         .collect::<Vec<String>>();
 
     distribute_building(lines, total_features, cnf_path)
-}
-
-#[cfg(feature = "d4")]
-#[inline]
-pub fn build_ddnnf_projected(path: &Path, total_features: Option<u32>) -> Ddnnf {
-    let temporary_ddnnf = NamedTempFile::new().expect("Failed to create temporary d-DNNF file.");
-
-    d4_oxide::compile_ddnnf_proj(
-        path.to_str()
-            .expect("Failed to serialize path.")
-            .to_string(),
-        temporary_ddnnf
-            .path()
-            .to_str()
-            .expect("Failed to serialize temporary d-DNNF path.")
-            .to_string(),
-    );
-
-    let ddnnf = temporary_ddnnf
-        .reopen()
-        .expect("Failed to open temporary d-DNNF.");
-
-    let lines = BufReader::new(ddnnf)
-        .lines()
-        .map(|line| line.expect("Unable to read line"))
-        .collect::<Vec<String>>();
-
-    distribute_building(lines, total_features, None)
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.

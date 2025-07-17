@@ -1,18 +1,22 @@
 {
+  bindgen,
+  craneLibDefault,
+  ddnnife-kotlin,
+  fenix,
+  gradle,
+  lib,
+  libddnnife,
   pkgs,
   stdenv,
-  lib,
-  gradle,
-  rust,
-  bindgen,
-  libddnnife,
-  ddnnife-kotlin,
 }:
 let
   libPrefix = if stdenv.hostPlatform.isWindows then "" else "lib";
   libFile = "${libPrefix}ddnnife${stdenv.hostPlatform.extensions.sharedLibrary}";
 
-  metadata = rust.craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife_ffi/Cargo.toml; };
+  toolchain = pkgs: fenix.packages.${pkgs.stdenv.buildPlatform.system}.stable.defaultToolchain;
+  craneLib = craneLibDefault.overrideToolchain (p: toolchain p);
+
+  metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife_ffi/Cargo.toml; };
   version = metadata.version;
 in
 stdenv.mkDerivation {
@@ -23,7 +27,7 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [
     gradle
-    rust.toolchainDefault
+    (toolchain pkgs)
   ];
 
   mitmCache = gradle.fetchDeps {

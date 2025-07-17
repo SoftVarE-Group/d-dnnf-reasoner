@@ -34,21 +34,6 @@ fn card_of_features_d4() {
     let _res = fs::remove_file(d4_out);
 }
 
-#[cfg(feature = "d4")]
-#[test]
-fn card_of_features_cnf() {
-    let cnf_out = Path::new("./tests/data/auto1_cnf_fs.csv");
-    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1.cnf"), None);
-    ddnnf.card_of_each_feature_csv(cnf_out).unwrap_or_default();
-
-    let mut should = File::open("./tests/data/auto1_sb_fs.csv").unwrap();
-    let mut is = File::open(cnf_out).unwrap();
-
-    // diff_files is true if the files are identical
-    assert!(diff_files(&mut should, &mut is));
-    let _res = fs::remove_file(cnf_out);
-}
-
 #[test]
 fn card_of_pc_c2d() {
     let c2d_out = "./tests/data/auto1_c2d_pc.csv";
@@ -92,30 +77,6 @@ fn card_of_pc_d4() {
     assert!(diff_files(&mut should, &mut is));
     fs::remove_file(d4_out).unwrap();
 }
-
-#[cfg(feature = "d4")]
-#[test]
-fn card_of_pc_cnf() {
-    let cnf_out = "./tests/data/auto1_cnf_pc.csv";
-    let sb_file_path = "./tests/data/auto1_sb_pc.csv";
-    let config_file = Path::new("./tests/data/auto1.config");
-
-    let output = BufWriter::new(File::create(cnf_out).expect("Unable to create file"));
-
-    let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1.cnf"), None);
-    ddnnf.max_worker = 1;
-    ddnnf
-        .operate_on_queries(Ddnnf::execute_query, config_file, output)
-        .unwrap_or_default();
-
-    let mut should = File::open(sb_file_path).unwrap();
-    let mut is = File::open(cnf_out).unwrap();
-
-    // diff_files is true if the files are identical
-    assert!(diff_files(&mut should, &mut is));
-    fs::remove_file(cnf_out).unwrap();
-}
-
 #[test]
 fn statistics() {
     let ddnnf: Ddnnf = parser::build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);

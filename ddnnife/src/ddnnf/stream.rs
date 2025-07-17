@@ -689,7 +689,6 @@ mod test {
     use itertools::Itertools;
     use num::One;
     use std::collections::HashSet;
-    use std::{env, fs};
 
     #[test]
     fn handle_stream_msg_core() {
@@ -956,128 +955,6 @@ mod test {
             format_vec(1..=42),
             vp9.handle_stream_msg("atomic a 4 5")
         );
-    }
-
-    #[cfg(feature = "d4")]
-    #[test]
-    fn handle_stream_msg_clause_update() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9.cnf"), None);
-
-        assert_eq!(
-            "E4 error: \"t\" can only be used in combination with \"clause-update\"".to_string(),
-            vp9.handle_stream_msg("update-clause t 43")
-        );
-        assert_eq!(
-            "E4 error: \"t\" must be set to a single positive number".to_string(),
-            vp9.handle_stream_msg("clause-update t 43 44")
-        );
-        assert_eq!(
-            "E4 error: key word is missing arguments".to_string(),
-            vp9.handle_stream_msg("clause-update add rmv")
-        );
-
-        let rc_before = vp9.handle_stream_msg("count").parse::<u64>().unwrap();
-        assert_eq!(
-            "".to_string(),
-            vp9.handle_stream_msg("clause-update t 45 add 43 44 45")
-        );
-
-        // Adding three extra features of which at least one has to be selected -> rc *= 2^3 - 1 => rc *= 7
-        assert_eq!(
-            rc_before * 7,
-            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
-        );
-
-        // Switch between the different states as much as needed
-        assert_eq!("".to_string(), vp9.handle_stream_msg("undo-update"));
-        assert_eq!(
-            rc_before,
-            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
-        );
-
-        assert_eq!("".to_string(), vp9.handle_stream_msg("undo-update"));
-        assert_eq!(
-            rc_before * 7,
-            vp9.handle_stream_msg("count").parse::<u64>().unwrap()
-        );
-
-        // Both, adding and removing at the same time is valid
-        assert_eq!(
-            String::from(""),
-            vp9.handle_stream_msg("clause-update rmv 43 44 45 add 43 44 0 -44 -45")
-        );
-
-        // Cannot remove a clause that should not be in the set anymore
-        assert_eq!(
-            String::from("E5 error: could not update cached state"),
-            vp9.handle_stream_msg("clause-update rmv 43 44 45")
-        );
-
-        // Shrinking the total amount of features is only valid if there are no more conflicting clauses
-        assert_eq!(
-            String::from("E5 error: at least one clause is in conflict with the feature reduction; remove conflicting clauses"),
-            vp9.handle_stream_msg("clause-update t 42")
-        );
-        assert_eq!(
-            String::from(""),
-            vp9.handle_stream_msg("clause-update rmv 43 44 0 -44 -45")
-        );
-        assert_eq!(
-            String::from(""),
-            vp9.handle_stream_msg("clause-update t 42")
-        );
-    }
-
-    #[cfg(feature = "d4")]
-    #[test]
-    fn handle_stream_msg_save() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9.cnf"), Some(42));
-        let binding = env::current_dir().unwrap();
-        let working_dir = binding.to_str().unwrap();
-        let file_formats = vec!["ddnnf", "cnf"];
-
-        for format in file_formats {
-            assert_eq!(
-                format!(
-                    "E4 error: the option \"{}\" is not valid in this context",
-                    &working_dir
-                ),
-                vp9.handle_stream_msg(format!("save-{format} {}", &working_dir).as_str())
-            );
-            assert_eq!(
-                String::from("E4 error: param \"path\" was used, but no value supplied"),
-                vp9.handle_stream_msg(format!("save-{format} path").as_str())
-            );
-            assert_eq!(
-                String::from("E4 error: param \"p\" was used, but no value supplied"),
-                vp9.handle_stream_msg(format!("save-{format} p").as_str())
-            );
-
-            assert_eq!(
-                String::from("E6 error: no file path was supplied"),
-                vp9.handle_stream_msg(format!("save-{format}").as_str())
-            );
-            assert_eq!(
-                format!("E6 error: No such file or directory (os error 2) while trying to write {format} to /home/ferris/Documents/crazy_project/out.{format}"),
-                vp9.handle_stream_msg(format!("save-{format} path /home/ferris/Documents/crazy_project/out.{format}").as_str())
-            );
-            assert_eq!(
-                String::from("E6 error: file path is not absolute, but has to be"),
-                vp9.handle_stream_msg(format!("save-{format} p ./").as_str())
-            );
-
-            assert_eq!(
-                String::from(""),
-                vp9.handle_stream_msg(
-                    format!(
-                        "save-{format} path {}/tests/data/out.{format}",
-                        &working_dir
-                    )
-                    .as_str()
-                )
-            );
-            let _res = fs::remove_file(format!("{}/tests/data/out.{format}", &working_dir));
-        }
     }
 
     #[test]

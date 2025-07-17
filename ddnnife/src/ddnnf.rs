@@ -95,16 +95,6 @@ impl Ddnnf {
         crate::parser::build_ddnnf(path, features)
     }
 
-    /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
-    ///
-    /// Panics when not including d4 as it is required for projected compilation.
-    pub fn from_file_projected(path: &Path, features: Option<u32>) -> Self {
-        #[cfg(feature = "d4")]
-        return crate::parser::build_ddnnf_projected(path, features);
-        #[cfg(not(feature = "d4"))]
-        panic!("d4 is required for projected compilation.");
-    }
-
     /// Returns the current count of the root node in the d-DNNF.
     ///
     /// This value is the same during all computations.

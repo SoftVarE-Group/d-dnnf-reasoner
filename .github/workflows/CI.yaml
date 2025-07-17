@@ -24,35 +24,21 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - double: aarch64-linux                   # target we are building for
-            runner: ubuntu-24.04-arm                # GitHub runner the build is running on
-            interpreter: /lib/ld-linux-aarch64.so.1 # path to libc interpreter
+          - double: aarch64-linux
+            runner: ubuntu-24.04-arm
+            flake: ddnnife-static
           - double: x86_64-linux
             runner: ubuntu-24.04
-            interpreter: /lib64/ld-linux-x86-64.so.2
+            flake: ddnnife-static
           - double: x86_64-darwin
             runner: macos-13
+            flake: ddnnife
           - double: aarch64-darwin
             runner: macos-15
-        variant:
-          - flake: ddnnife
-            artifact: ''
-          - flake: ddnnife-d4-bundled
-            artifact: '-d4'
-        exclude:
-          - target: { double: x86_64-linux }
-            variant: { flake: ddnnife }
-          - target: { double: aarch64-linux }
-            variant: { flake: ddnnife }
-        include:
-          - target: { double: aarch64-linux, runner: ubuntu-24.04-arm }
-            variant: { flake: ddnnife-static, artifact: '' }
-          - target: { double: x86_64-linux, runner: ubuntu-24.04 }
-            variant: { flake: ddnnife-static, artifact: '' }
-          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
-            variant: { flake: ddnnife-windows, artifact: '' }
-          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
-            variant: { flake: ddnnife-windows-d4-bundled, artifact: '-d4' }
+            flake: ddnnife
+          - double: x86_64-windows
+            runner: ubuntu-24.04
+            flake: ddnnife-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -65,18 +51,9 @@ jobs:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
-        run: nix build -L .#${{ matrix.variant.flake }}
-      - name: Set interpreter
-        if: ${{ matrix.target.interpreter }}
-        run: |
-          cp -rL result output
-          rm -rf result
-          chmod +w output/bin/*
-          nix run nixpkgs#patchelf -- --set-interpreter ${{ matrix.target.interpreter }} output/bin/*
-          chmod -w output/bin/*
-          mv output result
+        run: nix build -L .#${{ matrix.target.flake }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-${{ matrix.target.double }}${{ matrix.variant.artifact }}
+          name: ddnnife-${{ matrix.target.double }}
           path: result

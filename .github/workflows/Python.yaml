@@ -9,14 +9,21 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - double: x86_64-linux
-            runner: ubuntu-24.04
           - double: aarch64-linux
             runner: ubuntu-24.04-arm
+            flake: python
+          - double: x86_64-linux
+            runner: ubuntu-24.04
+            flake: python
           - double: x86_64-darwin
             runner: macos-13
+            flake: python
           - double: aarch64-darwin
             runner: macos-15
+            flake: python
+          - double: x86_64-windows
+            runner: ubuntu-24.04
+            flake: python-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -29,7 +36,7 @@ jobs:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
-        run: nix build -L .#python
+        run: nix build -L .#${{ matrix.target.flake }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:

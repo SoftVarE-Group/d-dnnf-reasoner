@@ -11,25 +11,19 @@ jobs:
         target:
           - double: aarch64-linux
             runner: ubuntu-24.04-arm
+            flake: kotlin
           - double: x86_64-linux
             runner: ubuntu-24.04
-          - double: aarch64-darwin
-            runner: macos-15
+            flake: kotlin
           - double: x86_64-darwin
             runner: macos-13
-        variant:
-          - flake: ''
-            artifact: ''
-          - flake: '-d4'
-            artifact: '-d4'
-        exclude:
-          - target: { double: x86_64-darwin }
-            variant: { flake: '-d4' }
-        include:
-          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
-            variant: { flake: '-windows', artifact: '' }
-          - target: { double: x86_64-windows, runner: ubuntu-24.04 }
-            variant: { flake: '-d4-windows', artifact: '-d4' }
+            flake: kotlin
+          - double: aarch64-darwin
+            runner: macos-15
+            flake: kotlin
+          - double: x86_64-windows
+            runner: ubuntu-24.04
+            flake: kotlin-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -41,19 +35,10 @@ jobs:
         with:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Build (dependencies)
-        if: ${{ matrix.variant.artifact == '-d4' }}
-        run: nix build -L .#dependencies${{ matrix.variant.flake }}
-      - name: Upload (dependencies)
-        if: ${{ matrix.variant.artifact == '-d4' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ddnnife-kotlin-${{ matrix.target.double }}${{ matrix.variant.artifact }}-dependencies
-          path: result
       - name: Build
-        run: nix build -L .#kotlin${{ matrix.variant.flake }}
+        run: nix build -L .#${{ matrix.target.flake }}
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-kotlin-${{ matrix.target.double }}${{ matrix.variant.artifact }}
+          name: ddnnife-kotlin-${{ matrix.target.double }}
           path: result
