@@ -23,15 +23,7 @@ Additionally, via the stream API, it can compute SAT queries, core/dead features
 ## Pre-built
 
 You can use pre-built binaries for Linux, macOS or Windows.
-There are two flavours for each target, one with the d4 compiler included and one without.
 Builds for the latest release are attached as assets for each [release][releases].
-
-Using the variant without d4 is straight forward, there are no external dependencies.
-The variant with d4 has some dynamic dependencies which need to be set up.
-Please see the README inside the release folder for details.
-
-On (Linux) systems with an older glibc, the d4 variant might not work.
-In this case, there is also the portable variant which is a self-extracting archive with everything bundled in one binary.
 
 ### Nix
 
@@ -49,13 +41,6 @@ To build without the need to clone the repository, use:
 
 ```
 nix build github:SoftVarE-Group/d-dnnf-reasoner
-```
-
-The default package output (`ddnnife-d4`) includes `d4`.
-To build the variant without `d4` use the package `ddnnife`:
-
-```
-nix build .#ddnnife
 ```
 
 ## Container
@@ -85,57 +70,13 @@ docker run -v <local/directory>:/work ddnnife:main /work/<file.ddnnf> count
 ## Requirements
 
 - [Rust][rust]
-- [Boost][boost]
-- [GMP][gmp] (with C++ bindings)
-- [Mt-KaHyPar][mtkahypar] (optional, required for including d4)
-- GCC or Clang
-
-### Linux
-
-- diffutils
-- m4
-- make
-
-### macOS
-
-The commandline developer tools have to be present:
-
-```
-xcode-select --install
-```
-
-### Windows
-
-On Windows, [MSYS2][msys2] is required to build the project.
-The UCRT64 or CLANG64 environment is used depending on the compiler (GCC or Clang).
-All dependencies must be installed for the environment.
-This can be achieved by using `pacboy`:
-
-```
-pacman -S pactoys
-pacboy -S toolchain:p boost:p
-```
-
-Mt-KaHyPar has to be present in the MSYS2 environment as well when building with d4.
 
 ## Build
 
-There are two flavours of ddnnife:
-One with the [d4][d4] compiler built in and one without.
-Whether d4 is included depends on the `d4` feature flag passed to cargo.
-
 When building with cargo, the resulting binaries will be at `target/release/{ddnnife, dhone}`.
-
-### With default features (without d4)
 
 ```
 cargo build --release
-```
-
-### With d4
-
-```
-cargo build --release --features d4
 ```
 
 ### dhone (dsharp preprocessor)

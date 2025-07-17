@@ -1,11 +1,5 @@
 # Kotlin bindings for `ddnnife`
 
-> [!IMPORTANT]  
-> A note on `d4`:
-> As the Rust crate, these bindings can also work with `d4` to provide a CNF to d-DNNF compiler.
-> The JARs built by this project only contain the library.
-> To use the `d4` variant, the dependencies need to present.
-
 ## Usage
 
 ### Java Utils

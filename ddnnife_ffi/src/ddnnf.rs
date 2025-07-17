@@ -18,17 +18,6 @@ impl Ddnnf {
         Self(ddnnf::Ddnnf::from_file(Path::new(&path), features))
     }
 
-    /// Loads a d-DNNF from file, using the projected d-DNNF compilation.
-    ///
-    /// Panics when not including d4 as it is required for projected compilation.
-    #[uniffi::constructor]
-    fn from_file_projected(path: String, features: Option<u32>) -> Self {
-        Self(ddnnf::Ddnnf::from_file_projected(
-            Path::new(&path),
-            features,
-        ))
-    }
-
     /// Returns the current count of the root node in the d-DNNF.
     ///
     /// This value is the same during all computations.

@@ -13,9 +13,9 @@ jobs:
     strategy:
       matrix:
         target:
-          - double: aarch64-linux    # target we are building for
-            architecture: arm64      # container architecture label
-            runner: ubuntu-24.04-arm # GitHub runner the build is running on
+          - double: aarch64-linux
+            architecture: arm64
+            runner: ubuntu-24.04-arm
           - double: x86_64-linux
             architecture: amd64
             runner: ubuntu-24.04

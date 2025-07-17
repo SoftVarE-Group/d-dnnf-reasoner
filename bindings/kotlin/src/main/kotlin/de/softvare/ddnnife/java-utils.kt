@@ -9,7 +9,7 @@ package de.softvare.ddnnife
  *
  * @param path Where to load the d-DNNF from.
  * @param features How many features the corresponding model has.
- * Can be `null` in which case this will be determined by compilation or from building the d-DNNF.
+ * Can be `null` in which case this will be determined by building the d-DNNF.
  * */
 fun ddnnfFromFile(path: String, features: Int?): Ddnnf {
     if (features != null) {
@@ -17,21 +17,6 @@ fun ddnnfFromFile(path: String, features: Int?): Ddnnf {
     }
 
     return Ddnnf.fromFile(path, features?.toUInt())
-}
-
-/**
- * Loads a d-DNNF from file, using the projected d-DNNF compilation.
- *
- * @param path Where to load the d-DNNF from.
- * @param features How many features the corresponding model has.
- * Can be `null` in which case this will be determined by compilation or from building the d-DNNF.
- * */
-fun ddnnfFromFileProjected(path: String, features: Int?): Ddnnf {
-    if (features != null) {
-        require(features >= 0) { "Features amount must be positive." }
-    }
-
-    return Ddnnf.fromFileProjected(path, features?.toUInt())
 }
 
 fun toUInt(i: Int): UInt {

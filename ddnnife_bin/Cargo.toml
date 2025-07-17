@@ -12,7 +12,6 @@ name = "ddnnife"
 path = "src/main.rs"
 
 [features]
-d4 = ["ddnnife/d4"]
 deterministic = ["ddnnife/deterministic"]
 
 [dependencies]

@@ -335,65 +335,6 @@ mod test {
         assert_eq!(vec![vec![5, 100], vec![1, 2, 3, 4, 7]], subsets2);
     }
 
-    #[cfg(feature = "d4")]
-    #[test]
-    fn brute_force_wo_cross() {
-        let ddnnfs: Vec<Ddnnf> = vec![
-            build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42)),
-            build_ddnnf(Path::new("tests/data/KC_axTLS.cnf"), None),
-            build_ddnnf(Path::new("tests/data/toybox.cnf"), None),
-        ];
-
-        for mut ddnnf in ddnnfs {
-            // brute force atomic sets via counting operations
-            let combinations: Vec<i32> = (1_i32..=ddnnf.number_of_variables as i32).collect();
-            assert_eq!(
-                ddnnf.get_atomic_sets(None, &[], false),
-                brute_force_atomic_sets(&mut ddnnf, combinations)
-            );
-        }
-    }
-
-    #[cfg(feature = "d4")]
-    #[test]
-    fn brute_force_cross() {
-        let ddnnfs: Vec<Ddnnf> = vec![
-            build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42)),
-            build_ddnnf(Path::new("tests/data/KC_axTLS.cnf"), None),
-            build_ddnnf(Path::new("tests/data/toybox.cnf"), None),
-        ];
-
-        for mut ddnnf in ddnnfs {
-            // brute force atomic sets via counting operations
-            let mut combinations: Vec<i32> =
-                (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32).collect();
-            combinations.retain(|&x| x != 0);
-
-            let mut brute_force_result = brute_force_atomic_sets(&mut ddnnf, combinations);
-            sort_and_clean_atomicsets(&mut brute_force_result);
-
-            assert_eq!(ddnnf.get_atomic_sets(None, &[], true), brute_force_result);
-        }
-    }
-
-    // Compute atomic sets by comparing cardinalities
-    fn brute_force_atomic_sets(ddnnf: &mut Ddnnf, combinations: Vec<i32>) -> Vec<Vec<i16>> {
-        let mut atomic_sets: UnionFind<i16> = UnionFind::default();
-
-        // check every possible combination of number combinations
-        for pair in combinations.iter().copied().combinations(2) {
-            if ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[0]])
-                && ddnnf.execute_query(&pair) == ddnnf.execute_query(&[pair[1]])
-            {
-                atomic_sets.union(pair[0] as i16, pair[1] as i16);
-            }
-        }
-
-        let mut subsets = atomic_sets.subsets();
-        subsets.sort_unstable();
-        subsets
-    }
-
     #[test]
     fn atomic_sets_vp9() {
         let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));

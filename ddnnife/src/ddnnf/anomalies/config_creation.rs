@@ -311,12 +311,11 @@ impl Ddnnf {
 
 #[cfg(test)]
 mod test {
-    use rand::thread_rng;
-    use std::collections::HashSet;
-    use std::path::Path;
-
     use super::*;
     use crate::parser::build_ddnnf;
+    use rand::rng;
+    use std::collections::HashSet;
+    use std::path::Path;
 
     #[test]
     fn enumeration_small_ddnnf() {
@@ -401,7 +400,7 @@ mod test {
             assert_eq!(i, res_all.len(), "there are duplicates");
 
             // shuffeling the assumptions should have no effect on the caching of the number of configs that we already looked at
-            assumptions.shuffle(&mut thread_rng())
+            assumptions.shuffle(&mut rng())
         }
     }
 
