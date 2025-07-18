@@ -54,7 +54,7 @@ pub fn open_file_savely(path: &str) -> File {
         Ok(x) => x,
         Err(err) => {
             // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-            eprintln!("\x1b[1;38;5;196mERROR: The following error code occured while trying to open the file \"{}\":\n{}\nAborting...", path, err);
+            eprintln!("\x1b[1;38;5;196mERROR: The following error code occured while trying to open the file \"{path}\":\n{err}\nAborting...");
             process::exit(1);
         }
     }

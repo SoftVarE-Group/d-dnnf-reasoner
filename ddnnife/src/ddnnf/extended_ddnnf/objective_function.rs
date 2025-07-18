@@ -71,7 +71,7 @@ impl ObjectiveFn {
             Sub(left_expr, right_expr) => left_expr.eval(var, attrs) - right_expr.eval(var, attrs),
             Mul(left_expr, right_expr) => left_expr.eval(var, attrs) * right_expr.eval(var, attrs),
             Div(left_expr, right_expr) => left_expr.eval(var, attrs) / right_expr.eval(var, attrs),
-            Neg(expr) => expr.eval(var, attrs) * (-1.0),
+            Neg(expr) => -expr.eval(var, attrs),
             NumVar(attr_name) => get_numeric_attr_val_or_panic(attr_name, var, attrs),
             NumConst(val) => *val,
         }

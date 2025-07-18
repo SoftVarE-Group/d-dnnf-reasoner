@@ -53,7 +53,7 @@ fn deconstruct_node(node: &Node) -> String {
     let mut str = match &node.ntype {
         NodeType::And { children } => deconstruct_children(String::from("A "), children),
         NodeType::Or { children } => deconstruct_children(String::from("O 0 "), children),
-        NodeType::Literal { literal } => format!("L {}", literal),
+        NodeType::Literal { literal } => format!("L {literal}"),
         NodeType::True => String::from("A 0"),
         NodeType::False => String::from("O 0 0"),
     };
@@ -99,15 +99,14 @@ pub fn write_as_mermaid_md(
                 subgraph legend[Legend]
                     nodes(\"<font color=white> Node Type <font color=cyan> \
                     Node Number <font color=greeny> Count <font color=red> Temp Count \
-                    <font color=orange> Query {:?}\")
+                    <font color=orange> Query {features:?}\")
                     style legend fill:none, stroke:none
                 end
                 style pad2 fill:none, stroke:none
             end
             style pad1 fill:none, stroke:none
         end
-        classDef marked stroke:#d90000, stroke-width:4px\n\n",
-        features
+        classDef marked stroke:#d90000, stroke-width:4px\n\n"
     );
     output.write_all(config.as_bytes()).unwrap();
     let marking = ddnnf.get_marked_nodes_clone(features);
@@ -183,7 +182,7 @@ fn mermaidify_type(ddnnf: &Ddnnf, position: usize) -> String {
                 if literal.is_negative() {
                     format!("(\"¬L{}", literal.abs())
                 } else {
-                    format!("(\"L{}", literal)
+                    format!("(\"L{literal}")
                 }
             }
             NodeType::True => String::from("(\"T"),

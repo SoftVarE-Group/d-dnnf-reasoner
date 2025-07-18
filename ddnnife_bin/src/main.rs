@@ -204,10 +204,7 @@ fn main() {
         _ => {
             let elapsed_time = time.elapsed().as_secs_f32();
             info!("Ddnnf overall count: {:#?}", ddnnf.rc());
-            info!(
-                "Elapsed time for parsing, and overall count in seconds: {:.3}s. (This includes compiling to dDNNF if needed)",
-                elapsed_time
-            );
+            info!("Elapsed time for parsing, and overall count in seconds: {elapsed_time:.3}s. (This includes compiling to dDNNF if needed)");
         }
     }
 

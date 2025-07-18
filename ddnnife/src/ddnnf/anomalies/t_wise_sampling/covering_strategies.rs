@@ -11,8 +11,7 @@ pub fn cover_with_caching(
 ) {
     debug_assert!(
         !interaction.contains(&0),
-        "Interaction contains undecided literals: {:?}",
-        interaction
+        "Interaction contains undecided literals: {interaction:?}"
     );
 
     if sample.covers(interaction) {
@@ -50,8 +49,7 @@ pub fn cover_with_caching_twise(
 ) {
     debug_assert!(
         !interaction.contains(&0),
-        "Interaction contains undecided literals: {:?}",
-        interaction
+        "Interaction contains undecided literals: {interaction:?}",
     );
 
     if sample.covers(interaction) {
