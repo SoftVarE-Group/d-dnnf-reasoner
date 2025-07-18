@@ -105,10 +105,7 @@ craneLib.${craneAction} (
 
     inherit cargoArtifacts;
 
-    cargoExtraArgs = lib.concatStringsSep " " (
-      lib.optionals (component != null) [ "--package ${component}" ]
-    );
-
+    cargoExtraArgs = lib.optionalString (component != null) "--package ${component}";
     cargoTestExtraArgs = cargoExtraArgs;
     cargoClippyExtraArgs = "--all-features -- --deny warnings";
   }
