@@ -233,7 +233,7 @@ impl Ddnnf {
                         ClauseApplication::Remove => op_rmv.push(reduced_clause),
                     }
                 }
-                None => panic!("dDNNF becomes UNSAT for clause: {:?}!", clause),
+                None => panic!("dDNNF becomes UNSAT for clause: {clause:?}!"),
             }
         }
         let strategy = self

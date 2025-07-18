@@ -268,14 +268,14 @@ impl Ddnnf {
                             "seed" | "s" => {
                                 seed = match args[param_index].parse::<u64>() {
                                     Ok(x) => x,
-                                    Err(e) => return format!("E3 error: {}", e),
+                                    Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
                             }
                             "limit" | "l" => {
                                 limit = match args[param_index].parse::<usize>() {
                                     Ok(x) => Some(x),
-                                    Err(e) => return format!("E3 error: {}", e),
+                                    Err(e) => return format!("E3 error: {e}"),
                                 };
                                 param_index += 1;
                             }
@@ -324,10 +324,7 @@ impl Ddnnf {
                     }
                 }
                 other => {
-                    return format!(
-                        "E4 error: the option \"{}\" is not valid in this context",
-                        other
-                    )
+                    return format!("E4 error: the option \"{other}\" is not valid in this context")
                 }
             }
         }
@@ -480,14 +477,13 @@ impl Ddnnf {
                     ) {
                         Ok(_) => String::from(""),
                         Err(e) => format!(
-                            "E6 error: {} while trying to write cnf to {}",
-                            e,
+                            "E6 error: {e} while trying to write cnf to {}",
                             path.to_str().unwrap()
                         ),
                     }
                 }
             }
-            other => format!("E2 error: the operation \"{}\" is not supported", other),
+            other => format!("E2 error: the operation \"{other}\" is not supported"),
         }
     }
 }
@@ -502,7 +498,7 @@ fn get_floats(params: &[&str]) -> Result<(Vec<f64>, usize), String> {
         }
         match param.parse::<f64>() {
             Ok(number) => floats.push(number),
-            Err(e) => return Err(format!("E3 {}", e)),
+            Err(e) => return Err(format!("E3 {e}")),
         }
         parsed_str_count += 1;
     }
@@ -640,7 +636,7 @@ fn get_numbers(params: &[&str], boundary: u32) -> Result<(Vec<i32>, usize), Stri
                     numbers.push(f)
                 }
             }),
-            Err(e) => return Err(format!("E3 {}", e)),
+            Err(e) => return Err(format!("E3 {e}")),
         }
         parsed_str_count += 1;
     }

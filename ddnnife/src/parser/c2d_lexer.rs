@@ -198,7 +198,7 @@ pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
             nodes,
             edges,
             variables,
-        } => format!("nnf {} {} {}\n", nodes, edges, variables),
+        } => format!("nnf {nodes} {edges} {variables}\n"),
         And { children: c } => {
             let mut s = String::from("A ");
             s.push_str(&c.len().to_string());
@@ -218,8 +218,8 @@ pub fn deconstruct_C2DToken(C2DToken: C2DToken) -> String {
         Or {
             decision,
             children: c,
-        } => format!("O {} 2 {} {}\n", decision, c[0], c[1]),
-        Literal { feature } => format!("L {}\n", feature),
+        } => format!("O {decision} 2 {} {}\n", c[0], c[1]),
+        Literal { feature } => format!("L {feature}\n"),
         False => String::from("O 0 0\n"),
         True => String::from("A 0\n"),
     }

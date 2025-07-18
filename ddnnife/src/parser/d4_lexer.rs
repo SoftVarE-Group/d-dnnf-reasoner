@@ -50,7 +50,7 @@ fn lex_edge(line: &str) -> IResult<&str, D4Token> {
                 .split_whitespace()
                 .map(|num: &str| {
                     num.parse::<i32>().unwrap_or_else(|_| {
-                        panic!("Was not able to parse i32 for edge. String was {}", out)
+                        panic!("Was not able to parse i32 for edge. String was {out}")
                     })
                 })
                 .collect::<Vec<i32>>();

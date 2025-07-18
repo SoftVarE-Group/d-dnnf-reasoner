@@ -23,7 +23,7 @@ impl Display for Cnf {
             num_variables: self.num_variables,
         };
 
-        writeln!(f, "{}", header)?;
+        writeln!(f, "{header}")?;
 
         self.clauses
             .iter()
@@ -31,7 +31,7 @@ impl Display for Cnf {
             .try_for_each(|(index, clause)| {
                 clause
                     .iter()
-                    .try_for_each(|literal| write!(f, "{} ", literal))?;
+                    .try_for_each(|literal| write!(f, "{literal} "))?;
 
                 write!(f, "0")?;
 
