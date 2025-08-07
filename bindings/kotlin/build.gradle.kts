@@ -2,7 +2,7 @@ import com.sun.jna.Platform
 import org.gradle.internal.os.OperatingSystem
 
 group = "de.softvare"
-version = "0.9.0"
+version = "0.10.0"
 
 plugins {
     java

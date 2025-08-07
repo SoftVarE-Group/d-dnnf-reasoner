@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "ddnnife"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bimap",
  "bitvec",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "ddnnife_bin"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap",
  "csv",
@@ -382,7 +382,7 @@ version = "0.1.0"
 
 [[package]]
 name = "ddnnife_dhone"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "clap",
  "ddnnife",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "ddnnife_ffi"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ddnnife",
  "ddnnife_cnf",
