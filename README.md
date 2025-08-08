@@ -243,10 +243,7 @@ From here on, we can use the following types of queries:
 - `random`: Gives uniform random samples (which are complete and satisfiable)
 - `atomic`: Computes atomic sets
 - `atomic-cross`: Computes atomic sets; a set can contain included and excluded features
-- `clause-update`: Manipulates the underlying CNF by adding / removing clauses and adjusting the total amount of features. Requires any change to be valid.
-- `undo-update`: Reverting the latest manipulation. Applying ```undo-update``` twice results in the second ```undo-update``` being equivalent to a redo.
 - `save-ddnnf`: Saves the d-DNNF for future use.
-- `save-cnf`: Saves the d-DNNF as CNF for future use; does require the input to be a CNF as well. Saving always persists the current version. Hence, this is especially intersting in combination with ```clause-update```.
 - `exit`: Leaves the stream mode
 
 Furthermore, where sensible, the types of queries can be combined with the parameters:
@@ -256,27 +253,21 @@ Furthermore, where sensible, the types of queries can be combined with the param
 - `l limit`: The number of solutions
 - `s seed`: Seeding for random operations
 - `p path`: The absolute path, for when we want to save the d-DNNF as d-DNNF or CNF.
-- `add`: Add something; currently only available for clauses
-- `rmv`: Remove something; currently only available for clauses
-- `t total-features`: Change the total amount of features. `t total-features` is always evaluated before `add` and `rmv`.
 
 The table below depicts the possible combinations of a query type with the parameters. The order of parameters does NOT influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
 Some parameters are optional and others are required. The usage should be intuitive. Otherwise, one can try and get an error message explaining what went wrong. The examples listed later serve as a guide.
 
-| query type / parameter | variables | assumptions | limit | seed | path | add | rmv | total-features |
-|------------------------|-----------|-------------|-------|------|------|-----|-----|----------------|
-| count                  |     ✔     |      ✔      |       |      |      |     |     |                |
-| core                   |     ✔     |      ✔      |       |      |      |     |     |                |
-| sat                    |     ✔     |      ✔      |       |      |      |     |     |                |
-| enum                   |           |      ✔      |   ✔   |   ✔  |      |     |     |                |
-| random                 |           |      ✔      |   ✔   |   ✔  |      |     |     |                |
-| atomic                 |     ✔     |      ✔      |       |      |      |     |     |                |
-| atomic-cross           |     ✔     |      ✔      |       |      |      |     |     |                |
-| clause-update          |           |             |       |      |      |  ✔  |  ✔  |       ✔        |
-| undo-update            |           |             |       |      |      |     |     |                |
-| save-ddnnf             |           |             |       |      |   ✔  |     |     |                |
-| save-cnf               |           |             |       |      |   ✔  |     |     |                |
-| exit                   |           |             |       |      |      |     |     |                |
+| query type / parameter | variables | assumptions | limit | seed | path |
+|------------------------|-----------|-------------|-------|------|------|
+| count                  |     ✔     |      ✔      |       |      |      |
+| core                   |     ✔     |      ✔      |       |      |      |
+| sat                    |     ✔     |      ✔      |       |      |      |
+| enum                   |           |      ✔      |   ✔   |   ✔  |      |
+| random                 |           |      ✔      |   ✔   |   ✔  |      |
+| atomic                 |     ✔     |      ✔      |       |      |      |
+| atomic-cross           |     ✔     |      ✔      |       |      |      |
+| save-ddnnf             |           |             |       |      |   ✔  |
+| exit                   |           |             |       |      |      |
 
 Sub-solutions (like multiple uniform random samples) will be separated by `;`.
 Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
@@ -333,12 +324,6 @@ If no candidates are supplied, all features of the d-DNNF will be the candidates
 
 ```
 atomic v 1 2 3 4 5 6 7 8 9 10 a 1
-```
-
-Adds two new features and a clause enforcing either on of the two new features to be selected.
-
-```
-clause-update t 44 add 43 44
 ```
 
 Saves the nnf as smooth d-DNNF in the c2d format. The parameter `p` or `path` has to be set, and the path must be absolute.

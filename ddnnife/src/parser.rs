@@ -1,7 +1,7 @@
 pub mod c2d_lexer;
 pub mod d4_lexer;
 pub mod from_cnf;
-pub mod intermediate_representation;
+pub mod graph;
 pub mod persisting;
 pub mod util;
 
@@ -10,7 +10,7 @@ use c2d_lexer::{lex_line_c2d, C2DToken, TId};
 use core::panic;
 use csv::ReaderBuilder;
 use d4_lexer::{lex_line_d4, D4Token};
-use intermediate_representation::IntermediateGraph;
+use graph::DdnnfGraph;
 use itertools::Itertools;
 use log::{error, warn};
 use num::BigInt;
@@ -30,8 +30,6 @@ use std::{
     process,
     rc::Rc,
 };
-
-type DdnnfGraph = StableGraph<TId, ()>;
 
 /// Parses a ddnnf, referenced by the file path. The file gets parsed and we create
 /// the corresponding data structure.
@@ -54,7 +52,6 @@ type DdnnfGraph = StableGraph<TId, ()>;
 #[inline]
 #[allow(unused_mut)]
 pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
-    let mut cnf_path = None;
     let mut ddnnf = File::open(path).expect("Failed to open input file.");
 
     let lines = BufReader::new(ddnnf)
@@ -62,18 +59,14 @@ pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
         .map(|line| line.expect("Unable to read line"))
         .collect::<Vec<String>>();
 
-    distribute_building(lines, total_features, cnf_path)
+    distribute_building(lines, total_features)
 }
 
 /// Chooses, depending on the first read line, which building implmentation to choose.
 /// Either the first line is a header and therefore the c2d format or total_features
 /// is supplied and its the d4 format.
 #[inline]
-pub fn distribute_building(
-    lines: Vec<String>,
-    total_features: Option<u32>,
-    cnf_path: Option<&Path>,
-) -> Ddnnf {
+pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> Ddnnf {
     use C2DToken::*;
 
     match lex_line_c2d(lines[0].trim()) {
@@ -90,7 +83,7 @@ pub fn distribute_building(
             match total_features {
                 Some(o) => {
                     // we try to parse the d4 standard
-                    build_d4_ddnnf(lines, Some(o), cnf_path)
+                    build_d4_ddnnf(lines, Some(o))
                 }
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
@@ -98,7 +91,7 @@ pub fn distribute_building(
                         Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
                         Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner."
                     );
-                    build_d4_ddnnf(lines, None, cnf_path)
+                    build_d4_ddnnf(lines, None)
                 }
             }
         }
@@ -148,28 +141,14 @@ fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     }
 
     let root = node_indices[node_indices.len() - 1];
-    let literal_diffs = get_literal_diffs(&ddnnf_graph, root);
-    let intermediate_graph = IntermediateGraph::new(
-        ddnnf_graph,
-        root,
-        variables,
-        literals_nx,
-        literal_diffs,
-        None,
-    );
-
-    Ddnnf::new(intermediate_graph, variables)
+    Ddnnf::new(ddnnf_graph, root, variables)
 }
 
 /// Parses a ddnnf, referenced by the file path.
 /// This function uses D4Tokens which specify a d-DNNF in d4 format.
 /// The file gets parsed and we create the corresponding data structure.
 #[inline]
-fn build_d4_ddnnf(
-    lines: Vec<String>,
-    total_features_opt: Option<u32>,
-    cnf_path: Option<&Path>,
-) -> Ddnnf {
+fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf {
     let mut ddnnf_graph = DdnnfGraph::new();
 
     let mut total_features = total_features_opt.unwrap_or(0);
@@ -424,16 +403,8 @@ fn build_d4_ddnnf(
     }
 
     extend_literal_diffs(&ddnnf_graph, &mut literal_diff, root);
-    let intermediate_graph = IntermediateGraph::new(
-        ddnnf_graph,
-        root,
-        total_features,
-        literals_nx.borrow().clone(),
-        literal_diff,
-        cnf_path,
-    );
 
-    Ddnnf::new(intermediate_graph, total_features)
+    Ddnnf::new(ddnnf_graph, root, total_features)
 }
 
 // Computes the difference between the children of a Node

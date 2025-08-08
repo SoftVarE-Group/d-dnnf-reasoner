@@ -1,14 +1,7 @@
-use std::cmp::Reverse;
-use std::collections::{BTreeSet, BinaryHeap, HashSet};
-use std::io::BufRead;
-use std::path::Path;
-use std::process::exit;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::sync::Arc;
-use std::{io, thread};
-
-use itertools::{Either, Itertools};
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
+use crate::parser::persisting::write_ddnnf_to_file;
+use crate::{util::*, Ddnnf};
+use itertools::Itertools;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{char, digit1};
@@ -16,11 +9,16 @@ use nom::combinator::{map_res, opt, recognize};
 use nom::sequence::pair;
 use nom::{IResult, Parser};
 use num::{BigInt, ToPrimitive};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashSet};
+use std::io::BufRead;
+use std::path::Path;
+use std::process::exit;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::Arc;
+use std::{io, thread};
 use workctl::WorkQueue;
-
-use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
-use crate::parser::persisting::{write_cnf_to_file, write_ddnnf_to_file};
-use crate::{util::*, Ddnnf};
 
 impl Ddnnf {
     /// Initiate the Stream mode. This enables a commincation channel between stdin and stdout.
@@ -188,8 +186,6 @@ impl Ddnnf {
         let mut seed = 42;
         let mut limit = None;
         let mut fitness = Vec::new();
-        let mut add_clauses: Vec<BTreeSet<i32>> = Vec::new();
-        let mut rmv_clauses: Vec<BTreeSet<i32>> = Vec::new();
         let mut total_features = self.number_of_variables;
         let mut path = Path::new("");
 
@@ -206,15 +202,6 @@ impl Ddnnf {
             // The boundary must be positive while still being in the limits of an i32
             if let Ok((numbers, len)) = get_numbers(&args[index + 1..], i32::MAX as u32) {
                 if len == 1 && numbers[0] > 0 {
-                    if self
-                        .cached_state
-                        .as_mut()
-                        .unwrap()
-                        .contains_conflicting_clauses(numbers[0] as u32)
-                    {
-                        return String::from("E5 error: at least one clause is in conflict with the feature reduction; remove conflicting clauses");
-                    }
-
                     total_features = numbers[0] as u32;
                     succesful_update = true;
                     // Remove the "total-features" param and its subsequent value
@@ -291,36 +278,6 @@ impl Ddnnf {
                             "E4 error: param \"{}\" was used, but no value supplied",
                             args[param_index - 1]
                         );
-                    }
-                }
-                "add" | "rmv" => {
-                    let mut res = Vec::new();
-                    let is_add = args[param_index - 1] == "add";
-
-                    match split_clauses(&args[param_index..]) {
-                        Ok(split) => {
-                            for s in split {
-                                res.push(get_numbers(&s, total_features));
-                                match get_numbers(&s, total_features) {
-                                    Ok((numbers, len)) => {
-                                        param_index += len;
-                                        // Additional offset if the last clause end with '0'
-                                        if param_index < args.len() && "0" == args[param_index] {
-                                            param_index += 1;
-                                        }
-
-                                        // Mapping of clauses to set of additions / removals
-                                        if is_add {
-                                            add_clauses.push(numbers.into_iter().collect());
-                                        } else {
-                                            rmv_clauses.push(numbers.into_iter().collect());
-                                        }
-                                    }
-                                    Err(err) => return err,
-                                };
-                            }
-                        }
-                        Err(err) => return err,
                     }
                 }
                 other => {
@@ -423,31 +380,7 @@ impl Ddnnf {
 
                 sample_result.to_string()
             }
-            "clause-update" => {
-                if self.can_save_state() {
-                    if self.update_cached_state(
-                        Either::Left((add_clauses, rmv_clauses)),
-                        Some(total_features),
-                    ) {
-                        String::from("")
-                    } else {
-                        String::from("E5 error: could not update cached state")
-                    }
-                } else {
-                    String::from("E5 error: clauses corresponding to the d-DNNF aren't available; the input file must be a CNF")
-                }
-            }
-            "undo-update" => {
-                if self.undo_on_cached_state() {
-                    String::from("")
-                } else {
-                    String::from(
-                        "E5 error: could not perform undo; there does not exist any cached state1",
-                    )
-                }
-            }
-            "exit" => String::from("exit"),
-            "save-cnf" | "save-ddnnf" => {
+            "save-ddnnf" => {
                 if path.to_str().unwrap() == "" {
                     return String::from("E6 error: no file path was supplied");
                 }
@@ -455,34 +388,16 @@ impl Ddnnf {
                     return String::from("E6 error: file path is not absolute, but has to be");
                 }
 
-                if args[0] == "save-ddnnf" {
-                    match write_ddnnf_to_file(self, path) {
-                        Ok(_) => String::from(""),
-                        Err(e) => format!(
-                            "E6 error: {} while trying to write ddnnf to {}",
-                            e,
-                            path.to_str().unwrap()
-                        ),
-                    }
-                } else {
-                    if self.cached_state.is_none() {
-                        return String::from(
-                            "E5 error: cannot save as CNF because clauses are not available",
-                        );
-                    }
-                    match write_cnf_to_file(
-                        &self.cached_state.as_mut().unwrap().clauses,
-                        total_features,
-                        path,
-                    ) {
-                        Ok(_) => String::from(""),
-                        Err(e) => format!(
-                            "E6 error: {e} while trying to write cnf to {}",
-                            path.to_str().unwrap()
-                        ),
-                    }
+                match write_ddnnf_to_file(self, path) {
+                    Ok(_) => String::from(""),
+                    Err(e) => format!(
+                        "E6 error: {} while trying to write ddnnf to {}",
+                        e,
+                        path.to_str().unwrap()
+                    ),
                 }
             }
+            "exit" => String::from("exit"),
             other => format!("E2 error: the operation \"{other}\" is not supported"),
         }
     }
@@ -549,41 +464,6 @@ fn contains_input_duplicate_commands_or_params(s: &str) -> Option<&str> {
         }
     }
     None
-}
-
-// Takes a vector of strings and splits them further in sub-vectors when encountering a '0'.
-// Example:
-//  ["1", "2", "3", "0", "-4", "5", "0", "6"] becomes [["1", "2", "3"], ["-4", "5"], ["6"]]
-fn split_clauses<'a>(input_strings: &'a [&'a str]) -> Result<Vec<Vec<&'a str>>, String> {
-    let mut result = Vec::new();
-    let mut subvec = Vec::new();
-
-    for &sub_str in input_strings {
-        // If the next element isn't a number, we stop splitting
-        if sub_str.parse::<f64>().is_err() {
-            break;
-        }
-
-        if sub_str == "0" {
-            if subvec.is_empty() {
-                return Err(String::from("E4 error: detected an unallowed empty clause"));
-            }
-            result.push(subvec.clone());
-            subvec.clear();
-        } else {
-            subvec.push(sub_str);
-        }
-    }
-
-    // Last clause is allowed to not end with a '0'
-    if !subvec.is_empty() {
-        result.push(subvec);
-    }
-    if result.is_empty() {
-        return Err(String::from("E4 error: key word is missing arguments"));
-    }
-
-    Ok(result)
 }
 
 // Parses numbers and ranges of the form START..[STOP] into a vector of i32
