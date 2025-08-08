@@ -195,7 +195,7 @@ fn main() {
             input.push(read_line);
         }
 
-        dparser::distribute_building(input, cli.total_features, None)
+        dparser::distribute_building(input, cli.total_features)
     };
 
     // print additional output, iff we are not in the stream mode

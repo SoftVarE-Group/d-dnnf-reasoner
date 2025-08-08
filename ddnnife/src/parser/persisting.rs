@@ -1,29 +1,9 @@
 use crate::{Ddnnf, Node, NodeType};
 use std::{
-    collections::BTreeSet,
     fs::File,
     io::{LineWriter, Write},
     path::Path,
 };
-
-use crate::util::format_vec;
-
-/// Takes a CNF and writes the string representation into a file with the provided name
-pub(crate) fn write_cnf_to_file(
-    clauses: &BTreeSet<BTreeSet<i32>>,
-    total_features: u32,
-    path_out: &Path,
-) -> std::io::Result<()> {
-    let file = File::create(path_out)?;
-    let mut lw = LineWriter::with_capacity(1000, file);
-
-    lw.write_all(format!("p cnf {} {}\n", total_features, clauses.len()).as_bytes())?;
-    for clause in clauses {
-        lw.write_all(format!("{} 0\n", format_vec(clause.iter())).as_bytes())?;
-    }
-
-    Ok(())
-}
 
 /// Takes a d-DNNF and writes the string representation into a file with the provided name
 pub fn write_ddnnf_to_file(ddnnf: &Ddnnf, path: &Path) -> std::io::Result<()> {
