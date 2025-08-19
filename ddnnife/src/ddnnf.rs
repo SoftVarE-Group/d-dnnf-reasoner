@@ -4,13 +4,13 @@ pub mod extended_ddnnf;
 pub mod multiple_queries;
 pub mod node;
 pub mod statistics;
-pub mod stream;
 
 use self::node::Node;
 use crate::parser::graph::{rebuild_graph, DdnnfGraph};
 use num::BigInt;
 use petgraph::stable_graph::NodeIndex;
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
@@ -163,6 +163,20 @@ impl Ddnnf {
             }
             _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count),
         }
+    }
+}
+
+impl Display for Ddnnf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "nnf {} {} {}",
+            self.nodes.len(),
+            0,
+            self.number_of_variables
+        )?;
+
+        self.nodes.iter().try_for_each(|node| writeln!(f, "{node}"))
     }
 }
 

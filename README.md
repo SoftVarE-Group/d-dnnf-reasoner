@@ -243,7 +243,8 @@ From here on, we can use the following types of queries:
 - `random`: Gives uniform random samples (which are complete and satisfiable)
 - `atomic`: Computes atomic sets
 - `atomic-cross`: Computes atomic sets; a set can contain included and excluded features
-- `save-ddnnf`: Saves the d-DNNF for future use.
+- `save-ddnnf <path>`: Saves the d-DNNF for future use.
+- `save-cnf <path>`: Builds a CNF and saves it.
 - `exit`: Leaves the stream mode
 
 Furthermore, where sensible, the types of queries can be combined with the parameters:
@@ -252,35 +253,25 @@ Furthermore, where sensible, the types of queries can be combined with the param
 - `a assumptions`: Assignments of features to true or false
 - `l limit`: The number of solutions
 - `s seed`: Seeding for random operations
-- `p path`: The absolute path, for when we want to save the d-DNNF as d-DNNF or CNF.
 
 The table below depicts the possible combinations of a query type with the parameters. The order of parameters does NOT influence the result and if two or more parameters are valid, then every possible combination of those is also valid.
 Some parameters are optional and others are required. The usage should be intuitive. Otherwise, one can try and get an error message explaining what went wrong. The examples listed later serve as a guide.
 
-| query type / parameter | variables | assumptions | limit | seed | path |
-|------------------------|-----------|-------------|-------|------|------|
-| count                  |     ✔     |      ✔      |       |      |      |
-| core                   |     ✔     |      ✔      |       |      |      |
-| sat                    |     ✔     |      ✔      |       |      |      |
-| enum                   |           |      ✔      |   ✔   |   ✔  |      |
-| random                 |           |      ✔      |   ✔   |   ✔  |      |
-| atomic                 |     ✔     |      ✔      |       |      |      |
-| atomic-cross           |     ✔     |      ✔      |       |      |      |
-| save-ddnnf             |           |             |       |      |   ✔  |
-| exit                   |           |             |       |      |      |
+| query type / parameter | variables | assumptions | limit | seed |
+|------------------------|-----------|-------------|-------|------|
+| count                  |     ✔     |      ✔      |       |      |
+| core                   |     ✔     |      ✔      |       |      |
+| sat                    |     ✔     |      ✔      |       |      |
+| enum                   |           |      ✔      |   ✔   |   ✔  |
+| random                 |           |      ✔      |   ✔   |   ✔  |
+| atomic                 |     ✔     |      ✔      |       |      |
+| atomic-cross           |     ✔     |      ✔      |       |      |
+| save-ddnnf             |           |             |       |      |
+| exit                   |           |             |       |      |
 
 Sub-solutions (like multiple uniform random samples) will be separated by `;`.
-Intern a solution, the feature numbers are separated by a space. The end of an answer is indicated by a new line.
-
-Syntactically wrong queries will result in an error message with an error code.
-The different error codes are: 
-
-- `E1` Operation is not yet supported
-- `E2` Operation does not exist. Neither now nor in the future
-- `E3` Parse error
-- `E4` Syntax error
-- `E5` Operation was not able to be done, because of the wrong input
-- `E6` File or path error
+In a solution, the feature numbers are separated by a space.
+The end of an answer is indicated by a new line.
 
 ### Examples
 
@@ -329,7 +320,7 @@ atomic v 1 2 3 4 5 6 7 8 9 10 a 1
 Saves the nnf as smooth d-DNNF in the c2d format. The parameter `p` or `path` has to be set, and the path must be absolute.
 
 ```
-save-ddnnf p /path/to/d-DNNFs/auto1.nnf
+save-ddnnf /path/to/d-DNNFs/auto1.nnf
 ```
 
 ## Documentation

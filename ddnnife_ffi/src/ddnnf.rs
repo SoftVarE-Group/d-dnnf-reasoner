@@ -1,8 +1,9 @@
 use crate::DdnnfMut;
 use ddnnife::ddnnf;
-use ddnnife::parser::persisting::write_ddnnf_to_file;
 use num::BigInt;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -34,10 +35,18 @@ impl Ddnnf {
         self.0.get_core()
     }
 
+    /// Generates the c2d format representation of this d-DNNF.
+    #[uniffi::method]
+    pub fn serialize(&self) -> String {
+        self.0.to_string()
+    }
+
     /// Saves this d-DNNF to the given file.
     #[uniffi::method]
     fn save(&self, path: &str) {
-        write_ddnnf_to_file(&self.0, Path::new(&path)).unwrap();
+        let mut file = File::create(path).expect("Failed to open file");
+        file.write_all(self.0.to_string().as_bytes())
+            .expect("Failed to serialize d-DNNF");
     }
 
     /// Creates a mutable copy of this d-DNNF.
