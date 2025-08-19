@@ -1,8 +1,9 @@
 use ddnnife::ddnnf::Ddnnf;
-use ddnnife::parser::{self, persisting::write_ddnnf_to_file};
+use ddnnife::parser;
 use file_diff::diff_files;
 use std::fs;
 use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 #[test]
@@ -14,7 +15,8 @@ fn card_of_features_normal_and_reloaded_test() {
 
     // save nnf in c2d format
     let saved_nnf = Path::new("./tests/data/auto1_d4_to_c2d.nnf");
-    write_ddnnf_to_file(&ddnnf, saved_nnf).unwrap();
+    let mut file = File::create(&saved_nnf).unwrap();
+    file.write_all(ddnnf.to_string().as_bytes()).unwrap();
 
     // compute the cardinality of features for the saved file
     let saved_out = Path::new("./tests/data/auto1_d4_to_c2d_fs.csv");
