@@ -14,7 +14,6 @@ When using such methods, it needs to be ensured that the parameters have correct
 
 - [Rust][rust] (or prebuilt `ddnnife` libraries and `ddnnife-bindgen`)
 - [Gradle][gradle]
-- [ktlint][ktlint] (optional)
 
 There are two ways to build the bindings:
 Locally by building the Rust library first, or by passing a directory containing the pre-built libraries.

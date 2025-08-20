@@ -87,6 +87,14 @@
             }
           );
 
+          kotlin-bundled = pkgs.callPackage ./nix/kotlin.nix (
+            kotlinAttrs
+            // {
+              bundled = true;
+              libddnnife = null;
+            }
+          );
+
           python = pkgs.callPackage ./nix/ddnnife.nix pythonAttrs;
           python-windows = pkgsWindows.callPackage ./nix/ddnnife.nix pythonAttrs;
 
