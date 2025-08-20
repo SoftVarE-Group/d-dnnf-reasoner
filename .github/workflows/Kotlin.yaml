@@ -4,26 +4,36 @@ on:
   - push
 
 jobs:
-  Library:
+  Build:
     strategy:
       fail-fast: false
       matrix:
         target:
           - double: aarch64-linux
             runner: ubuntu-24.04-arm
-            flake: kotlin
+            flake:
+              kotlin: kotlin
+              library: libddnnife
           - double: x86_64-linux
             runner: ubuntu-24.04
-            flake: kotlin
+            flake:
+              kotlin: kotlin
+              library: libddnnife
           - double: x86_64-darwin
             runner: macos-13
-            flake: kotlin
+            flake:
+              kotlin: kotlin
+              library: libddnnife
           - double: aarch64-darwin
             runner: macos-15
-            flake: kotlin
+            flake:
+              kotlin: kotlin
+              library: libddnnife
           - double: x86_64-windows
             runner: ubuntu-24.04
-            flake: kotlin-windows
+            flake:
+              kotlin: kotlin-windows
+              library: libddnnife-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -36,9 +46,43 @@ jobs:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
-        run: nix build -L .#${{ matrix.target.flake }}
+        run: nix build -L .#${{ matrix.target.flake.kotlin }}
+      - name: Export
+        run: |
+          nix copy --to file://${{ runner.temp }}/store .#${{ matrix.target.flake.library }}
+#          nix build -L .#${{ matrix.target.flake.library }}
+#          cp -rL result/lib ${{ runner.temp }}/output
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ddnnife-kotlin-${{ matrix.target.double }}
-          path: result
+          name: libddnnife-${{ matrix.target.double }}
+          path: ${{ runner.temp }}/store
+#          path: ${{ runner.temp }}/output
+
+  Package:
+    needs: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: "always-allow-substitutes = false"
+      - name: Cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: softvare-group
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Download
+        uses: actions/download-artifact@v5
+        with:
+          path: ${{ runner.temp }}/store
+          pattern: libddnnife-*
+          merge-multiple: false
+      - name: Import
+        run: |
+          for platform in aarch64-darwin x86_64-darwin x86_64-windows aarch64-linux #x86_64-linux
+          do
+            nix copy --no-check-sigs --all --from file://${{ runner.temp }}/store/libddnnife-${platform}
+          done

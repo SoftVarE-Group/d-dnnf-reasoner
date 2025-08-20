@@ -1,46 +1,46 @@
-name: Container
-
-on:
-  - push
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: softvare-group/ddnnife
-  TAG: ${{ github.ref_name }}
-
-jobs:
-  Build:
-    strategy:
-      matrix:
-        target:
-          - double: aarch64-linux
-            architecture: arm64
-            runner: ubuntu-24.04-arm
-          - double: x86_64-linux
-            architecture: amd64
-            runner: ubuntu-24.04
-    runs-on: ${{ matrix.target.runner }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Nix
-        uses: cachix/install-nix-action@v30
-      - name: Cache
-        uses: cachix/cachix-action@v16
-        with:
-          name: softvare-group
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Build
-        run: nix build -L .#container
-      - name: Container policy
-        run: |
-          nix build --out-link skopeo nixpkgs#skopeo
-          mkdir -p $HOME/.config/containers
-          cp skopeo/etc/containers/default-policy.json $HOME/.config/containers/policy.json
-      - name: Login
-        run: nix run nixpkgs#skopeo -- login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
-      - name: Push
-        run: nix run nixpkgs#skopeo -- copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }}
-      - name: Push latest tag
-        if: ${{ github.ref_type == 'tag' }}
-        run: nix run nixpkgs#skopeo -- copy docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }} docker://$REGISTRY/$IMAGE_NAME:latest-${{ matrix.target.architecture }}
+#name: Container
+#
+#on:
+#  - push
+#
+#env:
+#  REGISTRY: ghcr.io
+#  IMAGE_NAME: softvare-group/ddnnife
+#  TAG: ${{ github.ref_name }}
+#
+#jobs:
+#  Build:
+#    strategy:
+#      matrix:
+#        target:
+#          - double: aarch64-linux
+#            architecture: arm64
+#            runner: ubuntu-24.04-arm
+#          - double: x86_64-linux
+#            architecture: amd64
+#            runner: ubuntu-24.04
+#    runs-on: ${{ matrix.target.runner }}
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#      - name: Nix
+#        uses: cachix/install-nix-action@v30
+#      - name: Cache
+#        uses: cachix/cachix-action@v16
+#        with:
+#          name: softvare-group
+#          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+#      - name: Build
+#        run: nix build -L .#container
+#      - name: Container policy
+#        run: |
+#          nix build --out-link skopeo nixpkgs#skopeo
+#          mkdir -p $HOME/.config/containers
+#          cp skopeo/etc/containers/default-policy.json $HOME/.config/containers/policy.json
+#      - name: Login
+#        run: nix run nixpkgs#skopeo -- login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
+#      - name: Push
+#        run: nix run nixpkgs#skopeo -- copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }}
+#      - name: Push latest tag
+#        if: ${{ github.ref_type == 'tag' }}
+#        run: nix run nixpkgs#skopeo -- copy docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }} docker://$REGISTRY/$IMAGE_NAME:latest-${{ matrix.target.architecture }}
