@@ -5,7 +5,10 @@
   fenix,
   gradle,
   lib,
-  libddnnife,
+  # A single library passed results in a target-specific build.
+  libddnnife ? null,
+  # A bundled build takes the libraries at `./libddnnife`.
+  bundled ? false,
   pkgs,
   stdenv,
 }:
@@ -21,11 +24,14 @@ let
 
   src = lib.fileset.toSource {
     root = ./..;
-    fileset = lib.fileset.unions [
-      (craneLib.fileset.commonCargoSources ./..)
-      ../bindings/kotlin
-      ../example_input
-    ];
+    fileset = lib.fileset.unions (
+      [
+        (craneLib.fileset.commonCargoSources ./..)
+        ../bindings/kotlin
+        ../example_input
+      ]
+      ++ lib.optionals bundled [ (lib.fileset.maybeMissing ./libddnnife) ]
+    );
   };
 in
 stdenv.mkDerivation {
@@ -50,9 +56,10 @@ stdenv.mkDerivation {
 
   gradleFlags = [
     "--project-dir=bindings/kotlin"
-    "-Plibrary=${libddnnife}/lib/${libFile}"
     "-Pbindgen=${bindgen}/bin/uniffi-bindgen"
   ]
+  ++ lib.optionals (!bundled) [ "-Plibrary=${libddnnife}/lib/${libFile}" ]
+  ++ lib.optionals bundled [ "-Plibraries=../../nix/libddnnife" ]
   ++ lib.optionals stdenv.hostPlatform.isWindows [
     "-PgeneratePrefix=win32-x86-64"
     "-PgenerateLib=${libFile}"
