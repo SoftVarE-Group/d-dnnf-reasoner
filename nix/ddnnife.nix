@@ -60,41 +60,40 @@ let
   # The FFI crates should not be part of the default built.
   cargoExtraArgs = "--workspace --exclude ddnnife_bindgen --exclude ddnnife_ffi";
 
-  crate =
-    {
-      meta = {
-        mainProgram = "ddnnife";
-        description = "A d-DNNF reasoner.";
-        homepage = "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
-        license = lib.licenses.lgpl3Plus;
-        platforms = lib.platforms.unix ++ lib.platforms.windows;
-      };
-
-      pname = metadata.pname;
-      version = metadata.version;
-
-      src = ./..;
-      strictDeps = true;
-
-      CARGO_BUILD_TARGET = target;
-      TARGET_CC = lib.getExe cc;
-
-      doCheck = test;
-    }
-    // lib.optionalAttrs stdenv.targetPlatform.isWindows {
-      depsBuildBuild = [
-        cc
-        pkgs.windows.pthreads
-      ];
-
-      CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = (
-        buildPackages.writeShellScript "wine-wrapped" ''
-          export WINEPREFIX=''$(mktemp -d)
-          export WINEDEBUG=-all
-          ${lib.getExe buildPackages.wineWow64Packages.minimal} $@
-        ''
-      );
+  crate = {
+    meta = {
+      mainProgram = "ddnnife";
+      description = "A d-DNNF reasoner.";
+      homepage = "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
+      license = lib.licenses.lgpl3Plus;
+      platforms = lib.platforms.unix ++ lib.platforms.windows;
     };
+
+    pname = metadata.pname;
+    version = metadata.version;
+
+    src = ./..;
+    strictDeps = true;
+
+    CARGO_BUILD_TARGET = target;
+    TARGET_CC = lib.getExe cc;
+
+    doCheck = test;
+  }
+  // lib.optionalAttrs stdenv.targetPlatform.isWindows {
+    depsBuildBuild = [
+      cc
+      pkgs.windows.pthreads
+    ];
+
+    CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = (
+      buildPackages.writeShellScript "wine-wrapped" ''
+        export WINEPREFIX=''$(mktemp -d)
+        export WINEDEBUG=-all
+        ${lib.getExe buildPackages.wineWow64Packages.minimal} $@
+      ''
+    );
+  };
 
   cargoArtifacts = craneLib.buildDepsOnly (crate // { inherit cargoExtraArgs; });
 in
