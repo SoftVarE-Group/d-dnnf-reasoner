@@ -18,12 +18,21 @@ let
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife_ffi/Cargo.toml; };
   version = metadata.version;
+
+  src = lib.fileset.toSource {
+    root = ./..;
+    fileset = lib.fileset.unions [
+      (craneLib.fileset.commonCargoSources ./..)
+      ../bindings/kotlin
+      ../example_input
+    ];
+  };
 in
 stdenv.mkDerivation {
   pname = "ddnnife-kotlin";
   inherit version;
 
-  src = ../.;
+  inherit src;
 
   nativeBuildInputs = [
     gradle
@@ -39,16 +48,15 @@ stdenv.mkDerivation {
 
   gradleBuildTask = "shadowJar";
 
-  gradleFlags =
-    [
-      "--project-dir=bindings/kotlin"
-      "-Plibrary=${libddnnife}/lib/${libFile}"
-      "-Pbindgen=${bindgen}/bin/uniffi-bindgen"
-    ]
-    ++ lib.optionals stdenv.hostPlatform.isWindows [
-      "-PgeneratePrefix=win32-x86-64"
-      "-PgenerateLib=${libFile}"
-    ];
+  gradleFlags = [
+    "--project-dir=bindings/kotlin"
+    "-Plibrary=${libddnnife}/lib/${libFile}"
+    "-Pbindgen=${bindgen}/bin/uniffi-bindgen"
+  ]
+  ++ lib.optionals stdenv.hostPlatform.isWindows [
+    "-PgeneratePrefix=win32-x86-64"
+    "-PgenerateLib=${libFile}"
+  ];
 
   doCheck = true;
 
