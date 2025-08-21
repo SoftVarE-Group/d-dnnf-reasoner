@@ -45,6 +45,20 @@ let
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife/Cargo.toml; };
 
+  src = lib.fileset.toSource {
+    root = ./..;
+    fileset = lib.fileset.unions (
+      [
+        (craneLib.fileset.commonCargoSources ./..)
+        ../ddnnife/tests/data
+        ../example_input
+      ]
+      ++ lib.optionals pythonLib [
+        ../bindings/python
+      ]
+    );
+  };
+
   craneAction =
     if deny then
       "cargoDeny"
@@ -72,7 +86,7 @@ let
     pname = metadata.pname;
     version = metadata.version;
 
-    src = ./..;
+    inherit src;
     strictDeps = true;
 
     CARGO_BUILD_TARGET = target;
