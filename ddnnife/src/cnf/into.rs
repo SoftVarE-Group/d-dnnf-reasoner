@@ -1,6 +1,6 @@
 use crate::{Ddnnf, NodeType};
 use ddnnife_cnf::{Clause, Cnf, Literal};
-use std::collections::HashMap;
+use std::{collections::{HashMap, HashSet}, ops::BitOr};
 
 type Clauses = Vec<Clause>;
 
@@ -43,9 +43,74 @@ struct Biconditional {
     literals: Vec<Literal>,
 }
 
-impl From<Biconditional> for Clauses {
+impl Biconditional {
+    /// The decisions refer to the index the nodes in the list of biconditionals and not(!) to the variable index
+    /// Returns 0 if no new decision emerged
+    fn decision_propagation(&mut self, decisions: &Vec<Literal>) -> Literal {
+        match self.op_type {
+            OperationType::And => {
+                if self
+                    .literals
+                    .iter()
+                    .any(|literal| decisions.contains(&(-*literal)))
+                {
+                    return -(self.index as isize);
+                }
+                self.literals.retain(|literal| decisions.contains(literal));
+                if self.literals.is_empty() {
+                    return self.index as isize;
+                }
+            }
+            OperationType::Or => {
+                if self
+                    .literals
+                    .iter()
+                    .any(|literal| decisions.contains(literal))
+                {
+                    self.index as isize;
+                }
+                self.literals
+                    .retain(|literal| decisions.contains(&(-*literal)));
+                if self.literals.is_empty() {
+                    self.index as isize;
+                }
+            }
+        }
+        return 0;
+    }
+
+    fn is_taut(&self) -> bool {
+        let mut is_taut = false;
+        match self.op_type {
+            OperationType::Or => {
+                let mut checked_literals: Vec<Literal> = Vec::new();
+                self.literals.iter().for_each(|literal| {
+                    if checked_literals.contains(&(-*literal)) {
+                        is_taut = true;
+                    }
+                    checked_literals.push(*literal);
+                });
+                return is_taut;
+            }
+            _ => false,
+        }
+    }
+
+    fn replace_variable_index(&mut self, old: usize, new: usize) {
+        if self.index == old {
+            self.index = new;
+        }
+        self.literals.iter_mut().for_each(|lit| {
+            if *lit == old as isize {
+                *lit = new.clone() as isize;
+            }
+        });
+    }
+}
+
+impl From<&mut Biconditional> for Clauses {
     /// Transforms a biconditional into CNF clauses.
-    fn from(biconditional: Biconditional) -> Self {
+    fn from(biconditional: &mut Biconditional) -> Self {
         // Extract the literal representing the index of the biconditional.
         let tseitin_literal = biconditional.index as Literal;
 
@@ -140,14 +205,101 @@ impl From<&Ddnnf> for Cnf {
             return Cnf::default();
         }
 
-        let mut cnf: Clauses = biconditionals.into_iter().flat_map(Clauses::from).collect();
-        cnf.push(vec![tseitin_index as Literal - 1]);
+        let simplified_biconditionals = simplify_biconditionals(ddnnf, &mut biconditionals);
+
+        let mut cnf: Clauses = simplified_biconditionals
+            .into_iter()
+            .flat_map(Clauses::from)
+            .collect();
+        let mut max: usize = 0;
+        cnf.iter().for_each(|clause| {
+            let clause_max = clause.iter().max().expect("Unexpected empty clause");
+            if max < *clause_max as usize {
+                max = *clause_max as usize;
+            }
+        });
+        cnf.push(vec![max as isize]);
         cnf.into()
     }
 }
 
 fn nodes_to_literals(nodes: &[usize], node_literals: &[Literal]) -> Vec<Literal> {
     nodes.iter().map(|node| node_literals[*node]).collect()
+}
+
+fn simplify_biconditionals<'a>(
+    ddnnf: &Ddnnf,
+    biconditionals: &'a mut Vec<Biconditional>,
+) -> Vec<&'a mut Biconditional> {
+    let biconditionals = apply_core_dead_taut_decision_propagation(ddnnf, biconditionals);
+
+    biconditionals
+}
+
+fn apply_core_dead_taut_decision_propagation<'a>(
+    ddnnf: &Ddnnf,
+    biconditionals: &'a mut Vec<Biconditional>,
+) -> Vec<&'a mut Biconditional> {
+    let backbone = ddnnf.get_core();
+    let mut current_decisions: Vec<Literal> = Vec::new();
+    let mut next_decisions: Vec<Literal> = Vec::new();
+    let mut discarded_by_propagation: Vec<usize> = Vec::new(); // Remember tseitin variables that are not needed anymore
+
+    for lit in backbone {
+        current_decisions.push(lit as isize);
+    }
+    while !current_decisions.is_empty() {
+        println!("{:#?}", current_decisions);
+        biconditionals.iter_mut().for_each(|biconditional| {
+            if !discarded_by_propagation.contains(&biconditional.index) {
+                if biconditional.is_taut() {
+                    discarded_by_propagation.push(biconditional.index);
+                } else {
+                    let decision = biconditional.decision_propagation(&current_decisions);
+                    if decision != 0 {
+                        next_decisions.push(decision);
+                        discarded_by_propagation.push(biconditional.index);
+                    }
+                }
+            }
+        });
+        current_decisions = next_decisions;
+        next_decisions = Vec::new();
+    }
+    return cleanup_after_variable_elimination(biconditionals, &discarded_by_propagation);
+}
+
+fn cleanup_after_variable_elimination<'a>(
+    biconditionals: &'a mut Vec<Biconditional>,
+    eliminated_variables: &Vec<usize>,
+) -> Vec<&'a mut Biconditional> {
+    let mut resulting_biconditionals = Vec::new();
+    let mut new_indices = Vec::new();
+
+    let mut tseitin_starting_index: usize = usize::MAX;
+        biconditionals.iter().for_each(|biconditional| {
+            if tseitin_starting_index > biconditional.index {
+                tseitin_starting_index = biconditional.index;
+            }
+    });
+
+    biconditionals.iter_mut().for_each(|biconditional| {
+        if !eliminated_variables.contains(&biconditional.index) {
+            new_indices.push(biconditional.index.clone());
+            resulting_biconditionals.push(biconditional);
+        }
+    });
+    new_indices.sort();
+
+    new_indices.iter().enumerate().for_each(|(index, value)| {
+        resulting_biconditionals
+            .iter_mut()
+            .for_each(|biconditional| {
+                biconditional.replace_variable_index(*value, index + tseitin_starting_index);
+            });
+    });
+
+    return resulting_biconditionals;
 }
 
 /// Turns an operation into biconditionals.
