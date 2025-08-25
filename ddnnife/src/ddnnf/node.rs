@@ -1,4 +1,5 @@
 use num::BigInt;
+use std::fmt::{Display, Formatter};
 use NodeType::{And, False, Literal, Or, True};
 
 /// Represents all types of Nodes with its different parts
@@ -73,6 +74,37 @@ impl Node {
             Node::new_node(BigInt::ZERO, False)
         }
     }
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.ntype {
+            NodeType::And { children } => {
+                write!(f, "A ")?;
+                deconstruct_children(f, children)
+            }
+            NodeType::Or { children } => {
+                write!(f, "O 0 ")?;
+                deconstruct_children(f, children)
+            }
+            NodeType::Literal { literal } => write!(f, "L {literal}"),
+            NodeType::True => write!(f, "A 0"),
+            NodeType::False => write!(f, "O 0 0"),
+        }
+    }
+}
+
+fn deconstruct_children(f: &mut Formatter<'_>, children: &[usize]) -> std::fmt::Result {
+    write!(f, "{} ", &children.len().to_string())?;
+    children.iter().enumerate().try_for_each(|(i, child)| {
+        write!(f, "{child}")?;
+
+        if i < children.len() - 1 {
+            write!(f, " ")?;
+        }
+
+        Ok(())
+    })
 }
 
 #[cfg(test)]

@@ -107,6 +107,14 @@ impl ExtendedDdnnf {
         }
     }
 
+    pub fn with_fitness_values(ddnnf: Ddnnf, fitness: Vec<f64>) -> Self {
+        Self {
+            ddnnf,
+            attrs: Default::default(),
+            objective_fn_vals: Some(fitness),
+        }
+    }
+
     pub fn get_attr_val(&self, attr_name: &str, var: u32) -> Option<AttributeValue> {
         if let Some(attr) = self.attrs.get(attr_name) {
             return attr.get_val(var);
