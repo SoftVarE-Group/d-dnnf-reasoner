@@ -1,15 +1,15 @@
+mod stream;
+
+use crate::stream::{handle_query, stream, Query};
 use clap::{Parser, Subcommand};
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::ddnnf::Ddnnf;
-use ddnnife::parser::{
-    self as dparser,
-    persisting::{write_as_mermaid_md, write_ddnnf_to_file},
-};
+use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::info;
 use std::fs::File;
-use std::io::{self, stdout, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, stdout, BufRead, BufReader, BufWriter, Error, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -17,8 +17,8 @@ use std::time::Instant;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
-#[command(version, arg_required_else_help(true))]
-struct Cli {
+#[command(arg_required_else_help(true))]
+struct Args {
     /// Input path, stdin when not given.
     #[arg(short, long)]
     input: Option<PathBuf>,
@@ -27,12 +27,12 @@ struct Cli {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Choose one of the available
+    /// Operation to perform on the d-DNNF.
     #[clap(subcommand)]
     operation: Option<Operation>,
 
     /// The number of total features.
-    /// This is strictly necessary if the ddnnf has the d4 format respectivily does not contain a header.
+    /// This is strictly necessary if the d-DNNF has the d4 format without a header.
     #[arg(short, long)]
     total_features: Option<u32>,
 
@@ -40,11 +40,7 @@ struct Cli {
     #[arg(long)]
     save_ddnnf: Option<PathBuf>,
 
-    /// Provides information about the type of nodes, their connection, and the different paths.
-    #[arg(long)]
-    heuristics: bool,
-
-    /// Logging level for outputting warnings and information such as heuristics.
+    /// Logging level for outputting warnings and other information.
     #[arg(short, long, default_value_t=log::LevelFilter::Info)]
     logging: log::LevelFilter,
 }
@@ -84,14 +80,27 @@ enum Operation {
         #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 4)]
         jobs: u16,
     },
-
-    /// Starts ddnnife in stream mode.
-    Stream {
-        /// Specify how many threads should be used.
-        /// Possible values are between 1 and 32.
-        #[arg(short, long, value_parser = clap::value_parser!(u16).range(1..=32), default_value_t = 1)]
-        jobs: u16,
-    },
+    /// Starts the stream mode.
+    ///
+    /// The following queries are supported:
+    ///   `count`: Computes the cardinality of a partial configuration
+    ///   `core`: Lists core and dead features
+    ///   `sat`: Computes if a partial configuration is satisfiable
+    ///   `enum`: Lists complete satisfiable configurations
+    ///   `random`: Gives uniform random samples (which are complete and satisfiable)
+    ///   `atomic`: Computes atomic sets
+    ///   `atomic-cross`: Computes atomic sets; a set can contain included and excluded features
+    ///   `save-ddnnf <path>`: Saves the d-DNNF for future use.
+    ///   `save-cnf <path>`: Builds a CNF and saves it.
+    ///   `exit`: Leaves the stream mode
+    ///
+    /// Queries can be combined with the following parameters:
+    ///   `v variables`: The features we are interested in
+    ///   `a assumptions`: Assignments of features to true or false
+    ///   `l limit`: The number of solutions
+    ///   `s seed`: Seeding for random operations
+    #[command(verbatim_doc_comment)]
+    Stream,
     /// Evaluates multiple queries of the stream format from a file.
     StreamQueries {
         /// Path to a file that may contain multiple queries.
@@ -164,7 +173,7 @@ enum Operation {
     },
     /// Outputs statistics about the d-DNNF as JSON.
     Statistics {
-        /// Whether to pretty-print the JSON output
+        /// Whether to pretty-print the JSON output.
         #[arg(short, long)]
         pretty: bool,
     },
@@ -172,14 +181,14 @@ enum Operation {
     ToCnf,
 }
 
-fn main() {
-    let cli = Cli::parse();
+fn main() -> io::Result<()> {
+    // Parse the
+    let cli = Args::parse();
 
     pretty_env_logger::formatted_builder()
         .filter_level(cli.logging)
         .init();
 
-    // create the ddnnf based of the input file that is required
     let time = Instant::now();
 
     let mut ddnnf = if let Some(path) = &cli.input {
@@ -188,7 +197,7 @@ fn main() {
         // Read from stdin.
         let mut input = Vec::new();
         for line in io::stdin().lock().lines() {
-            let read_line = line.unwrap();
+            let read_line = line?;
             if read_line.is_empty() {
                 break;
             }
@@ -198,22 +207,15 @@ fn main() {
         dparser::distribute_building(input, cli.total_features)
     };
 
-    // print additional output, iff we are not in the stream mode
-    match &cli.operation {
-        Some(Operation::Stream { .. }) => (),
-        _ => {
-            let elapsed_time = time.elapsed().as_secs_f32();
-            info!("Ddnnf overall count: {:#?}", ddnnf.rc());
-            info!("Elapsed time for parsing, and overall count in seconds: {elapsed_time:.3}s. (This includes compiling to dDNNF if needed)");
-        }
-    }
+    info!("Ddnnf overall count: {}", ddnnf.rc());
+
+    let elapsed_time = time.elapsed().as_secs_f32();
+    info!("Elapsed time for parsing, and overall count: {elapsed_time:.3}s.");
 
     if let Some(operation) = cli.operation {
         // change the number of threads used for cardinality of features and partial configurations
         match operation {
-            Operation::CountQueries { jobs, .. }
-            | Operation::Stream { jobs }
-            | Operation::Sat { jobs, .. } => {
+            Operation::CountQueries { jobs, .. } | Operation::Sat { jobs, .. } => {
                 ddnnf.max_worker = jobs;
             }
             _ => (),
@@ -234,8 +236,8 @@ fn main() {
                 cross,
             } => {
                 for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, *cross) {
-                    writer.write_all(format_vec(set.iter()).as_bytes()).unwrap();
-                    writer.write_all("\n".as_bytes()).unwrap();
+                    writer.write_all(format_vec(set.iter()).as_bytes())?;
+                    writer.write_all("\n".as_bytes())?;
                 }
             }
             Operation::Urs {
@@ -247,24 +249,19 @@ fn main() {
                     .uniform_random_sampling(assumptions, *number, *seed)
                     .unwrap()
                 {
-                    writer
-                        .write_all(format_vec(sample.iter()).as_bytes())
-                        .unwrap();
-
-                    writer.write_all("\n".as_bytes()).unwrap();
+                    writer.write_all(format_vec(sample.iter()).as_bytes())?;
+                    writer.write_all("\n".as_bytes())?;
                 }
             }
             Operation::TWise { t } => {
-                writer
-                    .write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())
-                    .unwrap();
+                writer.write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())?;
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Operation::Count { features } => {
                 let features = features.clone().unwrap_or(vec![]);
                 let count = ddnnf.execute_query(&features);
 
-                writer.write_all(count.to_string().as_ref()).unwrap();
+                writer.write_all(count.to_string().as_ref())?;
 
                 let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
                 info!("While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
@@ -317,39 +314,39 @@ fn main() {
             Operation::StreamQueries {
                 queries_input_file, ..
             } => {
-                let file = dparser::open_file_savely(queries_input_file);
+                let file = File::open(queries_input_file)?;
+
                 let queries = BufReader::new(file)
                     .lines()
-                    .map(|line| line.expect("Unable to read line"));
+                    .map(|line| {
+                        let line = line?;
+                        Query::parse(&line).map_err(|error| Error::other(error.to_string()))
+                    })
+                    .collect::<Result<Vec<Query>, Error>>()?;
 
-                for query in queries {
-                    writer
-                        .write_all(ddnnf.handle_stream_msg(&query).as_bytes())
-                        .unwrap();
-                    writer.write_all("\n".as_bytes()).unwrap();
-                }
+                queries.into_iter().try_for_each(|query| {
+                    writer.write_all(handle_query(query, &mut ddnnf)?.as_bytes())?;
+                    writer.write_all("\n".as_bytes())
+                })?;
 
-                writer.flush().unwrap();
+                writer.flush()?;
             }
-            // switch in the stream mode
-            Operation::Stream { .. } => {
-                ddnnf.init_stream();
+            // Switch in the stream mode.
+            Operation::Stream => {
+                stream(&mut ddnnf)?;
             }
-            // writes the anomalies of the d-DNNF to file
-            // anomalies are: core, dead, false-optional features and atomic sets
+            // Output the anomalies of the d-DNNF.
+            // Anomalies are: core, dead, false-optional features and atomic sets.
             Operation::Anomalies => {
-                ddnnf.write_anomalies(&mut writer).unwrap();
+                ddnnf.write_anomalies(&mut writer)?;
             }
             Operation::Core => {
                 let mut core: Vec<i32> = ddnnf.core.clone().into_iter().collect();
-                core.sort_unstable_by_key(|k| k.abs());
-
-                writer
-                    .write_all(format_vec(core.iter()).as_bytes())
-                    .unwrap();
+                core.sort_unstable_by_key(|key| key.abs());
+                writer.write_all(format_vec(core.iter()).as_bytes())?;
             }
             Operation::Mermaid { assumptions } => {
-                write_as_mermaid_md(&mut ddnnf, assumptions, &mut writer).unwrap();
+                write_as_mermaid_md(&mut ddnnf, assumptions, &mut writer)?;
             }
             Operation::Statistics { pretty } => {
                 let statistics = Statistics::from(&ddnnf);
@@ -358,27 +355,24 @@ fn main() {
                     serde_json::to_writer_pretty(&mut writer, &statistics)
                 } else {
                     serde_json::to_writer(&mut writer, &statistics)
-                }
-                .expect("Unable to serialize statistics.");
+                }?;
             }
             Operation::ToCnf => {
-                writer
-                    .write_all(Cnf::from(&ddnnf).to_string().as_bytes())
-                    .unwrap();
+                writer.write_all(Cnf::from(&ddnnf).to_string().as_bytes())?;
             }
         }
 
-        writer.flush().unwrap();
+        writer.flush()?;
     }
 
-    // writes the d-DNNF to file
+    // Optionally write the d-DNNF to a file.
     if let Some(path) = cli.save_ddnnf {
-        write_ddnnf_to_file(&ddnnf, &path).unwrap();
-        info!(
-            "The smooth d-DNNF was written into the c2d format in {}.",
-            path.to_str().expect("Failed to serialize path.")
-        );
+        let mut file = File::create(&path)?;
+        file.write_all(ddnnf.to_string().as_bytes())?;
+        info!("The smooth d-DNNF was written into the c2d format in {path:?}.");
     }
+
+    Ok(())
 }
 
 fn compute_queries<T: ToString + Ord + Send + 'static>(

@@ -365,6 +365,9 @@ dependencies = [
  "ddnnife_cnf",
  "log",
  "mimalloc",
+ "nom 8.0.0",
+ "nom_permutation",
+ "num",
  "pretty_env_logger",
  "serde_json",
 ]
@@ -654,6 +657,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "nom_permutation"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bc970084781b339d2e1d1aa6458d27e5f18d480ca5a69c7135e3978b57e17c7"
+dependencies = [
+ "nom 8.0.0",
 ]
 
 [[package]]
