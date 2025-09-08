@@ -25,7 +25,7 @@ Additionally, via the stream API, it can compute SAT queries, core/dead features
 You can use pre-built binaries for Linux, macOS or Windows.
 Builds for the latest release are attached as assets for each [release][releases].
 
-### Nix
+## Nix
 
 This project can be used and developed via a [Nix][nix] [flake][flake].
 
@@ -42,6 +42,20 @@ To build without the need to clone the repository, use:
 ```
 nix build github:SoftVarE-Group/d-dnnf-reasoner
 ```
+
+The following flake outputs are available:
+
+| Output            | Description                                  |
+|-------------------|----------------------------------------------|
+| `ddnnife`         | Dynamic executable of ddnnife                |
+| `ddnnife-static`  | Static executable of ddnnife                 |
+| `ddnnife-windows` | Windows executable of ddnnife                |
+| `kotlin`          | Kotlin bindings as a JAR (platform-specific) |
+| `kotlin-windows`  | Kotlin bindings as a JAR (Windows)           |
+| `python`          | Python bindings                              |
+| `python-windows`  | Python bindings (Windows)                    |
+
+By default, the `ddnnife` output is built.
 
 ## Container
 
@@ -79,17 +93,11 @@ When building with cargo, the resulting binaries will be at `target/release/{ddn
 cargo build --release
 ```
 
-### dhone (dsharp preprocessor)
-
-```
-cargo build --release --bin dhone
-```
-
 ## Tests
 
 ### Running
 
-We highly encourage running test cases with the release build, as the debug build is very slow in comparison.
+We highly encourage running tests on the release build, as the debug build is very slow in comparison.
 
 ```
 cargo test --release
@@ -110,9 +118,8 @@ cargo llvm-cov --release --open
 
 ## CLI
 
-
-Both `ddnnife` and `dhone` provide a help information via `--help`.
-Simply execute the binaries with the -h, --help flag or no parameter at all to get an overview of all possible parameters and how to use them.
+Both `ddnnife` and `dhone` provide information via `--help`.
+Simply execute the binaries with the `-h`, `--help` flag to get an overview of all possible parameters and how to use them.
 
 ### Examples
 
