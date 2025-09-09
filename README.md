@@ -45,15 +45,17 @@ nix build github:SoftVarE-Group/d-dnnf-reasoner
 
 The following flake outputs are available:
 
-| Output            | Description                                  |
-|-------------------|----------------------------------------------|
-| `ddnnife`         | Dynamic executable of ddnnife                |
-| `ddnnife-static`  | Static executable of ddnnife                 |
-| `ddnnife-windows` | Windows executable of ddnnife                |
-| `kotlin`          | Kotlin bindings as a JAR (platform-specific) |
-| `kotlin-windows`  | Kotlin bindings as a JAR (Windows)           |
-| `python`          | Python bindings                              |
-| `python-windows`  | Python bindings (Windows)                    |
+| Output            | Description                                      |
+|-------------------|--------------------------------------------------|
+| `ddnnife`         | Dynamic executable of ddnnife                    |
+| `ddnnife-static`  | Static executable of ddnnife                     |
+| `ddnnife-windows` | Windows executable of ddnnife                    |
+| `kotlin`          | Kotlin bindings as a JAR (platform-specific)[^1] |
+| `kotlin-windows`  | Kotlin bindings as a JAR (Windows)               |
+| `python`          | Python bindings                                  |
+| `python-windows`  | Python bindings (Windows)                        |
+
+[^1]: There also is a platform-independent JAR available with each [release][releases].
 
 By default, the `ddnnife` output is built.
 
