@@ -14,7 +14,6 @@ deterministic = []
 bimap = "0.6"
 bitvec = "1"
 csv = { workspace = true }
-cxx = "=1.0.138"
 ddnnife_cnf = { workspace = true }
 file_diff = "1"
 itertools = "0.14"
@@ -29,5 +28,4 @@ rand_pcg = "0.9"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 streaming-iterator = "0.1"
-tempfile = "3"
 workctl = "0.2"
