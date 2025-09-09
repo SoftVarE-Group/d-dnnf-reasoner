@@ -25,7 +25,7 @@ pub struct Sample {
 
 impl PartialOrd<Self> for Sample {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.len().cmp(&other.len()))
+        Some(self.cmp(other))
     }
 }
 
