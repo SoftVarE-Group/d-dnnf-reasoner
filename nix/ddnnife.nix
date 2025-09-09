@@ -51,6 +51,7 @@ let
       [
         (craneLib.fileset.commonCargoSources ./..)
         ../ddnnife/tests/data
+        ../ddnnife_bin/tests/data
         ../example_input
       ]
       ++ lib.optionals pythonLib [
