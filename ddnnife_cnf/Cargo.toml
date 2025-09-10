@@ -3,6 +3,7 @@ name = "ddnnife_cnf"
 description = "DIMACS CNF implementation"
 version = "0.1.0"
 authors = ["Jan Baudisch <jan.baudisch@uni-ulm.de>"]
+repository = "https://github.com/SoftVarE-Group/d-dnnf-reasoner"
 edition = "2021"
 license = "LGPL-3.0-or-later"
 workspace = ".."
