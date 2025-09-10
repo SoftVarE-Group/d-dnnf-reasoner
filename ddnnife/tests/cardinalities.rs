@@ -1,5 +1,5 @@
-use ddnnife::ddnnf::statistics::{ChildConnections, NodeCount, Paths, Statistics};
 use ddnnife::ddnnf::Ddnnf;
+use ddnnife::ddnnf::statistics::{ChildConnections, NodeCount, Paths, Statistics};
 use ddnnife::parser;
 use file_diff::diff_files;
 use std::fs::{self, File};

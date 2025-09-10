@@ -1,11 +1,11 @@
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::tag,
     character::complete::{char, digit1, space1},
     combinator::{map, recognize, value},
     multi::many_m_n,
     sequence::{pair, preceded, terminated},
-    IResult, Parser,
 };
 
 use D4Token::*;

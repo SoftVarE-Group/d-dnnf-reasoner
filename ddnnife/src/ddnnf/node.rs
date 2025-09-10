@@ -1,6 +1,6 @@
+use NodeType::{And, False, Literal, Or, True};
 use num::BigInt;
 use std::fmt::{Display, Formatter};
-use NodeType::{And, False, Literal, Or, True};
 
 /// Represents all types of Nodes with its different parts
 #[derive(Debug, Clone, PartialEq)]

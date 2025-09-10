@@ -1,4 +1,4 @@
-use super::{Fitness, Limit, Literal, Variable, DEFAULT_LIMIT, DEFAULT_SEED};
+use super::{DEFAULT_LIMIT, DEFAULT_SEED, Fitness, Limit, Literal, Variable};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while};
 use nom::character::complete::space1;

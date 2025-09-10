@@ -1,11 +1,11 @@
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::tag,
     character::complete::{char, digit1},
     combinator::{map, recognize, value},
     multi::many1,
     sequence::{pair, preceded},
-    IResult, Parser,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq)]

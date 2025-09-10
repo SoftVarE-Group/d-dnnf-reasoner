@@ -6,7 +6,7 @@ pub mod node;
 pub mod statistics;
 
 use self::node::Node;
-use crate::parser::graph::{rebuild_graph, DdnnfGraph};
+use crate::parser::graph::{DdnnfGraph, rebuild_graph};
 use num::BigInt;
 use petgraph::stable_graph::NodeIndex;
 use std::collections::{HashMap, HashSet};

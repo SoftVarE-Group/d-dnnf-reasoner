@@ -82,11 +82,7 @@ impl Ddnnf {
                         .iter()
                         .map(|&index| {
                             let node = &self.nodes[index];
-                            if node.marker {
-                                &node.temp
-                            } else {
-                                &node.count
-                            }
+                            if node.marker { &node.temp } else { &node.count }
                         })
                         .product()
                 }
@@ -96,11 +92,7 @@ impl Ddnnf {
                     .iter()
                     .map(|&index| {
                         let node = &self.nodes[index];
-                        if node.marker {
-                            &node.temp
-                        } else {
-                            &node.count
-                        }
+                        if node.marker { &node.temp } else { &node.count }
                     })
                     .sum()
             }

@@ -5,20 +5,20 @@ pub mod graph;
 pub mod persisting;
 pub mod util;
 
-use crate::ddnnf::{extended_ddnnf::Attribute, node::Node, Ddnnf};
-use c2d_lexer::{lex_line_c2d, C2DToken, TId};
+use crate::ddnnf::{Ddnnf, extended_ddnnf::Attribute, node::Node};
+use c2d_lexer::{C2DToken, TId, lex_line_c2d};
 use core::panic;
 use csv::ReaderBuilder;
-use d4_lexer::{lex_line_d4, D4Token};
+use d4_lexer::{D4Token, lex_line_d4};
 use graph::DdnnfGraph;
 use itertools::Itertools;
 use log::{error, warn};
 use num::BigInt;
 use petgraph::{
+    Direction::{Incoming, Outgoing},
     graph::{EdgeIndex, NodeIndex},
     stable_graph::StableGraph,
     visit::DfsPostOrder,
-    Direction::{Incoming, Outgoing},
 };
 use std::cell::RefMut;
 use std::{
@@ -88,7 +88,8 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
                 }
                 None => {
                     // unknown standard or combination -> we assume d4 and choose total_features
-                    warn!("The first line of the file isn't a header and the option 'total_features' is not set. \
+                    warn!(
+                        "The first line of the file isn't a header and the option 'total_features' is not set. \
                         Hence, we can't determine the number of variables and as a result, we might not be able to construct a valid ddnnf. \
                         Nonetheless, we build a ddnnf with our limited information, but we discourage using ddnnife in this manner."
                     );
@@ -596,7 +597,9 @@ pub fn build_attributes(path: &Path) -> HashMap<String, Attribute> {
     let mut next_expected_id = 1;
     for id in record_ids {
         if id != next_expected_id {
-            panic!("Ids in column \"(Feature ID,Integer)\" must be in ascending order starting with \"1\" and increasing by one.")
+            panic!(
+                "Ids in column \"(Feature ID,Integer)\" must be in ascending order starting with \"1\" and increasing by one."
+            )
         }
         next_expected_id += 1;
     }
@@ -666,7 +669,11 @@ pub fn open_file_savely(path: &Path) -> File {
         Ok(x) => x,
         Err(err) => {
             // Bold, Red, Foreground Color (see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-            error!("The following error code occured while trying to open the file {}:\n{}\nAborting...", path.to_str().expect("Failed to serialize path."), err);
+            error!(
+                "The following error code occured while trying to open the file {}:\n{}\nAborting...",
+                path.to_str().expect("Failed to serialize path."),
+                err
+            );
             process::exit(1);
         }
     }

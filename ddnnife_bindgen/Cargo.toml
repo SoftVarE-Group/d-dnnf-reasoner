@@ -2,9 +2,8 @@
 name = "ddnnife_bindgen"
 description = "uniffi wrapper for ddnnife ffi bindings"
 version = "1.0.0"
-authors = ["Heiko Raab <heiko.raab@uni-ulm-de>", "Chico Sundermann <chico.sundermann@uni-ulm.de>", "Jan Baudisch <jan.baudisch@uni-ulm.de>"]
 repository = "https://github.com/SoftVarE-Group/d-dnnf-reasoner"
-edition = "2021"
+edition = "2024"
 license = "LGPL-3.0-or-later"
 workspace = ".."
 publish = false

@@ -1,6 +1,6 @@
 use super::super::{
-    covering_strategies::cover_with_caching_twise, t_iterator::TInteractionIter, SamplingResult,
-    SatWrapper,
+    SamplingResult, SatWrapper, covering_strategies::cover_with_caching_twise,
+    t_iterator::TInteractionIter,
 };
 use super::{AndMerger, SampleMerger};
 use super::{Config, Sample};

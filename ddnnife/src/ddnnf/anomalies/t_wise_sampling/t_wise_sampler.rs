@@ -2,10 +2,10 @@ use super::covering_strategies::cover_with_caching;
 use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
-use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
-use crate::util::rng;
 use crate::Ddnnf;
 use crate::NodeType;
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
+use crate::util::rng;
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
@@ -184,9 +184,11 @@ fn complete_partial_configs(
         }
     }
 
-    debug_assert!(sample
-        .iter()
-        .all(|config| !config.get_literals().contains(&0)));
+    debug_assert!(
+        sample
+            .iter()
+            .all(|config| !config.get_literals().contains(&0))
+    );
 }
 
 pub fn complete_partial_configs_optimal(sample: &mut Sample, ext_ddnnf: &ExtendedDdnnf) {

@@ -3,8 +3,8 @@ use crate::ddnnf::anomalies::t_wise_sampling::sample_merger::{AndMerger, SampleM
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use crate::ddnnf::anomalies::t_wise_sampling::{Config, Sample, SamplingResult};
-use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
+use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
 use itertools::Itertools;
 use std::cmp::min;
 use streaming_iterator::StreamingIterator;
