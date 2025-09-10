@@ -2,13 +2,13 @@ mod query;
 
 pub use query::Query;
 
+use ddnnife::Ddnnf;
 use ddnnife::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use ddnnife::util::{format_vec, format_vec_vec};
-use ddnnife::Ddnnf;
 use ddnnife_cnf::Cnf;
 use log::trace;
 use std::fs::File;
-use std::io::{stdin, Error, Result, Write};
+use std::io::{Error, Result, Write, stdin};
 
 static DEFAULT_LIMIT: Limit = 1;
 static DEFAULT_SEED: u64 = 42;
@@ -161,10 +161,10 @@ fn run_operation<T: ToString>(
     variables: &[Literal],
 ) -> String {
     // If no variables are given, simply perform the operation.
-    if variables.is_empty() {
-        if let Some(result) = operation(ddnnf, assumptions, false) {
-            return result.to_string();
-        }
+    if variables.is_empty()
+        && let Some(result) = operation(ddnnf, assumptions, false)
+    {
+        return result.to_string();
     }
 
     // In case variables are given, for each variable, we extend the assumptions and run the
@@ -189,10 +189,10 @@ fn run_operation<T: ToString>(
 
 #[cfg(test)]
 mod test {
-    use super::{handle_query, Query};
+    use super::{Query, handle_query};
+    use ddnnife::Ddnnf;
     use ddnnife::parser::build_ddnnf;
     use ddnnife::util::format_vec;
-    use ddnnife::Ddnnf;
     use num::{BigInt, One};
     use std::collections::HashSet;
     use std::io::{Error, Result};
@@ -354,7 +354,11 @@ mod test {
             res.contains(&"1 2 3 -4 -5 6 7 -8 -9 10 11 -12 -13 -14 15 16 -17 -18 19 20 -21 -22 -23 -24 25 26 -27 -28 -29 -30 31 32 -33 -34 -35 -36 37 38 39 40 41 -42")
         );
 
-        assert_eq!(res.len(), 2, "there should be only 2 configs although we wanted 10, because there are only 2 individual and valid configs");
+        assert_eq!(
+            res.len(),
+            2,
+            "there should be only 2 configs although we wanted 10, because there are only 2 individual and valid configs"
+        );
 
         let binding = handle_string_query(
             &mut vp9,

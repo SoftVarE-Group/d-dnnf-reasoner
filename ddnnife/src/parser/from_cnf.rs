@@ -3,13 +3,13 @@ use crate::{
     d4_lexer::parse_signed_alt_space1_number1,
 };
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::tag,
     character::complete::char,
     combinator::{map, recognize, value},
     multi::many1,
     sequence::{preceded, terminated},
-    IResult, Parser,
 };
 use std::cmp::max;
 use std::collections::{BTreeSet, HashSet};

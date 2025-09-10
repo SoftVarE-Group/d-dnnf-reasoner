@@ -1,10 +1,10 @@
-use super::super::t_iterator::TInteractionIter;
 use super::super::SamplingResult;
+use super::super::t_iterator::TInteractionIter;
 use super::{Config, Sample};
 use super::{OrMerger, SampleMerger};
 use crate::util::rng;
 use rand::prelude::SliceRandom;
-use std::cmp::{min, Ordering};
+use std::cmp::{Ordering, min};
 use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 

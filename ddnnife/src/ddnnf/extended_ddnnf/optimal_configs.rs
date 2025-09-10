@@ -1,6 +1,6 @@
+use crate::NodeType::*;
 use crate::ddnnf::anomalies::t_wise_sampling::Config;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
-use crate::NodeType::*;
 use bimap::BiHashMap;
 use itertools::Itertools;
 use std::cmp::Ordering;
@@ -53,10 +53,11 @@ impl OptimalConfig {
     }
 
     pub fn unify_disjoint(mut self, other: &Self) -> Self {
-        debug_assert!(self
-            .config
-            .get_decided_literals()
-            .all(|literal| !other.config.get_decided_literals().contains(&literal)));
+        debug_assert!(
+            self.config
+                .get_decided_literals()
+                .all(|literal| !other.config.get_decided_literals().contains(&literal))
+        );
 
         self.config.extend(other.config.get_decided_literals());
         self.value += other.value;
@@ -139,18 +140,15 @@ impl ExtendedDdnnf {
 
                 Some(unified_config)
             }
-            Or { children } => {
-                let best_config = children
-                    .iter()
-                    .flat_map(|&child_node_id| {
-                        partial_configs.get(child_node_id).unwrap_or_else(|| {
-                            panic!("No partial config for node {child_node_id} present.")
-                        })
+            Or { children } => children
+                .iter()
+                .flat_map(|&child_node_id| {
+                    partial_configs.get(child_node_id).unwrap_or_else(|| {
+                        panic!("No partial config for node {child_node_id} present.")
                     })
-                    .max()
-                    .cloned();
-                best_config
-            }
+                })
+                .max()
+                .cloned(),
         }
     }
 
@@ -325,7 +323,7 @@ pub fn merge_top_k_results_or(
             .iter()
             .enumerate()
             .zip(curr_idx_tuple.iter())
-            .filter(|((_, list), &i)| i < list.len())
+            .filter(|&((_, list), &i)| i < list.len())
             .map(|((list_idx, list), &i)| (&list[i], list_idx))
             .max_by(|(left, _), (right, _)| left.cmp(right))
             .expect("There must be an element left.");
@@ -340,8 +338,8 @@ pub fn merge_top_k_results_or(
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use crate::ddnnf::extended_ddnnf::test::build_sandwich_ext_ddnnf;
     use crate::Ddnnf;
+    use crate::ddnnf::extended_ddnnf::test::build_sandwich_ext_ddnnf;
     use num::ToPrimitive;
 
     pub fn build_sandwich_ext_ddnnf_with_objective_function_values() -> ExtendedDdnnf {

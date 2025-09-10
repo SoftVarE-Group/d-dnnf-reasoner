@@ -1,4 +1,4 @@
-use crate::{parser, Ddnnf};
+use crate::{Ddnnf, parser};
 use std::path::Path;
 use std::{error::Error, io::Write, sync::mpsc, thread};
 use workctl::WorkQueue;

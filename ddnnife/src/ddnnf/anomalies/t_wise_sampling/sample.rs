@@ -1,6 +1,6 @@
-use super::t_iterator::TInteractionIter;
 use super::Config;
-use std::cmp::{min, Ordering};
+use super::t_iterator::TInteractionIter;
+use std::cmp::{Ordering, min};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::iter;

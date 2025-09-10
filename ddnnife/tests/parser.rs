@@ -1,4 +1,4 @@
-use ddnnife::ddnnf::{node::NodeType::*, Ddnnf};
+use ddnnife::ddnnf::{Ddnnf, node::NodeType::*};
 use ddnnife::parser;
 use num::BigInt;
 use std::path::Path;

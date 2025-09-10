@@ -7,9 +7,9 @@ use std::{
 use itertools::Itertools;
 use num::{BigInt, BigRational, ToPrimitive, Zero};
 use once_cell::sync::Lazy;
-use rand::seq::SliceRandom;
 use rand::SeedableRng;
-use rand_distr::{weighted::WeightedAliasIndex, Binomial, Distribution};
+use rand::seq::SliceRandom;
+use rand_distr::{Binomial, Distribution, weighted::WeightedAliasIndex};
 use rand_pcg::{Lcg64Xsh32, Pcg32};
 
 use crate::Ddnnf;
@@ -157,9 +157,10 @@ impl Ddnnf {
                         acc_amount *= change.1;
                     } else {
                         // restrict the creation of any more configs
-                        enumeration_child_lists.push(vec![self
-                            .enumerate_node((&BigInt::ZERO, &BigInt::from(1)), child)[0]
-                            .clone()]);
+                        enumeration_child_lists.push(vec![
+                            self.enumerate_node((&BigInt::ZERO, &BigInt::from(1)), child)[0]
+                                .clone(),
+                        ]);
                     }
                 }
 
@@ -464,15 +465,18 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
-        assert!(vp9
-            .enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
-            .is_none());
+        assert!(
+            vp9.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
+                .is_none()
+        );
         assert!(vp9.enumerate(&mut vec![100], 1).is_none());
 
         assert!(auto1.enumerate(&mut vec![1, -1], 1).is_none());
-        assert!(auto1
-            .enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
-            .is_none());
+        assert!(
+            auto1
+                .enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
+                .is_none()
+        );
         assert!(auto1.enumerate(&mut vec![-10_000], 1).is_none());
     }
 
@@ -546,15 +550,18 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.uniform_random_sampling(&[1, -1], 1, 42).is_none());
-        assert!(vp9
-            .uniform_random_sampling(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
-            .is_none());
+        assert!(
+            vp9.uniform_random_sampling(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
+                .is_none()
+        );
         assert!(vp9.uniform_random_sampling(&[100], 1, 42).is_none());
 
         assert!(auto1.uniform_random_sampling(&[1, -1], 1, 42).is_none());
-        assert!(auto1
-            .uniform_random_sampling(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
-            .is_none());
+        assert!(
+            auto1
+                .uniform_random_sampling(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 42)
+                .is_none()
+        );
         assert!(auto1.uniform_random_sampling(&[-10_000], 1, 42).is_none());
     }
 }

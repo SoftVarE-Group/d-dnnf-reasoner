@@ -1,11 +1,11 @@
 pub(crate) mod objective_function;
 pub(crate) mod optimal_configs;
 
+use crate::Ddnnf;
 use crate::ddnnf::anomalies::t_wise_sampling::Config;
-use crate::ddnnf::extended_ddnnf::objective_function::ObjectiveFn;
 use crate::ddnnf::extended_ddnnf::Attribute::{BoolAttr, FloatAttr, IntegerAttr, StringAttr};
 use crate::ddnnf::extended_ddnnf::AttributeValue::{BoolVal, FloatVal, IntegerVal, StringVal};
-use crate::Ddnnf;
+use crate::ddnnf::extended_ddnnf::objective_function::ObjectiveFn;
 use itertools::Itertools;
 use std::collections::HashMap;
 

@@ -7,9 +7,10 @@ mod sat_wrapper;
 mod t_iterator;
 mod t_wise_sampler;
 
-use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
-use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::Ddnnf;
+use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
+use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
+use SamplingResult::ResultWithSample;
 pub use config::Config;
 use covering_strategies::cover_with_caching_sorted;
 use itertools::Itertools;
@@ -25,7 +26,6 @@ use streaming_iterator::StreamingIterator;
 use t_iterator::TInteractionIter;
 use t_wise_sampler::TWiseSampler;
 use t_wise_sampler::{complete_partial_configs_optimal, trim_and_resample};
-use SamplingResult::ResultWithSample;
 
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
@@ -140,10 +140,10 @@ impl ExtendedDdnnf {
 
 #[cfg(test)]
 mod test {
-    use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
     use crate::ddnnf::anomalies::t_wise_sampling::Sample;
+    use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
     use crate::ddnnf::extended_ddnnf::optimal_configs::test::build_sandwich_ext_ddnnf_with_objective_function_values;
-    use crate::{parser::build_ddnnf, Ddnnf};
+    use crate::{Ddnnf, parser::build_ddnnf};
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::path::Path;
@@ -152,9 +152,11 @@ mod test {
     fn check_validity_of_sample(sample: &Sample, ddnnf: &Ddnnf, t: usize) {
         let sample_literals: HashSet<i32> = sample.get_literals().iter().copied().collect();
         sample.iter().for_each(|config| {
-            assert!(config
-                .get_decided_literals()
-                .all(|literal| sample_literals.contains(&literal)));
+            assert!(
+                config
+                    .get_decided_literals()
+                    .all(|literal| sample_literals.contains(&literal))
+            );
         });
 
         sample

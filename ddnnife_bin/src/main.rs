@@ -1,15 +1,15 @@
 mod stream;
 
-use crate::stream::{handle_query, stream, Query};
+use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
-use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::ddnnf::Ddnnf;
+use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::info;
 use std::fs::File;
-use std::io::{self, stdout, BufRead, BufReader, BufWriter, Error, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Error, Write, stdout};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -264,8 +264,13 @@ fn main() -> io::Result<()> {
                 writer.write_all(count.to_string().as_ref())?;
 
                 let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
-                info!("While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
-                    That are {:.2}%", marked_nodes.len(), ddnnf.nodes.len(), marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0);
+                info!(
+                    "While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
+                    That are {:.2}%",
+                    marked_nodes.len(),
+                    ddnnf.nodes.len(),
+                    marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0
+                );
             }
             // computes the cardinality of features and saves the results in a .csv file
             // the cardinalities are always sorted from lowest to highest (also for multiple threads)

@@ -350,11 +350,13 @@ mod test {
                 .into_iter()
                 .map(|f| f as i16)
                 .collect::<Vec<i16>>();
-            assert!(vp9_atomic_sets
-                .iter()
-                .filter(|set| vp9_core_features.iter().all(|f| set.contains(f)))
-                .exactly_one()
-                .is_ok());
+            assert!(
+                vp9_atomic_sets
+                    .iter()
+                    .filter(|set| vp9_core_features.iter().all(|f| set.contains(f)))
+                    .exactly_one()
+                    .is_ok()
+            );
         }
     }
 
@@ -457,7 +459,9 @@ mod test {
 
         assert_eq!(
             vec![
-                vec![1, 2, 3, 4, 5, 8, 12, 14, 15, 16, 17, 18, 32, 34, 36, 37, 39, 40, 41, 42, 43],
+                vec![
+                    1, 2, 3, 4, 5, 8, 12, 14, 15, 16, 17, 18, 32, 34, 36, 37, 39, 40, 41, 42, 43
+                ],
                 vec![10, 11, 20, 22, 23, 25, 26, 33, 35],
                 vec![19, 44]
             ],
