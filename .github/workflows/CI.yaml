@@ -57,3 +57,26 @@ jobs:
         with:
           name: ddnnife-${{ matrix.target.double }}
           path: result
+
+  Publish:
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref_type == 'tag' }}
+    needs:
+      - Check
+      - Build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: softvare-group
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          nix develop --command cargo publish -p ddnnife
+          nix develop --command cargo publish -p ddnnife_cli
