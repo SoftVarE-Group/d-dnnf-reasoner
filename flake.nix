@@ -46,7 +46,7 @@
           };
 
           defaultAttrs = rustAttrs // {
-            component = "ddnnife_bin";
+            component = "ddnnife_cli";
           };
 
           libAttrs = defaultAttrs // {
