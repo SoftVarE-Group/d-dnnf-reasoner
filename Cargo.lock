@@ -300,7 +300,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ddnnife_bin"
+name = "ddnnife_bindgen"
+version = "1.0.0"
+dependencies = [
+ "uniffi",
+]
+
+[[package]]
+name = "ddnnife_cli"
 version = "0.10.0"
 dependencies = [
  "clap",
@@ -314,13 +321,6 @@ dependencies = [
  "num",
  "pretty_env_logger",
  "serde_json",
-]
-
-[[package]]
-name = "ddnnife_bindgen"
-version = "1.0.0"
-dependencies = [
- "uniffi",
 ]
 
 [[package]]

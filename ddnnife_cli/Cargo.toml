@@ -1,5 +1,5 @@
 [package]
-name = "ddnnife_bin"
+name = "ddnnife_cli"
 description = "d-DNNF toolkit"
 version = "0.10.0"
 edition = "2024"

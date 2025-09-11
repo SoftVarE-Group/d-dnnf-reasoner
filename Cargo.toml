@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "ddnnife",
-    "ddnnife_bin",
     "ddnnife_bindgen",
+    "ddnnife_cli",
     "ddnnife_cnf",
     "ddnnife_dhone",
     "ddnnife_ffi",
