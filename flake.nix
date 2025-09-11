@@ -96,6 +96,7 @@
           );
 
           python = pkgs.callPackage ./nix/ddnnife.nix pythonAttrs;
+          python-static = pkgsStatic.callPackage ./nix/ddnnife.nix pythonAttrs;
           python-windows = pkgsWindows.callPackage ./nix/ddnnife.nix pythonAttrs;
 
           documentation = pkgs.callPackage ./nix/ddnnife.nix (
