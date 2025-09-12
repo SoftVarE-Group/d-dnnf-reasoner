@@ -1,3 +1,13 @@
+[project]
+name = "ddnnife"
+dynamic = ["version"]
+description = "d-DNNF toolkit"
+license = "LGPL-3.0-or-later"
+readme = "README.md"
+
+[project.urls]
+source = "https://github.com/SoftVarE-Group/d-dnnf-reasoner"
+
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
@@ -6,5 +16,4 @@ build-backend = "maturin"
 profile = "release"
 bindings = "uniffi"
 manifest-path = "../../ddnnife_ffi/Cargo.toml"
-frozen = true
-strip = true
+offline = true

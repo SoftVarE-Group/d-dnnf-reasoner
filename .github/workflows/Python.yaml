@@ -12,21 +12,25 @@ jobs:
           - double: aarch64-linux
             runner: ubuntu-24.04-arm
             flake: python
+            test: true
           - double: aarch64-linux-musl
             runner: ubuntu-24.04-arm
             flake: python-static
           - double: x86_64-linux
             runner: ubuntu-24.04
             flake: python
+            test: true
           - double: x86_64-linux-musl
             runner: ubuntu-24.04
             flake: python-static
           - double: x86_64-darwin
             runner: macos-13
             flake: python
+            test: true
           - double: aarch64-darwin
             runner: macos-15
             flake: python
+            test: true
           - double: x86_64-windows
             runner: ubuntu-24.04
             flake: python-windows
@@ -43,8 +47,36 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
         run: nix build -L .#${{ matrix.target.flake }}
+      - name: Test
+        if: ${{ matrix.target.test }}
+        working-directory: bindings/python
+        run: |
+          pip install ddnnife --find-links ../../result
+          pip install pytest
+          pytest --verbose
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: ddnnife-python-${{ matrix.target.double }}
           path: result
+
+  Publish:
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref_type == 'tag' }}
+    needs:
+      - Build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Download
+        uses: actions/download-artifact@v5
+        with:
+          path: ${{ runner.temp }}/wheels
+          pattern: ddnnife-python-*
+          merge-multiple: true
+      - name: Publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: nix run nixpkgs#uv -- publish ${{ runner.temp }}/wheels/*
