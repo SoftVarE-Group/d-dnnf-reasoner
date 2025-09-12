@@ -35,7 +35,7 @@ pub fn rebuild_graph(
             // extract the parsed Token
             TId::Literal { feature } => Node::new_literal(feature),
             TId::And => Node::new_and(calc_and_count(&mut parsed_nodes, &neighs), neighs),
-            TId::Or => Node::new_or(0, calc_or_count(&mut parsed_nodes, &neighs), neighs),
+            TId::Or => Node::new_or(calc_or_count(&mut parsed_nodes, &neighs), neighs),
             TId::True => Node::new_bool(true),
             TId::False => Node::new_bool(false),
             TId::Header => {

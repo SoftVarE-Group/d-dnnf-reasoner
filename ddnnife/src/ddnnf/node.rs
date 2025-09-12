@@ -55,7 +55,7 @@ impl Node {
 
     #[inline]
     /// Creates a new Or node
-    pub fn new_or(_decision_var: u32, count: BigInt, children: Vec<usize>) -> Node {
+    pub fn new_or(count: BigInt, children: Vec<usize>) -> Node {
         Node::new_node(count, Or { children })
     }
 
@@ -145,7 +145,7 @@ mod test {
             }
         );
         assert_eq!(
-            Node::new_or(42, BigInt::from(42), vec![1, 5, 10]),
+            Node::new_or(BigInt::from(42), vec![1, 5, 10]),
             Node {
                 marker: false,
                 count: BigInt::from(42),
