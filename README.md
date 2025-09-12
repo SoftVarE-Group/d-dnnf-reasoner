@@ -56,10 +56,11 @@ There is a tag for each branch and for each tagged release.
 To pull the container, use:
 
 ```
-docker pull ghcr.io/softvare-group/ddnnife:latest
+docker pull ghcr.io/softvare-group/ddnnife:latest-amd64
 ```
 
-Then, you can use it like the standalone binary.
+There is also an `-arm64` image available.
+
 For `ddnnife` to be able to access files, you need to create a volume.
 The following mounts `<local/directory>` on `/work` inside the container:
 
