@@ -2,33 +2,22 @@
 
 > A d-DNNF reasoner.
 
-`ddnnife` takes a smooth d-DNNF following the standard format specified by [c2d][c2d] or the [d4][d4] standard (an extension of the c2d standard).
-After parsing and storing, `ddnnife` can be used to compute the cardinality of single features, all features, or partial configurations.
-Additionally, via the stream API, it can compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations, and produce uniform random samples. 
+`ddnnife` takes a smooth d-DNNF following the standard format specified by [c2d][c2d] or the [d4][d4] standard.
+It can be used to compute the cardinality of single features, all features, or partial configurations.
+Furthermore, it can compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations and produce uniform random samples.
 
-# Table of contents
-
-1. [Building](#building)
-   - [Requirements](#requirements)
-   - [Build](#build)
-   - [Tests](#tests)
-2. [Usage](#usage)
-   - [CLI](#cli)
-   - [Stream API](#stream-api)
-   - [Documentation](#documentation)
-3. [Container](#container)
+In addition to the `ddnnife` CLI, a Rust API is provided as well as bindings for Kotlin/Java and Python.
 
 # Installation
 
-## Pre-built
+## Pre-Built
 
 You can use pre-built binaries for Linux, macOS or Windows.
 Builds for the latest release are attached as assets for each [release][releases].
 
 ## Nix
 
-This project can be used and developed via a [Nix][nix] [flake][flake].
-
+This project can be used via a [Nix][nix] [flake][flake].
 With Nix installed simply run the following for a build:
 
 ```
@@ -36,7 +25,6 @@ nix build
 ```
 
 The result will be at `result`.
-
 To build without the need to clone the repository, use:
 
 ```
@@ -52,8 +40,6 @@ The following flake outputs are available:
 | `ddnnife-windows` | Windows executable of ddnnife                    |
 | `kotlin`          | Kotlin bindings as a JAR (platform-specific)[^1] |
 | `kotlin-windows`  | Kotlin bindings as a JAR (Windows)               |
-| `python`          | Python bindings                                  |
-| `python-windows`  | Python bindings (Windows)                        |
 
 [^1]: There also is a platform-independent JAR available with each [release][releases].
 
@@ -61,16 +47,13 @@ By default, the `ddnnife` output is built.
 
 ## Container
 
-There is also a container image for usage with [Docker][docker], [Podman][podman] or any other container tool.
-
+A container image is available for usage with [Docker][docker], [Podman][podman] or any other container tool.
 For an overview, see [here][container].
-
 There is a tag for each branch and for each tagged release.
-Currently, the latest version is found on the `main` branch.
 To pull the container, use:
 
 ```
-docker pull ghcr.io/softvare-group/ddnnife:main
+docker pull ghcr.io/softvare-group/ddnnife:latest
 ```
 
 Then, you can use it like the standalone binary.
@@ -81,40 +64,14 @@ The following mounts `<local/directory>` on `/work` inside the container:
 docker run -v <local/directory>:/work ddnnife:main /work/<file.ddnnf> count
 ```
 
-# Building
+## From Source
 
-## Requirements
-
-- [Rust][rust]
-
-## Build
-
-When building with cargo, the resulting binaries will be at `target/release/{ddnnife, dhone}`.
+This requires a [Rust][rust] toolchain to be installed.
+When building with Cargo, the resulting binaries will be at `target/release/{ddnnife, dhone}`.
 
 ```
 cargo build --release
 ```
-
-## Tests
-
-### Running
-
-We highly encourage running tests on the release build, as the debug build is very slow in comparison.
-
-```
-cargo test --release
-```
-
-### Coverage
-
-Test coverage can be determined with [`llvm-cov`][llvm-cov].
-It is not included with `rustup` and has to be installed separately, please see its installation instructions.
-
-```
-cargo llvm-cov --release --open
-```
-
-`--open` will open the report in the browser instead of the console (the default).
 
 # Usage
 
@@ -128,25 +85,25 @@ Simply execute the binaries with the `-h`, `--help` flag to get an overview of a
 The following examples assume `ddnnife` and `dhone` to be present in the path.
 This could be achieved by modifying `$PATH` on unix system for example.
 
-Prepossesses the d-DNNF: `berkeleydb_dsharp.nnf` which may need preprocessing because it was created with dsharp (in this case it is necessary) and save the resulting d-DNNF as `berkeleydb_prepo.nnf`.
+Preprocesses the d-DNNF: `berkeleydb_dsharp.nnf` which may need preprocessing because it was created with dsharp (in this case it is necessary) and save the resulting d-DNNF as `berkeleydb_prepo.nnf`.
 
 ```
 ddnnife -i example_input/berkeleydb_dsharp.nnf --save-ddnnf example_input/berkeleydb_prepo.nnf
 ```
 
-Compute the cardinality of a feature model for `auto1`.
+Computes the cardinality of a feature model for `auto1`.
 
 ```
 ddnnife -i example_input/auto1_c2d.nnf count
 ```
 
-Compute the cardinality of features for `busybox-1.18.0_c2d.nnf` and saves the result as `busybox-features.csv` in the current working directory.
+Computes the cardinality of features for `busybox-1.18.0_c2d.nnf` and saves the result as `busybox-features.csv` in the current working directory.
 
 ```
 ddnnife -i example_input/busybox-1.18.0_c2d.nnf -o busybox-features.csv count-features
 ```
 
-Compute the cardinality of features for `auto1` when compiled with d4.
+Computes the cardinality of features for `auto1` when compiled with d4.
 Here we need the `-t` option that allows us to specify the total number of features.
 That information is needed but not contained in d-DNNFs using the d4 standard.
 Furthermore, the parsing takes more time because we have to smooth the d-DNNF.
@@ -284,8 +241,6 @@ The end of an answer is indicated by a new line.
 
 ### Examples
 
-After entering the stream API, the following examples are conceivable but not exhaustive:
-
 Check whether features 10, 100, and 1000 are either core or dead under the assumption that feature 1 is deselected.
 
 ```
@@ -326,31 +281,12 @@ If no candidates are supplied, all features of the d-DNNF will be the candidates
 atomic v 1 2 3 4 5 6 7 8 9 10 a 1
 ```
 
-Saves the nnf as smooth d-DNNF in the c2d format. The parameter `p` or `path` has to be set, and the path must be absolute.
-
-```
-save-ddnnf /path/to/d-DNNFs/auto1.nnf
-```
-
-## Documentation
-
-To generate an HTML documentation of the code and open it in the default browser, use:
-
-```
-cargo doc --open
-```
-
 [releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases
 [c2d]: http://reasoning.cs.ucla.edu/c2d
 [d4]: https://github.com/SoftVarE-Group/d4v2
 [rust]: https://rust-lang.org
-[boost]: https://boost.org
-[gmp]: https://gmplib.org
-[mtkahypar]: https://github.com/kahypar/mt-kahypar
-[msys2]: https://msys2.org
-[llvm-cov]: https://github.com/taiki-e/cargo-llvm-cov
 [nix]: https://nixos.org
-[flake]: https://nixos.wiki/wiki/Flakes
+[flake]: https://wiki.nixos.org/wiki/Flakes
 [docker]: https://docker.com
 [podman]: https://podman.io
 [container]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/pkgs/container/ddnnife
