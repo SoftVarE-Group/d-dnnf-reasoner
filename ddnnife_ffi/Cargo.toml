@@ -1,7 +1,7 @@
 [package]
 name = "ddnnife_ffi"
 description = "ddnnife FFI bindings"
-version = "0.10.0"
+version = "0.11.0"
 repository = "https://github.com/SoftVarE-Group/d-dnnf-reasoner"
 edition = "2024"
 license = "LGPL-3.0-or-later"
