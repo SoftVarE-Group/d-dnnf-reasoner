@@ -14,7 +14,7 @@ resolver = "2"
 clap = { version = "4", features = ["derive"] }
 csv = "1"
 ddnnife = { path = "ddnnife" }
-ddnnife_cnf = { path = "ddnnife_cnf" }
+ddnnife_cnf = { path = "ddnnife_cnf", version = "0.1" }
 log = "0.4"
 mimalloc = "0.1"
 num = "0.4"
