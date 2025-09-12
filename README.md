@@ -1,3 +1,6 @@
+[![Crates.io Version](https://img.shields.io/crates/v/ddnnife)][crate]
+[![PyPI - Version](https://img.shields.io/pypi/v/ddnnife)][pypi]
+
 # ddnnife
 
 > A d-DNNF reasoner.
@@ -6,7 +9,7 @@
 It can be used to compute the cardinality of single features, all features, or partial configurations.
 Furthermore, it can compute SAT queries, core/dead features, atomic sets, enumerate complete valid configurations and produce uniform random samples.
 
-In addition to the `ddnnife` CLI, a Rust API is provided as well as bindings for Kotlin/Java and Python.
+In addition to the `ddnnife` CLI, a [Rust API][crate] is provided as well as bindings for Kotlin/Java and [Python][pypi].
 
 # Installation
 
@@ -281,6 +284,8 @@ If no candidates are supplied, all features of the d-DNNF will be the candidates
 atomic v 1 2 3 4 5 6 7 8 9 10 a 1
 ```
 
+[crate]: https://crates.io/crates/ddnnife
+[pypi]: https://pypi.org/project/ddnnife
 [releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases
 [c2d]: http://reasoning.cs.ucla.edu/c2d
 [d4]: https://github.com/SoftVarE-Group/d4v2
