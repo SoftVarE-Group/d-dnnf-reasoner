@@ -7,7 +7,7 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane.url = "github:ipetkov/crane/v0.20.3";
+    crane.url = "github:ipetkov/crane/v0.21.1";
   };
 
   outputs =
