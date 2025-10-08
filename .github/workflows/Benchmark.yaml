@@ -13,12 +13,25 @@ on:
       - closed
 
 env:
-  BENCHER_PROJECT: 48300797-c076-4608-b186-17bee9bca2da
+  BENCHER_PROJECT: ca0e42cd-8d49-4149-aa9b-dd800da0ca0f
   BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+  BENCHER_ADAPTER: rust_criterion
 
 jobs:
   Benchmark:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - double: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - double: x86_64-linux
+            runner: ubuntu-24.04
+          - double: x86_64-darwin
+            runner: macos-13
+          - double: aarch64-darwin
+            runner: macos-15
+    runs-on: ${{ matrix.target.runner }}
     if: >-
       github.event_name != 'pull_request' || (
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -44,28 +57,28 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           bencher run \
-          --adapter rust_criterion \
           --file result/benchmark.txt \
           --branch ${{ github.ref_name }} \
-          --testbed ${{ runner.os }} \
+          --testbed ${{ matrix.target.double }} \
           --threshold-measure latency \
           --threshold-test t_test \
           --threshold-max-sample-size 64 \
           --threshold-upper-boundary 0.95 \
           --thresholds-reset \
+          --ci-only-on-alert \
           --github-actions ${{ secrets.GITHUB_TOKEN }}
       - name: Upload
         if: github.event_name == 'pull_request'
         run: |
           bencher run \
-          --adapter rust_criterion \
           --file result/benchmark.txt \
           --branch ${{ github.head_ref }} \
-          --testbed ${{ runner.os }} \
+          --testbed ${{ matrix.target.double }} \
           --start-point ${{ github.base_ref }} \
           --start-point-hash ${{ github.event.pull_request.base.sha }} \
           --start-point-clone-thresholds \
           --start-point-reset \
+          --ci-only-on-alert \
           --github-actions ${{ secrets.GITHUB_TOKEN }}
 
   Archive:
