@@ -30,7 +30,7 @@
       ];
     in
     {
-      formatter = lib.genAttrs systems (system: nixpkgs.legacyPackages.${system}.nixfmt-rfc-style);
+      formatter = lib.genAttrs systems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
       packages = lib.genAttrs systems (
         system:
         let
@@ -107,7 +107,13 @@
             }
           );
 
-          benchmark = pkgs.callPackage ./nix/ddnnife.nix (rustAttrs // { benchmark = true; });
+          benchmark = pkgs.callPackage ./nix/ddnnife.nix (
+            rustAttrs
+            // {
+              benchmark = true;
+              component = "ddnnife";
+            }
+          );
 
           container = pkgs.dockerTools.buildLayeredImage {
             name = "ddnnife";

@@ -125,6 +125,7 @@ craneLib.${craneAction} (
     cargoClippyExtraArgs = "--all-features -- --deny warnings";
   }
   // lib.optionalAttrs benchmark {
+    pname = "${name}-bench";
     cargoTestCommand = "cargo bench > benchmark.txt";
     installPhaseCommand = "install -D benchmark.txt $out/benchmark.txt";
   }
