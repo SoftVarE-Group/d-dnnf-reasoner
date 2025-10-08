@@ -107,6 +107,8 @@
             }
           );
 
+          benchmark = pkgs.callPackage ./nix/ddnnife.nix (rustAttrs // { benchmark = true; });
+
           container = pkgs.dockerTools.buildLayeredImage {
             name = "ddnnife";
             contents = [

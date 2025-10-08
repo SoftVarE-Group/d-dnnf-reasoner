@@ -1,0 +1,83 @@
+name: Benchmark
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+      - closed
+
+env:
+  BENCHER_PROJECT: 48300797-c076-4608-b186-17bee9bca2da
+  BENCHER_API_TOKEN: ${{ secrets.BENCHER_API_TOKEN }}
+
+jobs:
+  Benchmark:
+    runs-on: ubuntu-24.04
+    if: >-
+      github.event_name != 'pull_request' || (
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.state == 'open')
+    permissions:
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v16
+        with:
+          name: softvare-group
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Bencher
+        uses: bencherdev/bencher@main
+      - name: Run
+        run: nix build -L .#benchmark
+      - name: Upload
+        if: github.event_name != 'pull_request'
+        run: |
+          bencher run \
+          --adapter rust_criterion \
+          --file result/benchmark.txt \
+          --branch ${{ github.ref_name }} \
+          --testbed ${{ runner.os }} \
+          --threshold-measure latency \
+          --threshold-test t_test \
+          --threshold-max-sample-size 64 \
+          --threshold-upper-boundary 0.95 \
+          --thresholds-reset \
+          --github-actions ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload
+        if: github.event_name == 'pull_request'
+        run: |
+          bencher run \
+          --adapter rust_criterion \
+          --file result/benchmark.txt \
+          --branch ${{ github.head_ref }} \
+          --testbed ${{ runner.os }} \
+          --start-point ${{ github.base_ref }} \
+          --start-point-hash ${{ github.event.pull_request.base.sha }} \
+          --start-point-clone-thresholds \
+          --start-point-reset \
+          --github-actions ${{ secrets.GITHUB_TOKEN }}
+
+  Archive:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.state == 'closed'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Bencher
+        uses: bencherdev/bencher@main
+      - name: Archive
+        run: bencher archive --branch ${{ github.head_ref }}

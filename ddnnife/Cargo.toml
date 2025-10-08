@@ -29,3 +29,10 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 streaming-iterator = "0.1"
 workctl = "0.2"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "load"
+harness = false

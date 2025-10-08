@@ -6,6 +6,7 @@
   deny ? false,
   format ? false,
   lint ? false,
+  benchmark ? false,
   documentation ? false,
   craneLibDefault,
   buildPackages,
@@ -122,6 +123,10 @@ craneLib.${craneAction} (
     cargoExtraArgs = lib.optionalString (component != null) "--package ${component}";
     cargoTestExtraArgs = cargoExtraArgs;
     cargoClippyExtraArgs = "--all-features -- --deny warnings";
+  }
+  // lib.optionalAttrs benchmark {
+    cargoTestCommand = "cargo bench > benchmark.txt";
+    installPhaseCommand = "install -D benchmark.txt $out/benchmark.txt";
   }
   // lib.optionalAttrs pythonLib {
     nativeBuildInputs = [
