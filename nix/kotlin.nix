@@ -1,7 +1,7 @@
 {
   bindgen,
-  craneLibDefault,
   ddnnife-kotlin,
+  crane,
   fenix,
   gradle,
   lib,
@@ -17,7 +17,7 @@ let
   libFile = "${libPrefix}ddnnife${stdenv.hostPlatform.extensions.sharedLibrary}";
 
   toolchain = pkgs: fenix.packages.${pkgs.stdenv.buildPlatform.system}.stable.defaultToolchain;
-  craneLib = craneLibDefault.overrideToolchain (p: toolchain p);
+  craneLib = (crane.mkLib pkgs).overrideToolchain (p: toolchain p);
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife_ffi/Cargo.toml; };
   version = metadata.version;

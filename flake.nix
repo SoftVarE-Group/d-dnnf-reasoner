@@ -2,12 +2,12 @@
   description = "Packages and development environments for ddnnife";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane.url = "github:ipetkov/crane/v0.21.1";
+    crane.url = "github:ipetkov/crane/v0.22.0";
   };
 
   outputs =
@@ -41,7 +41,7 @@
           pkgsSelf = self.packages.${system};
 
           rustAttrs = {
-            craneLibDefault = crane.mkLib pkgs;
+            inherit crane;
             inherit fenix;
           };
 
@@ -70,7 +70,7 @@
           default = pkgsSelf.ddnnife;
 
           ddnnife = pkgs.callPackage ./nix/ddnnife.nix defaultAttrs;
-          ddnnife-static = pkgsStatic.callPackage ./nix/ddnnife.nix defaultAttrs;
+          ddnnife-static = pkgsStatic.callPackage ./nix/ddnnife.nix (defaultAttrs // { cranePkgs = pkgs; });
           ddnnife-windows = pkgsWindows.callPackage ./nix/ddnnife.nix defaultAttrs;
 
           libddnnife = pkgs.callPackage ./nix/ddnnife.nix libAttrs;
@@ -96,7 +96,7 @@
           );
 
           python = pkgs.callPackage ./nix/ddnnife.nix pythonAttrs;
-          python-static = pkgsStatic.callPackage ./nix/ddnnife.nix pythonAttrs;
+          python-static = pkgsStatic.callPackage ./nix/ddnnife.nix (pythonAttrs // { cranePkgs = pkgs; });
           python-windows = pkgsWindows.callPackage ./nix/ddnnife.nix pythonAttrs;
 
           documentation = pkgs.callPackage ./nix/ddnnife.nix (
@@ -137,7 +137,7 @@
           pkgs = nixpkgs.legacyPackages.${system};
 
           defaultAttrs = {
-            craneLibDefault = crane.mkLib pkgs;
+            inherit crane;
             inherit fenix;
           };
         in
