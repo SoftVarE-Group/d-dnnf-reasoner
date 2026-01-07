@@ -28,7 +28,7 @@ jobs:
           - double: x86_64-linux
             runner: ubuntu-24.04
           - double: x86_64-darwin
-            runner: macos-13
+            runner: macos-15-intel
           - double: aarch64-darwin
             runner: macos-15
     runs-on: ${{ matrix.target.runner }}
@@ -41,7 +41,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Bencher
         uses: bencherdev/bencher@main
       - name: Archive

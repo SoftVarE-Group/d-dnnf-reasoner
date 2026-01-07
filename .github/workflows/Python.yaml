@@ -24,7 +24,7 @@ jobs:
             runner: ubuntu-24.04
             flake: python-static
           - double: x86_64-darwin
-            runner: macos-13
+            runner: macos-15-intel
             flake: python
             test: true
           - double: aarch64-darwin
@@ -37,7 +37,7 @@ jobs:
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
@@ -67,11 +67,11 @@ jobs:
       - Build
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Download
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           path: ${{ runner.temp }}/wheels
           pattern: ddnnife-python-*

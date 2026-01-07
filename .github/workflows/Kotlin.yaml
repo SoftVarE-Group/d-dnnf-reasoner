@@ -33,7 +33,7 @@ jobs:
           - double:
               nix: x86_64-darwin
               jvm: darwin-x86-64
-            runner: macos-13
+            runner: macos-15-intel
             flake:
               kotlin: kotlin
               library: libddnnife
@@ -47,7 +47,7 @@ jobs:
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
