@@ -14,6 +14,24 @@ pub struct Cnf {
     pub clauses: Vec<Clause>,
 }
 
+impl Cnf {
+    /// Creates a new CNF with model count 0.
+    pub fn with_count_0() -> Self {
+        Self {
+            num_variables: 1,
+            clauses: vec![vec![1], vec![-1]],
+        }
+    }
+
+    /// Creates a new CNF with model count 1.
+    pub fn with_count_1() -> Self {
+        Self {
+            num_variables: 1,
+            clauses: vec![vec![1]],
+        }
+    }
+}
+
 impl Display for Cnf {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let num_clauses = self.clauses.len();

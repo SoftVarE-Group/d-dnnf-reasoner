@@ -91,7 +91,24 @@ impl From<Biconditional> for Clauses {
 
 impl From<&Ddnnf> for Cnf {
     /// Generates an equi-countable CNF representation via Tseitin transformation.
+    ///
+    /// **Note:** The d-DNNF is not allowed to contain boolean nodes in positions other than the root
+    /// node.
     fn from(ddnnf: &Ddnnf) -> Self {
+        // Check for special case of boolean root nodes.
+        let root_index = ddnnf.nodes.len() - 1;
+        let root = &ddnnf.nodes[root_index];
+
+        // A `true` root node implicates a model count of `1`.
+        if root.ntype == NodeType::True {
+            return Cnf::with_count_1();
+        }
+
+        // A `false` root node implicates a model count of `0`.
+        if root.ntype == NodeType::False {
+            return Cnf::with_count_0();
+        }
+
         // Index to keep track of the last variable introduced to reference a Tseitin transformation.
         let mut tseitin_index = ddnnf.number_of_variables as usize + 1;
 
@@ -126,10 +143,8 @@ impl From<&Ddnnf> for Cnf {
                     &mut tseitin_index,
                 ),
                 NodeType::Literal { literal } => *literal as Literal,
-                // TODO: what to do about these?
-                NodeType::True => unreachable!(),
-                // TODO: what to do about these?
-                NodeType::False => unreachable!(),
+                NodeType::True => unreachable!("Boolean nodes are only allowed as a root node."),
+                NodeType::False => unreachable!("Boolean nodes are only allowed as a root node."),
             };
 
             node_literals[index] = literal;
