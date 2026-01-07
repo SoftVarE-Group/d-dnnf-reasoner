@@ -267,20 +267,20 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
 
             // A False node as a child of an AND node leads to a chain of AND node deletions.
             if child_type == TId::False && node_type == TId::And {
-                delete_chain(&mut ddnnf_graph, node);
+                delete_chain(&mut ddnnf_graph, node, TId::False);
             }
 
             // A True node as a child of an OR node leads to a chain of OR node deletions.
             if child_type == TId::True && node_type == TId::Or {
-                delete_chain(&mut ddnnf_graph, node);
+                delete_chain(&mut ddnnf_graph, node, TId::True);
             }
         }
     }
 
-    // Remove all True and False nodes.
-    ddnnf_graph.retain_nodes(|graph, node| {
-        let node = graph[node];
-        node != TId::True && node != TId::False
+    // Remove all True and False nodes that are not the root node.
+    ddnnf_graph.retain_nodes(|graph, node_index| {
+        let node = graph[node_index];
+        node_index == root || (node != TId::True && node != TId::False)
     });
 
     // third dfs:
@@ -359,8 +359,9 @@ fn get_literal_indices(
     literal_nodes
 }
 
-/// Starting from an initial node, removes all parent nodes of the same type.
-fn delete_chain(ddnnf_graph: &mut DdnnfGraph, start: NodeIndex) {
+/// Starting from an initial node, removes all parent nodes of the same type and replace the chain
+/// with a specified node type.
+fn delete_chain(ddnnf_graph: &mut DdnnfGraph, start: NodeIndex, replacement: TId) {
     // The type of node to remove.
     let node_type = ddnnf_graph[start];
 
@@ -378,8 +379,13 @@ fn delete_chain(ddnnf_graph: &mut DdnnfGraph, start: NodeIndex) {
             }
         }
 
-        // Finally remove the node itself.
-        ddnnf_graph.remove_node(current);
+        // If it is the last node in the chain, replace it.
+        if to_remove.is_empty() {
+            ddnnf_graph[current] = replacement;
+        } else {
+            // Otherwise remove it.
+            ddnnf_graph.remove_node(current);
+        }
     }
 }
 
