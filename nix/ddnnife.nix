@@ -8,13 +8,14 @@
   lint ? false,
   benchmark ? false,
   documentation ? false,
-  craneLibDefault,
-  buildPackages,
+  crane,
   fenix,
   lib,
-  maturin,
   pkgs,
+  cranePkgs ? null,
   stdenv,
+  buildPackages,
+  maturin,
 }:
 let
   # The default MinGW GCC in Nix comes with mcfgthreads which seems to be unable
@@ -42,7 +43,11 @@ let
       fenix.packages.${system}.targets.${target}.stable.rust-std
     ];
 
-  craneLib = craneLibDefault.overrideToolchain (p: toolchain p);
+  craneLib =
+    let
+      pkgs' = if cranePkgs != null then cranePkgs else pkgs;
+    in
+    (crane.mkLib pkgs').overrideToolchain (p: toolchain p);
 
   metadata = craneLib.crateNameFromCargoToml { cargoToml = ../ddnnife/Cargo.toml; };
 
@@ -97,10 +102,7 @@ let
     doCheck = test;
   }
   // lib.optionalAttrs stdenv.targetPlatform.isWindows {
-    depsBuildBuild = [
-      cc
-      pkgs.windows.pthreads
-    ];
+    depsBuildBuild = [ cc ];
 
     CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUNNER = (
       buildPackages.writeShellScript "wine-wrapped" ''

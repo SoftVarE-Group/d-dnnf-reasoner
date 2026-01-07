@@ -3,7 +3,7 @@ allow = [
     "Apache-2.0",
     "BSD-3-Clause",
     "BSL-1.0",
-    "LGPL-3.0",
+    "LGPL-3.0-or-later",
     "MIT",
     "MPL-2.0",
     "Unicode-3.0",

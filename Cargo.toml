@@ -18,7 +18,7 @@ ddnnife_cnf = { path = "ddnnife_cnf", version = "0.1" }
 log = "0.4"
 mimalloc = "0.1"
 num = "0.4"
-uniffi = { version = "0.29" }
+uniffi = { version = "0.30" }
 
 [profile.release]
 lto = true
