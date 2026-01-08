@@ -12,7 +12,7 @@ use std::io::{Error, Result, Write, stdin};
 
 static DEFAULT_LIMIT: Limit = 1;
 static DEFAULT_SEED: u64 = 42;
-static ERROR_UNSAT: &str = "With the assumptions, the d-DNNF is not satisfiable. Hence, there exist no valid sample configurations.";
+static ERROR_UNSAT: &str = "Under the given assumptions, the d-DNNF represents a tautology or contradiction. Hence, there exist no valid sample configurations.";
 
 type Literal = i32;
 type Variable = u32;

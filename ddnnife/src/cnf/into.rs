@@ -1,4 +1,4 @@
-use crate::{Ddnnf, NodeType};
+use crate::{Ddnnf, DdnnfKind, NodeType};
 use ddnnife_cnf::{Clause, Cnf, Literal};
 use std::collections::HashMap;
 
@@ -91,22 +91,12 @@ impl From<Biconditional> for Clauses {
 
 impl From<&Ddnnf> for Cnf {
     /// Generates an equi-countable CNF representation via Tseitin transformation.
-    ///
-    /// **Note:** The d-DNNF is not allowed to contain boolean nodes in positions other than the root
-    /// node.
     fn from(ddnnf: &Ddnnf) -> Self {
         // Check for special case of boolean root nodes.
-        let root_index = ddnnf.nodes.len() - 1;
-        let root = &ddnnf.nodes[root_index];
-
-        // A `true` root node implicates a model count of `1`.
-        if root.ntype == NodeType::True {
-            return Cnf::with_count_1();
-        }
-
-        // A `false` root node implicates a model count of `0`.
-        if root.ntype == NodeType::False {
-            return Cnf::with_count_0();
+        match ddnnf.kind {
+            DdnnfKind::Tautology => return Cnf::with_count_1(),
+            DdnnfKind::Contradiction => return Cnf::with_count_0(),
+            _ => {}
         }
 
         // Index to keep track of the last variable introduced to reference a Tseitin transformation.
@@ -143,8 +133,6 @@ impl From<&Ddnnf> for Cnf {
                     &mut tseitin_index,
                 ),
                 NodeType::Literal { literal } => *literal as Literal,
-                NodeType::True => unreachable!("Boolean nodes are only allowed as a root node."),
-                NodeType::False => unreachable!("Boolean nodes are only allowed as a root node."),
             };
 
             node_literals[index] = literal;

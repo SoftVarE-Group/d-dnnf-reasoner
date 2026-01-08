@@ -1,4 +1,4 @@
-use crate::{Ddnnf, NodeType::*};
+use crate::{Ddnnf, DdnnfKind, NodeType::*};
 use num::Zero;
 
 impl Ddnnf {
@@ -33,6 +33,12 @@ impl Ddnnf {
         mark: &mut Vec<bool>,
         root_index: Option<usize>,
     ) -> bool {
+        match self.kind {
+            DdnnfKind::Tautology => return true,
+            DdnnfKind::Contradiction => return false,
+            _ => {}
+        }
+
         let root_index = root_index.unwrap_or(self.nodes.len() - 1);
 
         if features.iter().any(|f| self.makes_query_unsat(f)) {

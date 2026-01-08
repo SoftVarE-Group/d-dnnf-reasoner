@@ -7,9 +7,9 @@ mod sat_wrapper;
 mod t_iterator;
 mod t_wise_sampler;
 
-use crate::Ddnnf;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
+use crate::{Ddnnf, DdnnfKind};
 use SamplingResult::ResultWithSample;
 pub use config::Config;
 use covering_strategies::cover_with_caching_sorted;
@@ -45,6 +45,12 @@ impl Ddnnf {
 
 impl ExtendedDdnnf {
     pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
+        match self.ddnnf.kind {
+            DdnnfKind::Tautology => return SamplingResult::Empty,
+            DdnnfKind::Contradiction => return SamplingResult::Void,
+            _ => {}
+        }
+
         let sat_solver = SatWrapper::new(&self.ddnnf);
         let and_merger = AttributeZippingMerger {
             t,

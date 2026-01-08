@@ -39,24 +39,28 @@ fn ddnnf_parsing_test() {
 
 #[test]
 fn minimal_true() {
-    let ddnnf = parser::build_ddnnf(Path::new("./tests/data/minimal_true.nnf"), None);
+    let mut ddnnf = parser::build_ddnnf(Path::new("./tests/data/minimal_true.nnf"), None);
     assert_eq!(ddnnf.rc(), BigInt::from(1));
+    assert!(ddnnf.sat(&mut vec![]));
 }
 
 #[test]
 fn minimal_false() {
-    let ddnnf = parser::build_ddnnf(Path::new("./tests/data/minimal_false.nnf"), None);
+    let mut ddnnf = parser::build_ddnnf(Path::new("./tests/data/minimal_false.nnf"), None);
     assert_eq!(ddnnf.rc(), BigInt::from(0));
+    assert!(!ddnnf.sat(&mut vec![]));
 }
 
 #[test]
 fn stub_true() {
-    let ddnnf = parser::build_ddnnf(Path::new("./tests/data/stub_true.nnf"), None);
+    let mut ddnnf = parser::build_ddnnf(Path::new("./tests/data/stub_true.nnf"), None);
     assert_eq!(ddnnf.rc(), BigInt::from(1));
+    assert!(ddnnf.sat(&mut vec![]));
 }
 
 #[test]
 fn stub_false() {
-    let ddnnf = parser::build_ddnnf(Path::new("./tests/data/stub_false.nnf"), None);
+    let mut ddnnf = parser::build_ddnnf(Path::new("./tests/data/stub_false.nnf"), None);
     assert_eq!(ddnnf.rc(), BigInt::from(0));
+    assert!(!ddnnf.sat(&mut vec![]));
 }

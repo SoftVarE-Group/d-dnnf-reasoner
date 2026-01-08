@@ -1,6 +1,6 @@
-use crate::NodeType::*;
+use super::ExtendedDdnnf;
+use crate::NodeType;
 use crate::ddnnf::anomalies::t_wise_sampling::Config;
-use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use bimap::BiHashMap;
 use itertools::Itertools;
 use std::cmp::Ordering;
@@ -105,16 +105,14 @@ impl ExtendedDdnnf {
             .unwrap_or_else(|| panic!("Node {node_id} does not exist."));
 
         match &node.ntype {
-            True => Some(OptimalConfig::empty(number_of_variables)),
-            False => None,
-            Literal { literal } => {
+            NodeType::Literal { literal } => {
                 if assumptions.contains(&literal.neg()) {
                     None
                 } else {
                     Some(OptimalConfig::from(&[*literal], self))
                 }
             }
-            And { children } => {
+            NodeType::And { children } => {
                 let children_configs = children
                     .iter()
                     .map(|&child_node_id| {
@@ -140,7 +138,7 @@ impl ExtendedDdnnf {
 
                 Some(unified_config)
             }
-            Or { children } => children
+            NodeType::Or { children } => children
                 .iter()
                 .flat_map(|&child_node_id| {
                     partial_configs.get(child_node_id).unwrap_or_else(|| {
@@ -193,16 +191,14 @@ impl ExtendedDdnnf {
             .unwrap_or_else(|| panic!("Node {node_id} does not exist."));
 
         match &node.ntype {
-            True => vec![OptimalConfig::empty(number_of_variables)],
-            False => vec![],
-            Literal { literal } => {
+            NodeType::Literal { literal } => {
                 if assumptions.contains(&literal.neg()) {
                     vec![]
                 } else {
                     vec![OptimalConfig::from(&[*literal], self)]
                 }
             }
-            And { children } => {
+            NodeType::And { children } => {
                 let children_configs = children
                     .iter()
                     .map(|&child_node_id| {
@@ -221,7 +217,7 @@ impl ExtendedDdnnf {
 
                 merge_top_k_results_and(children_configs, number_of_variables, Some(k))
             }
-            Or { children } => {
+            NodeType::Or { children } => {
                 let children_configs = children
                     .iter()
                     .map(|&child_node_id| {

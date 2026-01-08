@@ -90,4 +90,15 @@ class JavaTest {
     void toUIntTest() {
         assertEquals(1, toUInt(1));
     }
+
+    @Test
+    void trivial() {
+      Ddnnf trivialDdnnf = ddnnfFromFile("../../ddnnife/tests/data/stub_true.nnf", null);
+      assert(trivialDdnnf.isTrivial());
+    }
+
+    @Test
+    void nonTrivial() {
+      assert(!ddnnf.isTrivial());
+    }
 }

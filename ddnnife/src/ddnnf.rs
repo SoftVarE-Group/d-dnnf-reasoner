@@ -6,6 +6,7 @@ pub mod node;
 pub mod statistics;
 
 use self::node::Node;
+use crate::NodeType;
 use crate::parser::graph::{DdnnfGraph, rebuild_graph};
 use num::BigInt;
 use petgraph::stable_graph::NodeIndex;
@@ -13,14 +14,27 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
+/// Value for indicating whether the d-DNNF is a special case: tautology or contradiction.
+/// If it is neither a tautology nor a contradiction, it is non-trivial.
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub enum DdnnfKind {
+    #[default]
+    NonTrivial,
+    Tautology,
+    Contradiction,
+}
+
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
 #[derive(Clone, Debug)]
 pub struct Ddnnf {
+    /// Flag indicating whether the d-DNNF is a special case: tautology or contradiction.
+    ///
+    /// **Note:** A d-DNNF representing a tautology or contradiction contains no nodes.
+    pub kind: DdnnfKind,
     /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
     pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
-    pub true_nodes: Vec<usize>, // Indices of true nodes. In some cases those nodes needed to have special treatment
     /// The core/dead features of the model corresponding with this ddnnf
     pub core: HashSet<i32>,
     /// An interim save for the marking algorithm
@@ -33,9 +47,9 @@ pub struct Ddnnf {
 impl Default for Ddnnf {
     fn default() -> Self {
         Ddnnf {
+            kind: DdnnfKind::default(),
             nodes: Vec::new(),
             literals: HashMap::new(),
-            true_nodes: Vec::new(),
             core: HashSet::new(),
             md: Vec::new(),
             number_of_variables: 0,
@@ -47,12 +61,12 @@ impl Default for Ddnnf {
 impl Ddnnf {
     /// Creates a new ddnnf including dead and core features
     pub fn new(graph: DdnnfGraph, root: NodeIndex, number_of_variables: u32) -> Ddnnf {
-        let dfs_ig = rebuild_graph(graph, root);
+        let (kind, nodes, literals) = rebuild_graph(graph, root);
 
         let mut ddnnf = Ddnnf {
-            nodes: dfs_ig.0,
-            literals: dfs_ig.1,
-            true_nodes: dfs_ig.2,
+            kind,
+            nodes,
+            literals,
             core: HashSet::new(),
             md: Vec::new(),
             number_of_variables,
@@ -64,6 +78,15 @@ impl Ddnnf {
         ddnnf
     }
 
+    /// Checks whether this d-DNNF is trivial. A trivial d-DNNF is either a tautology or a
+    /// contradiction.
+    pub fn is_trivial(&self) -> bool {
+        match self.kind {
+            DdnnfKind::Tautology | DdnnfKind::Contradiction => true,
+            DdnnfKind::NonTrivial => false,
+        }
+    }
+
     /// Loads a d-DNNF from file.
     pub fn from_file(path: &Path, features: Option<u32>) -> Self {
         crate::parser::build_ddnnf(path, features)
@@ -73,7 +96,11 @@ impl Ddnnf {
     ///
     /// This value is the same during all computations.
     pub fn rc(&self) -> BigInt {
-        self.nodes[self.nodes.len() - 1].count.clone()
+        match self.kind {
+            DdnnfKind::NonTrivial => self.nodes[self.nodes.len() - 1].count.clone(),
+            DdnnfKind::Tautology => BigInt::from(2).pow(self.number_of_variables),
+            DdnnfKind::Contradiction => BigInt::ZERO,
+        }
     }
 
     /// Returns the core features of this d-DNNF.
@@ -96,12 +123,11 @@ impl Ddnnf {
 
     /// Computes the total number of edges in the dDNNF
     pub fn edge_count(&self) -> usize {
-        use crate::NodeType::*;
         let mut total_edges = 0;
 
         for node in self.nodes.iter() {
             match &node.ntype {
-                And { children } | Or { children } => {
+                NodeType::And { children } | NodeType::Or { children } => {
                     total_edges += children.len();
                 }
                 _ => (),

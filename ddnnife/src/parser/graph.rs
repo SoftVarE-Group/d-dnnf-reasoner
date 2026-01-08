@@ -1,6 +1,6 @@
 use super::{calc_and_count, calc_or_count};
 use crate::c2d_lexer::TId;
-use crate::{Node, NodeType};
+use crate::{DdnnfKind, Node, NodeType};
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::DfsPostOrder;
 use petgraph::stable_graph::{NodeIndex, StableGraph};
@@ -11,7 +11,14 @@ pub type DdnnfGraph = StableGraph<TId, ()>;
 pub fn rebuild_graph(
     graph: DdnnfGraph,
     root: NodeIndex,
-) -> (Vec<Node>, HashMap<i32, usize>, Vec<usize>) {
+) -> (DdnnfKind, Vec<Node>, HashMap<i32, usize>) {
+    // Check for special cases where there is a boolean root node.
+    match graph[root] {
+        TId::True => return (DdnnfKind::Tautology, Vec::new(), HashMap::new()),
+        TId::False => return (DdnnfKind::Contradiction, Vec::new(), HashMap::new()),
+        _ => {}
+    }
+
     // always make sure that there are no cycles
     debug_assert!(!is_cyclic_directed(&graph));
 
@@ -23,7 +30,6 @@ pub fn rebuild_graph(
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(graph.node_count());
     let mut literals: HashMap<i32, usize> = HashMap::new();
-    let mut true_nodes = Vec::new();
 
     while let Some(nx) = dfs.next(&graph) {
         nd_to_usize.insert(nx, parsed_nodes.len());
@@ -36,8 +42,7 @@ pub fn rebuild_graph(
             TId::Literal { feature } => Node::new_literal(feature),
             TId::And => Node::new_and(calc_and_count(&mut parsed_nodes, &neighs), neighs),
             TId::Or => Node::new_or(calc_or_count(&mut parsed_nodes, &neighs), neighs),
-            TId::True => Node::new_bool(true),
-            TId::False => Node::new_bool(false),
+            TId::True | TId::False => panic!("Boolean nodes are only allowed as root nodes."),
             TId::Header => {
                 panic!("The d4 standard does not include a header!")
             }
@@ -55,14 +60,10 @@ pub fn rebuild_graph(
             NodeType::Literal { literal } => {
                 literals.insert(*literal, parsed_nodes.len());
             }
-            NodeType::True => {
-                true_nodes.push(parsed_nodes.len());
-            }
-            _ => (),
         }
 
         parsed_nodes.push(next);
     }
 
-    (parsed_nodes, literals, true_nodes)
+    (DdnnfKind::NonTrivial, parsed_nodes, literals)
 }

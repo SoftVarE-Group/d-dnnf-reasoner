@@ -2,6 +2,7 @@ mod stream;
 
 use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
+use ddnnife::DdnnfKind;
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
@@ -207,6 +208,12 @@ fn main() -> io::Result<()> {
         dparser::distribute_building(input, cli.total_features)
     };
 
+    match ddnnf.kind {
+        DdnnfKind::NonTrivial => {}
+        DdnnfKind::Tautology => info!("d-DNNF represents a tautology."),
+        DdnnfKind::Contradiction => info!("d-DNNF represents a contradiction."),
+    }
+
     info!("Ddnnf overall count: {}", ddnnf.rc());
 
     let elapsed_time = time.elapsed().as_secs_f32();
@@ -245,12 +252,11 @@ fn main() -> io::Result<()> {
                 seed,
                 number,
             } => {
-                for sample in ddnnf
-                    .uniform_random_sampling(assumptions, *number, *seed)
-                    .unwrap()
-                {
-                    writer.write_all(format_vec(sample.iter()).as_bytes())?;
-                    writer.write_all("\n".as_bytes())?;
+                if let Some(samples) = ddnnf.uniform_random_sampling(assumptions, *number, *seed) {
+                    for sample in samples {
+                        writer.write_all(format_vec(sample.iter()).as_bytes())?;
+                        writer.write_all("\n".as_bytes())?;
+                    }
                 }
             }
             Operation::TWise { t } => {

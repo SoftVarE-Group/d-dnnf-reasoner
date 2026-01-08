@@ -1,4 +1,4 @@
-use crate::{Ddnnf, NodeType};
+use crate::{Ddnnf, DdnnfKind, NodeType};
 use std::io::Write;
 
 /// Takes a Ddnnf, transforms it into a corresponding markdown mermaid representation,
@@ -43,6 +43,19 @@ pub fn write_as_mermaid_md(
 
 /// Adds the nodes its children to the mermaid graph
 fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
+    if ddnnf.is_trivial() {
+        return match ddnnf.kind {
+            DdnnfKind::Tautology => {
+                "0(\"⊤ <font color=cyan>0 <font color=greeny>1 <font color=red>1\");\n"
+            }
+            DdnnfKind::Contradiction => {
+                "0(\"⊥ <font color=cyan>0 <font color=greeny>0 <font color=red>0\");\n"
+            }
+            DdnnfKind::NonTrivial => unreachable!(),
+        }
+        .into();
+    }
+
     let mut result = String::new();
 
     for (position, node) in ddnnf.nodes.iter().enumerate().rev() {
@@ -62,9 +75,6 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
 
                     if !children_series.is_empty() {
                         for (i, &child) in children_series.iter().enumerate() {
-                            if ddnnf.nodes[child].ntype == NodeType::True {
-                                continue;
-                            }
                             mm_node.push_str(&child.to_string());
                             if i != children_series.len() - 1 {
                                 mm_node.push_str(" & ");
@@ -75,14 +85,13 @@ fn mermaidify_nodes(ddnnf: &Ddnnf, marking: &[usize]) -> String {
                     }
                     mm_node
                 }
-                NodeType::Literal { literal: _ } | NodeType::False => {
+                NodeType::Literal { literal: _ } => {
                     format!(
                         "\t\t{}{};\n",
                         mermaidify_type(ddnnf, position),
                         marking_insert(marking, position)
                     )
                 }
-                _ => String::new(),
             }
         );
     }
@@ -110,8 +119,6 @@ fn mermaidify_type(ddnnf: &Ddnnf, position: usize) -> String {
                     format!("(\"L{literal}")
                 }
             }
-            NodeType::True => String::from("(\"T"),
-            NodeType::False => String::from("(\"F"),
         }
     );
 

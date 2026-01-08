@@ -19,7 +19,6 @@ impl Ddnnf {
                     .map(|&indice| &self.nodes[indice].temp)
                     .sum()
             }
-            False => self.nodes[i].temp.set_zero(),
             _ => self.nodes[i].temp.set_one(), // True and Literal
         }
     }
