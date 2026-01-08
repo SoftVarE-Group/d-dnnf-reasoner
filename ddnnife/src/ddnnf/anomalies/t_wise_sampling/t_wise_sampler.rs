@@ -2,10 +2,10 @@ use super::covering_strategies::cover_with_caching;
 use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
-use crate::Ddnnf;
 use crate::NodeType;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::util::rng;
+use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
@@ -35,6 +35,12 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     }
 
     pub fn sample(&mut self, t: usize) -> SamplingResult {
+        match self.ddnnf.kind {
+            DdnnfKind::Tautology => return SamplingResult::Empty,
+            DdnnfKind::Contradiction => return SamplingResult::Void,
+            _ => {}
+        }
+
         let sat_solver = SatWrapper::new(self.ddnnf);
 
         // Sample each node and keep the result as a partial sample.
@@ -81,6 +87,12 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     /// # Panics
     /// Panics if one child does not have a [SamplingResult] in [TWiseSampler::partial_samples].
     pub(crate) fn partial_sample(&mut self, node_id: usize) -> SamplingResult {
+        match self.ddnnf.kind {
+            DdnnfKind::Tautology => return SamplingResult::Empty,
+            DdnnfKind::Contradiction => return SamplingResult::Void,
+            _ => {}
+        }
+
         let node = self.ddnnf.nodes.get(node_id).expect("Node does not exist!");
 
         match &node.ntype {
@@ -97,8 +109,6 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 self.remove_unneeded(node_id, children);
                 sample
             }
-            NodeType::True => SamplingResult::Empty,
-            NodeType::False => SamplingResult::Void,
         }
     }
 

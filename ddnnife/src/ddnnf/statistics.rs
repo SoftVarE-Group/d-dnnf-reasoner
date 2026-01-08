@@ -51,8 +51,6 @@ impl From<&Ddnnf> for NodeCount {
             NodeType::And { .. } => counts.and += 1,
             NodeType::Or { .. } => counts.or += 1,
             NodeType::Literal { .. } => counts.literal += 1,
-            NodeType::True => counts.r#true += 1,
-            NodeType::False => counts.r#false += 1,
         });
 
         counts
@@ -103,6 +101,10 @@ pub struct Paths {
 
 impl From<&Ddnnf> for Paths {
     fn from(ddnnf: &Ddnnf) -> Self {
+        if ddnnf.is_trivial() {
+            return Paths::default();
+        }
+
         let depths = calculate_depths(ddnnf, ddnnf.nodes.len() - 1, 0);
 
         let amount = depths.len();

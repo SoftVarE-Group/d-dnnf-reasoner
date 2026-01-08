@@ -20,14 +20,19 @@ static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>, usize>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 impl Ddnnf {
-    /// Creates satisfiable complete configurations for a ddnnf and given assumptions
-    /// If the ddnnf on itself or in combination with the assumption is unsatisfiable,
-    /// then we can not create any satisfiable configuration and simply return None.
+    /// Creates satisfiable complete configurations for a d-DNNF and given assumptions.
+    ///
+    /// Returns `None` if the d-DNNF itself or with the assumptions represents a tautology or
+    /// contradiction.
     pub fn enumerate(
         &mut self,
         assumptions: &mut Vec<i32>,
         amount: usize,
     ) -> Option<Vec<Vec<i32>>> {
+        if self.is_trivial() {
+            return None;
+        }
+
         if amount == 0 {
             return Some(Vec::new());
         }
@@ -66,14 +71,21 @@ impl Ddnnf {
     }
 
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
-    /// Each sample is sorted by the number of the features. Each sample is a complete configuration with #SAT of 1.
-    /// If the ddnnf itself or in combination with the assumptions is unsatisfiable, None is returned.
+    /// Each sample is sorted by the number of the features. Each sample is a complete configuration
+    /// with #SAT of 1.
+    ///
+    /// Returns `None` if the d-DNNF itself or with the assumptions represents a tautology or
+    /// contradiction.
     pub fn uniform_random_sampling(
         &mut self,
         assumptions: &[i32],
         amount: usize,
         seed: u64,
     ) -> Option<Vec<Vec<i32>>> {
+        if self.is_trivial() {
+            return None;
+        }
+
         if !self.preprocess_config_creation(assumptions) {
             return None;
         }
@@ -114,11 +126,6 @@ impl Ddnnf {
             }
         }
 
-        // We can't create a config that contains a true node.
-        // Hence, we have to hide the true node by changing its count to 0
-        for &index in self.true_nodes.iter() {
-            self.nodes[index].temp.set_zero();
-        }
         true
     }
 
@@ -146,11 +153,6 @@ impl Ddnnf {
                 let mut enumeration_child_lists = Vec::new();
 
                 for &child in children {
-                    // skip the true nodes
-                    if self.true_nodes.contains(&child) {
-                        continue;
-                    }
-
                     if &acc_amount < range.1 {
                         let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_child_lists.push(self.enumerate_node(change, child));
@@ -215,7 +217,6 @@ impl Ddnnf {
             Literal { literal } => {
                 enumeration_list.push(vec![*literal]);
             }
-            _ => (),
         }
         enumeration_list
     }
@@ -304,7 +305,6 @@ impl Ddnnf {
                     sample_list.push(vec![*literal]);
                 }
             }
-            _ => (),
         }
         sample_list
     }

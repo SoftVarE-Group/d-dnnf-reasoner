@@ -7,6 +7,19 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Mutex;
 
+type DdnnfKind = ddnnife::DdnnfKind;
+
+/// Value for indicating whether the d-DNNF is a special case: tautology or contradiction.
+/// If it is neither a tautology nor a contradiction, it is non-trivial.
+#[uniffi::remote(Enum)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq)]
+pub enum DdnnfKind {
+    #[default]
+    NonTrivial,
+    Tautology,
+    Contradiction,
+}
+
 /// A wrapped version of a d-DNNF.
 #[derive(uniffi::Object, Clone)]
 pub struct Ddnnf(pub(crate) ddnnife::Ddnnf);
@@ -17,6 +30,19 @@ impl Ddnnf {
     #[uniffi::constructor]
     fn from_file(path: String, features: Option<u32>) -> Self {
         Self(ddnnf::Ddnnf::from_file(Path::new(&path), features))
+    }
+
+    /// Returns the d-DNNF kind.
+    #[uniffi::method]
+    pub fn kind(&self) -> DdnnfKind {
+        self.0.kind
+    }
+
+    /// Checks whether this d-DNNF is trivial. A trivial d-DNNF is either a tautology or a
+    /// contradiction.
+    #[uniffi::method]
+    pub fn is_trivial(&self) -> bool {
+        self.0.is_trivial()
     }
 
     /// Returns the current count of the root node in the d-DNNF.

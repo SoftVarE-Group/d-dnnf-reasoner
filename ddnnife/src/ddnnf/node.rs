@@ -1,4 +1,3 @@
-use NodeType::{And, False, Literal, Or, True};
 use num::BigInt;
 use std::fmt::{Display, Formatter};
 
@@ -27,10 +26,6 @@ pub enum NodeType {
     Or { children: Vec<usize> },
     /// The cardinality is one if not declared otherwise due to some query
     Literal { literal: i32 },
-    /// The cardinality is one
-    True,
-    /// The cardinality is zero
-    False,
 }
 
 impl Node {
@@ -50,29 +45,19 @@ impl Node {
     #[inline]
     /// Creates a new And node
     pub fn new_and(count: BigInt, children: Vec<usize>) -> Node {
-        Node::new_node(count, And { children })
+        Node::new_node(count, NodeType::And { children })
     }
 
     #[inline]
     /// Creates a new Or node
     pub fn new_or(count: BigInt, children: Vec<usize>) -> Node {
-        Node::new_node(count, Or { children })
+        Node::new_node(count, NodeType::Or { children })
     }
 
     #[inline]
     /// Creates a new Literal node
     pub fn new_literal(literal: i32) -> Node {
-        Node::new_node(BigInt::from(1), Literal { literal })
-    }
-
-    #[inline]
-    /// Creates either a new True or False node
-    pub fn new_bool(b: bool) -> Node {
-        if b {
-            Node::new_node(BigInt::from(1), True)
-        } else {
-            Node::new_node(BigInt::ZERO, False)
-        }
+        Node::new_node(BigInt::from(1), NodeType::Literal { literal })
     }
 }
 
@@ -88,8 +73,6 @@ impl Display for Node {
                 deconstruct_children(f, children)
             }
             NodeType::Literal { literal } => write!(f, "L {literal}"),
-            NodeType::True => write!(f, "A 0"),
-            NodeType::False => write!(f, "O 0 0"),
         }
     }
 }
@@ -121,7 +104,7 @@ mod test {
                 temp: BigInt::ZERO,
                 partial_derivative: BigInt::ZERO,
                 parents: vec![],
-                ntype: And {
+                ntype: NodeType::And {
                     children: vec![1, 5, 10]
                 }
             }
@@ -129,7 +112,7 @@ mod test {
         assert_eq!(
             Node::new_node(
                 BigInt::from(42),
-                And {
+                NodeType::And {
                     children: vec![1, 5, 10]
                 }
             ),
@@ -139,7 +122,7 @@ mod test {
                 temp: BigInt::ZERO,
                 partial_derivative: BigInt::ZERO,
                 parents: vec![],
-                ntype: And {
+                ntype: NodeType::And {
                     children: vec![1, 5, 10]
                 }
             }
@@ -152,7 +135,7 @@ mod test {
                 temp: BigInt::ZERO,
                 partial_derivative: BigInt::ZERO,
                 parents: vec![],
-                ntype: Or {
+                ntype: NodeType::Or {
                     children: vec![1, 5, 10]
                 }
             }
@@ -165,29 +148,7 @@ mod test {
                 temp: BigInt::ZERO,
                 partial_derivative: BigInt::ZERO,
                 parents: vec![],
-                ntype: Literal { literal: 42 }
-            }
-        );
-        assert_eq!(
-            Node::new_bool(true),
-            Node {
-                marker: false,
-                count: BigInt::from(1),
-                temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
-                parents: vec![],
-                ntype: True
-            }
-        );
-        assert_eq!(
-            Node::new_bool(false),
-            Node {
-                marker: false,
-                count: BigInt::ZERO,
-                temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
-                parents: vec![],
-                ntype: False
+                ntype: NodeType::Literal { literal: 42 }
             }
         );
     }

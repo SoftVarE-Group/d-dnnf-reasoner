@@ -28,6 +28,7 @@ let
       [
         (craneLib.fileset.commonCargoSources ./..)
         ../bindings/kotlin
+        ../ddnnife/tests/data
         ../example_input
       ]
       ++ lib.optionals bundled [ (lib.fileset.maybeMissing ./libddnnife) ]

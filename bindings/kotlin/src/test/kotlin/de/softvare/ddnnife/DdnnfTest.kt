@@ -86,4 +86,15 @@ internal class DdnnfTest {
         assertEquals(7481, cnf.clauses().size)
         assertEquals(110642, serialized.length)
     }
+
+    @Test
+    fun trivial() {
+      val trivialDdnnf = Ddnnf.fromFile("../../ddnnife/tests/data/stub_true.nnf", null)
+      assert(trivialDdnnf.isTrivial())
+    }
+
+    @Test
+    fun nonTrivial() {
+      assert(!ddnnf.isTrivial())
+    }
 }

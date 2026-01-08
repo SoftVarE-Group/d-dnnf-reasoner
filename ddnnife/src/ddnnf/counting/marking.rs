@@ -1,7 +1,5 @@
+use crate::{Ddnnf, NodeType};
 use num::{BigInt, One, Zero};
-
-use super::super::node::NodeType::*;
-use crate::Ddnnf;
 
 impl Ddnnf {
     #[inline]
@@ -21,7 +19,7 @@ impl Ddnnf {
     #[inline]
     fn annotate_single_partial_derivative(&mut self, i: usize) {
         match &self.nodes[i].ntype {
-            And { children } => {
+            NodeType::And { children } => {
                 let children_c = children.clone();
                 for &child in children_c.iter() {
                     let mut current_node_partial_derivative =
@@ -36,13 +34,13 @@ impl Ddnnf {
                     self.nodes[child].partial_derivative += &current_node_partial_derivative;
                 }
             }
-            Or { children } => {
+            NodeType::Or { children } => {
                 let current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
                 for child in children.clone() {
                     self.nodes[child].partial_derivative += &current_node_partial_derivative;
                 }
             }
-            _ => (), // True, False, and Literal
+            _ => (),
         }
     }
 
@@ -61,7 +59,7 @@ impl Ddnnf {
     // .temp value if the child node is marked and the .count value if not
     pub(crate) fn calc_count_marked_node(&mut self, i: usize) {
         match &self.nodes[i].ntype {
-            And { children } => {
+            NodeType::And { children } => {
                 let marked_children = children
                     .iter()
                     .filter(|&&child| self.nodes[child].marker)
@@ -87,7 +85,7 @@ impl Ddnnf {
                         .product()
                 }
             }
-            Or { children } => {
+            NodeType::Or { children } => {
                 self.nodes[i].temp = children
                     .iter()
                     .map(|&index| {
@@ -96,8 +94,7 @@ impl Ddnnf {
                     })
                     .sum()
             }
-            False => self.nodes[i].temp.set_zero(),
-            _ => self.nodes[i].temp.set_one(), // True and Literal
+            NodeType::Literal { .. } => self.nodes[i].temp.set_one(),
         }
     }
 
