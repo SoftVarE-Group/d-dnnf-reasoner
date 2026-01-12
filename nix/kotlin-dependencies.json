@@ -56,15 +56,15 @@
   "jakarta/platform#jakartaee-api-parent/9.0.0": {
    "pom": "sha256-9l3PFLbh2RSOGYo5D6/hVfrKCTJT3ekAMH8+DqgsrTs="
   },
-  "net/java/dev/jna#jna/5.17.0": {
-   "jar": "sha256-s6lAjnxR4I7w47/MCPRD9uwPYZG6jNfBjVPSsi5b28A=",
-   "pom": "sha256-UBoP8F2EpK0Q9t4lvpT0k5i3CjG+jzoO2fTGtE++/uQ="
+  "net/java/dev/jna#jna/5.18.1": {
+   "jar": "sha256-JgxLHiKx254RDuRBxPE84RX4QfpIxB14dQmGIUs5VVc=",
+   "pom": "sha256-mLYq5v8oDXR/s1n8QuSP7RE9Rbw3Kagj3DC4MIqAZkU="
   },
   "net/java/dev/jna/jna/maven-metadata": {
    "xml": {
     "groupId": "net.java.dev.jna",
-    "lastUpdated": "20250316114729",
-    "release": "5.17.0"
+    "lastUpdated": "20250930184731",
+    "release": "5.18.1"
    }
   },
   "org/apache#apache/23": {
@@ -214,8 +214,8 @@
   "org/jetbrains/kotlin/jvm/org.jetbrains.kotlin.jvm.gradle.plugin/maven-metadata": {
    "xml": {
     "groupId": "org.jetbrains.kotlin.jvm",
-    "lastUpdated": "20250901102005",
-    "release": "2.2.20-RC2"
+    "lastUpdated": "20260108102025",
+    "release": "2.3.20-Beta1"
    }
   },
   "org/jetbrains/kotlinx#kotlinx-coroutines-bom/1.8.0": {
@@ -273,15 +273,15 @@
     "release": "4.13.2"
    }
   },
-  "net/java/dev/jna#jna/5.17.0": {
-   "jar": "sha256-s6lAjnxR4I7w47/MCPRD9uwPYZG6jNfBjVPSsi5b28A=",
-   "pom": "sha256-UBoP8F2EpK0Q9t4lvpT0k5i3CjG+jzoO2fTGtE++/uQ="
+  "net/java/dev/jna#jna/5.18.1": {
+   "jar": "sha256-JgxLHiKx254RDuRBxPE84RX4QfpIxB14dQmGIUs5VVc=",
+   "pom": "sha256-mLYq5v8oDXR/s1n8QuSP7RE9Rbw3Kagj3DC4MIqAZkU="
   },
   "net/java/dev/jna/jna/maven-metadata": {
    "xml": {
     "groupId": "net.java.dev.jna",
-    "lastUpdated": "20250316114729",
-    "release": "5.17.0"
+    "lastUpdated": "20250930184731",
+    "release": "5.18.1"
    }
   },
   "org/apiguardian#apiguardian-api/1.1.2": {
