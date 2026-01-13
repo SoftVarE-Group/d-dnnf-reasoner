@@ -53,11 +53,23 @@ use std::{
 #[inline]
 #[allow(unused_mut)]
 pub fn build_ddnnf(path: &Path, mut total_features: Option<u32>) -> Ddnnf {
-    let mut ddnnf = File::open(path).expect("Failed to open input file.");
+    let mut ddnnf = match File::open(path) {
+        Ok(file) => file,
+        Err(error) => {
+            error!("Failed to open {path:?}: {error}");
+            process::exit(1);
+        }
+    };
 
     let lines = BufReader::new(ddnnf)
         .lines()
-        .map(|line| line.expect("Unable to read line"))
+        .map(|result| match result {
+            Ok(line) => line,
+            Err(error) => {
+                error!("Failed to read from {path:?}: {error}");
+                process::exit(1);
+            }
+        })
         .collect::<Vec<String>>();
 
     distribute_building(lines, total_features)
