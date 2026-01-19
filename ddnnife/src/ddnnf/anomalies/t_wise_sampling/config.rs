@@ -1,6 +1,8 @@
 use super::SatWrapper;
+use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
+use streaming_iterator::StreamingIterator;
 
 /// Represents a (partial) configuration
 #[derive(Debug, Clone, Eq)]
@@ -202,5 +204,14 @@ impl Config {
     /// Checks if the config is complete (all literals are decided)
     pub fn is_complete(&self) -> bool {
         self.n_decided_literals == self.literals.len()
+    }
+
+    /// Generates all `t`-wise interactions covered by this configuration.
+    pub fn interactions(&self, t: usize) -> Vec<Vec<i32>> {
+        let mut out = Vec::new();
+        TInteractionIter::new(&self.literals, t)
+            .for_each(|interaction| out.push(interaction.to_vec()));
+
+        out
     }
 }

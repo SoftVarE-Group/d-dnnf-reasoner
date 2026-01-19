@@ -4,6 +4,7 @@ use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
 use ddnnife::DdnnfKind;
 use ddnnife::ddnnf::Ddnnf;
+use ddnnife::ddnnf::anomalies::t_wise_sampling::SamplingResult;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
@@ -260,7 +261,14 @@ fn main() -> io::Result<()> {
                 }
             }
             Operation::TWise { t } => {
-                writer.write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())?;
+                let sample = ddnnf.sample_t_wise(*t);
+                writer.write_all(sample.to_string().as_bytes())?;
+                match sample {
+                    SamplingResult::Empty | SamplingResult::Void => todo!(),
+                    SamplingResult::ResultWithSample(s) => {
+                        info!("{t}-wise interactions: {}", s.interactions(*t).len())
+                    }
+                }
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Operation::Count { features } => {

@@ -146,8 +146,8 @@ impl ExtendedDdnnf {
 
 #[cfg(test)]
 mod test {
-    use crate::ddnnf::anomalies::t_wise_sampling::Sample;
     use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
+    use crate::ddnnf::anomalies::t_wise_sampling::{Sample, SamplingResult};
     use crate::ddnnf::extended_ddnnf::optimal_configs::test::build_sandwich_ext_ddnnf_with_objective_function_values;
     use crate::{Ddnnf, parser::build_ddnnf};
     use itertools::Itertools;
@@ -229,6 +229,20 @@ mod test {
 
         for t in 1..=4 {
             check_validity_of_sample(&ext_ddnnf.sample_t_wise_yasa(t), &ext_ddnnf.ddnnf, t);
+        }
+    }
+
+    #[test]
+    fn number_of_interactions() {
+        let ddnnf = build_ddnnf(Path::new("tests/data/busybox.nnf"), None);
+        let sample = ddnnf.sample_t_wise(2);
+        match sample {
+            SamplingResult::Empty | SamplingResult::Void => {
+                panic!("Expected valid, non-empty sampling result.")
+            }
+            SamplingResult::ResultWithSample(sample) => {
+                assert_eq!(sample.interactions(2).len(), 1387048)
+            }
         }
     }
 }

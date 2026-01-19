@@ -236,6 +236,22 @@ impl Sample {
         TInteractionIter::new(&literals, min(t, literals.len()))
             .all(|interaction| self.covers(interaction))
     }
+
+    /// Generates all `t`-wise interactions covered by this sample.
+    pub fn interactions(&self, t: usize) -> HashSet<Vec<i32>> {
+        let mut interactions = HashSet::new();
+        self.iter().for_each(|config| {
+            config
+                .interactions(t)
+                .into_iter()
+                .for_each(|mut interaction| {
+                    interaction.sort_unstable();
+                    interactions.insert(interaction);
+                });
+        });
+
+        interactions
+    }
 }
 
 #[cfg(test)]
