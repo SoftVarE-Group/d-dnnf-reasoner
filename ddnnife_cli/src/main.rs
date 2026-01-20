@@ -120,6 +120,9 @@ enum Operation {
         /// but also the larger the number of test cases required.
         #[clap(short, default_value_t = 2)]
         t: usize,
+        /// Log the number of t-wise interactions contained in the generated sample.
+        #[clap(short, long)]
+        count: bool,
     },
     /// Computes core, dead, false-optional features, and atomic sets.
     Anomalies,
@@ -261,14 +264,12 @@ fn main() -> io::Result<()> {
                     }
                 }
             }
-            Operation::TWise { t } => {
+            Operation::TWise { t, count } => {
                 let sample = ddnnf.sample_t_wise(*t);
                 writer.write_all(sample.to_string().as_bytes())?;
-                match sample {
-                    SamplingResult::Empty | SamplingResult::Void => todo!(),
-                    SamplingResult::ResultWithSample(s) => {
-                        info!("{t}-wise interactions: {}", s.interactions(*t).len())
-                    }
+
+                if *count && let SamplingResult::ResultWithSample(sample) = sample {
+                    info!("{t}-wise interactions: {}", sample.interactions(*t).len())
                 }
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
