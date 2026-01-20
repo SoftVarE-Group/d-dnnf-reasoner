@@ -209,16 +209,17 @@ fn main() -> io::Result<()> {
         dparser::distribute_building(input, cli.total_features)
     };
 
+    let elapsed_time = time.elapsed().as_secs_f32();
+    info!("Time for parsing: {elapsed_time:.3}s.");
+
     match ddnnf.kind {
         DdnnfKind::NonTrivial => {}
         DdnnfKind::Tautology => info!("d-DNNF represents a tautology."),
         DdnnfKind::Contradiction => info!("d-DNNF represents a contradiction."),
     }
 
-    info!("Ddnnf overall count: {}", ddnnf.rc());
-
-    let elapsed_time = time.elapsed().as_secs_f32();
-    info!("Elapsed time for parsing, and overall count: {elapsed_time:.3}s.");
+    info!("Number of variables: {}", ddnnf.number_of_variables);
+    info!("Model count: {}", ddnnf.rc());
 
     if let Some(operation) = cli.operation {
         // change the number of threads used for cardinality of features and partial configurations
