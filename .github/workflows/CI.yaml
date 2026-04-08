@@ -12,7 +12,7 @@ jobs:
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -46,14 +46,14 @@ jobs:
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
         run: nix build -L .#${{ matrix.target.flake }}
       - name: Upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ddnnife-${{ matrix.target.double }}
           path: result
@@ -70,7 +70,7 @@ jobs:
       - name: Nix
         uses: cachix/install-nix-action@v31
       - name: Cache
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           name: softvare-group
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
