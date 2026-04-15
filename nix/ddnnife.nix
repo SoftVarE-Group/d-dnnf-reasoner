@@ -31,6 +31,8 @@ let
 
   cc = if stdenv.targetPlatform.isWindows then cc-windows else stdenv.cc;
 
+  dynamicMusl = stdenv.targetPlatform.isMusl && !stdenv.targetPlatform.isStatic;
+
   target = stdenv.targetPlatform.rust.rustcTarget;
 
   toolchain =
@@ -125,6 +127,9 @@ craneLib.${craneAction} (
     cargoExtraArgs = lib.optionalString (component != null) "--package ${component}";
     cargoTestExtraArgs = cargoExtraArgs;
     cargoClippyExtraArgs = "--all-features -- --deny warnings";
+  }
+  // lib.optionalAttrs dynamicMusl {
+    CARGO_BUILD_RUSTFLAGS = "-C target-feature=-crt-static";
   }
   // lib.optionalAttrs benchmark {
     pname = "${name}-bench";
