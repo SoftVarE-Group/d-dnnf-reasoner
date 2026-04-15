@@ -39,6 +39,7 @@
           pkgsStatic = pkgs.pkgsStatic;
           pkgsWindows = pkgs.pkgsCross.mingwW64;
           pkgsSelf = self.packages.${system};
+          pkgsMusl = pkgs.pkgsCross.musl64;
 
           rustAttrs = {
             inherit crane;
@@ -74,11 +75,21 @@
           ddnnife-windows = pkgsWindows.callPackage ./nix/ddnnife.nix defaultAttrs;
 
           libddnnife = pkgs.callPackage ./nix/ddnnife.nix libAttrs;
+          libddnnife-musl = pkgsMusl.callPackage ./nix/ddnnife.nix libAttrs;
           libddnnife-windows = pkgsWindows.callPackage ./nix/ddnnife.nix libAttrs;
 
           bindgen = pkgs.callPackage ./nix/bindgen.nix rustAttrs;
 
           kotlin = pkgs.callPackage ./nix/kotlin.nix kotlinAttrs;
+
+          kotlin-musl = pkgsMusl.callPackage ./nix/kotlin.nix (
+            kotlinAttrs
+            // {
+              libddnnife = pkgsSelf.libddnnife-musl;
+              ddnnife-kotlin = pkgsSelf.kotlin-musl;
+            }
+          );
+
           kotlin-windows = pkgsWindows.callPackage ./nix/kotlin.nix (
             kotlinAttrs
             // {

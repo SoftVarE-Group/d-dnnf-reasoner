@@ -23,6 +23,20 @@ jobs:
             flake:
               kotlin: kotlin
               library: libddnnife
+          - standalone: true
+            suffix: -musl
+            double:
+              nix: aarch64-linux
+            runner: ubuntu-24.04-arm
+            flake:
+              kotlin: kotlin-musl
+          - standalone: true
+            suffix: -musl
+            double:
+              nix: x86_64-linux
+            runner: ubuntu-24.04
+            flake:
+              kotlin: kotlin-musl
           - double:
               nix: aarch64-darwin
               jvm: darwin-aarch64
@@ -58,15 +72,23 @@ jobs:
       - name: Build
         run: nix build -L .#${{ matrix.target.flake.kotlin }}
       - name: Export
+        if: ${{ !matrix.target.standalone }}
         run: |
           nix build -L .#${{ matrix.target.flake.library }}
           mkdir -p ${{ runner.temp }}/libddnnife
           cp -rL result/lib ${{ runner.temp }}/libddnnife/${{ matrix.target.double.jvm }}
       - name: Upload
+        if: ${{ !matrix.target.standalone }}
         uses: actions/upload-artifact@v7
         with:
           name: libddnnife-${{ matrix.target.double.nix }}
           path: ${{ runner.temp }}/libddnnife
+      - name: Upload
+        if: ${{ matrix.target.standalone }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ddnnife-kotlin-${{ matrix.target.double.nix }}${{ matrix.target.suffix }}
+          path: result
 
   Package:
     needs: Build
