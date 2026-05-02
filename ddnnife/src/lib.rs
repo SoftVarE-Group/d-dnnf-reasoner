@@ -1,3 +1,4 @@
+pub mod int_hash;
 pub mod parser;
 pub mod util;
 pub use crate::parser::c2d_lexer;

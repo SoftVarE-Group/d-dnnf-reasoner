@@ -4,19 +4,19 @@ use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
+use crate::int_hash::{self, IntMap, IntSet};
 use crate::util::rng;
 use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
 use streaming_iterator::StreamingIterator;
 
 pub struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
     /// The d-DNNF to sample.
     pub(crate) ddnnf: &'a Ddnnf,
     /// Map that holds the [SamplingResult]s for the nodes.
-    pub(crate) partial_samples: HashMap<usize, SamplingResult>,
+    pub(crate) partial_samples: IntMap<usize, SamplingResult>,
     /// The merger for and nodes.
     and_merger: A,
     /// The merger for or nodes.
@@ -28,7 +28,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
     pub fn new(ddnnf: &'a Ddnnf, and_merger: A, or_merger: O) -> Self {
         Self {
             ddnnf,
-            partial_samples: HashMap::with_capacity(ddnnf.nodes.len()),
+            partial_samples: int_hash::map_with_capacity(ddnnf.nodes.len()),
             and_merger,
             or_merger,
         }
@@ -259,8 +259,8 @@ pub fn trim_and_resample(
 }
 
 #[inline]
-fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, HashSet<i32>) {
-    let mut literals_to_resample: HashSet<i32> = HashSet::new();
+fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, IntSet<i32>) {
+    let mut literals_to_resample: IntSet<i32> = IntSet::default();
     let mut new_sample = Sample::new_from_samples(&[sample]);
     let complete_len = sample.complete_configs.len();
 

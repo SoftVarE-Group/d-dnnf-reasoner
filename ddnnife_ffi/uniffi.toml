@@ -14,7 +14,7 @@ from_custom = "{}.toByteArray()"
 into_custom = "int.from_bytes({}, 'big')"
 from_custom = "{}.to_bytes()"
 
-[bindings.kotlin.custom_types.HashSetu32]
+[bindings.kotlin.custom_types.IntSetu32]
 type_name = "HashSet<UInt>"
 into_custom = "HashSet({})"
 from_custom = "{}.toList()"
