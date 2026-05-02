@@ -1,3 +1,4 @@
+use ddnnife::int_hash::IntSet;
 use num::BigInt;
 use std::collections::HashSet;
 
@@ -19,9 +20,9 @@ uniffi::custom_type!(BigInt, Vec<u8>, {
     try_lift: |vec| Ok(BigInt::from_signed_bytes_be(&vec)),
 });
 
-type HashSetu32 = HashSet<u32>;
+type IntSetu32 = IntSet<u32>;
 
-uniffi::custom_type!(HashSetu32, Vec<u32>, {
+uniffi::custom_type!(IntSetu32, Vec<u32>, {
     remote,
     lower: |hashset| hashset.into_iter().collect(),
     try_lift: |vec| Ok(vec.into_iter().collect()),

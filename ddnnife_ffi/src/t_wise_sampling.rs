@@ -1,6 +1,6 @@
 use crate::ddnnf::Ddnnf;
 use ddnnife::ddnnf::anomalies::t_wise_sampling;
-use std::collections::HashSet;
+use ddnnife::int_hash::IntSet;
 
 #[uniffi::export]
 impl Ddnnf {
@@ -28,7 +28,7 @@ pub struct Sample {
     /// Configs that do not contain all variables of this sample
     pub partial_configs: Vec<Config>,
     /// The variables that Configs of this sample may contain
-    pub vars: HashSet<u32>,
+    pub vars: IntSet<u32>,
     /// The literals that actually occur in this sample
     pub literals: Vec<i32>,
 }

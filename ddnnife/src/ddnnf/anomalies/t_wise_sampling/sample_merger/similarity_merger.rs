@@ -2,10 +2,10 @@ use super::super::SamplingResult;
 use super::super::t_iterator::TInteractionIter;
 use super::{Config, Sample};
 use super::{OrMerger, SampleMerger};
+use crate::int_hash::IntSet;
 use crate::util::rng;
 use rand::prelude::SliceRandom;
 use std::cmp::{Ordering, min};
-use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
@@ -74,7 +74,7 @@ fn snd<'a>((_, candidate): &(usize, &'a Candidate<'_>)) -> &'a Candidate<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Candidate<'a> {
     config: &'a Config,
-    literals: HashSet<i32>,
+    literals: IntSet<i32>,
     max_intersect: usize,
     total_intersect: usize,
 }
@@ -101,7 +101,7 @@ impl Ord for Candidate<'_> {
 
 impl<'a> Candidate<'a> {
     fn new(config: &'a Config) -> Self {
-        let literals: HashSet<i32> = config.get_decided_literals().collect();
+        let literals: IntSet<i32> = config.get_decided_literals().collect();
         debug_assert!(!literals.contains(&0));
         debug_assert!(!literals.is_empty());
         Self {
@@ -112,7 +112,7 @@ impl<'a> Candidate<'a> {
         }
     }
 
-    fn update(&mut self, other_literals: &HashSet<i32>) {
+    fn update(&mut self, other_literals: &IntSet<i32>) {
         let intersect = self.literals.intersection(other_literals).count();
 
         self.total_intersect += intersect;
@@ -180,7 +180,7 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
+            .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
         assert!(candidate.is_t_wise_covered_by(&sample, 2));
 
@@ -193,7 +193,7 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&c.get_decided_literals().collect()));
+            .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
         assert!(!candidate.is_t_wise_covered_by(&sample, 2));
     }
