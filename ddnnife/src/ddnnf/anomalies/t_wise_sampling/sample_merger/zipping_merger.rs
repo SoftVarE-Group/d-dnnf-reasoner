@@ -70,7 +70,7 @@ impl SampleMerger for ZippingMerger<'_> {
 
 impl ZippingMerger<'_> {
     /// Generates all t-wise interactions between two samples.
-    fn interactions(left: &Sample, right: &Sample, t: usize) -> HashSet<Vec<i32>> {
+    fn interactions(left: &Sample, right: &Sample, t: usize) -> Vec<Vec<i32>> {
         Self::generate_interactions(
             Self::generate_self_interactions(left, t),
             Self::generate_self_interactions(right, t),
@@ -83,7 +83,7 @@ impl ZippingMerger<'_> {
     fn generate_interactions(
         left: impl Iterator<Item = HashSet<Vec<i32>>>,
         right: impl DoubleEndedIterator<Item = HashSet<Vec<i32>>>,
-    ) -> HashSet<Vec<i32>> {
+    ) -> Vec<Vec<i32>> {
         let mut interactions = HashSet::new();
 
         // Both sets are sorted from 1 to t-1.
@@ -99,7 +99,11 @@ impl ZippingMerger<'_> {
             }
         });
 
-        interactions
+        // HashSets are used for deduplication. Consuming methods might need a stable iteration
+        // order, so a sorted Vec is returned.
+        let mut out: Vec<Vec<i32>> = interactions.into_iter().collect();
+        out.sort_unstable();
+        out
     }
 
     /// Generates a set of interactions inside a sample ordered by interactions size.
@@ -177,7 +181,7 @@ mod test {
     use crate::parser::build_ddnnf;
 
     use super::*;
-    use std::collections::HashSet;
+    use crate::int_hash::IntSet;
     use std::path::Path;
 
     #[test]
@@ -198,7 +202,7 @@ mod test {
     /// Create an empty sample that may contain the given variables and will certainly contain
     /// the given literals. Only use this if you know that the configs you are going to add to
     /// this sample contain the given literals.
-    fn new_with_literals(vars: HashSet<u32>, mut literals: Vec<i32>) -> Sample {
+    fn new_with_literals(vars: IntSet<u32>, mut literals: Vec<i32>) -> Sample {
         literals.sort_unstable();
         literals.dedup();
         Sample {
@@ -221,7 +225,7 @@ mod test {
             ddnnf: &ddnnf,
         };
 
-        let mut left_sample = new_with_literals(HashSet::from([2, 3]), vec![-2, 3]);
+        let mut left_sample = new_with_literals([2, 3].into_iter().collect(), vec![-2, 3]);
         left_sample.add_partial(Config::from(&[3, -2], 4));
         let right_sample = Sample::new_from_configs(vec![Config::from(&[1, 4], 4)]);
 
