@@ -1,7 +1,7 @@
 use super::Config;
 use super::t_iterator::TInteractionIter;
+use crate::int_hash::IntSet;
 use std::cmp::{Ordering, min};
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::iter;
 use streaming_iterator::StreamingIterator;
@@ -17,7 +17,7 @@ pub struct Sample {
     /// Configs that do not contain all variables of this sample
     pub partial_configs: Vec<Config>,
     /// The variables that Configs of this sample may contain
-    pub vars: HashSet<u32>,
+    pub vars: IntSet<u32>,
     /// The literals that actually occur in this sample, this is not a HashSet because we want
     /// a stable iteration order.
     pub literals: Vec<i32>,
@@ -61,7 +61,7 @@ impl Display for Sample {
 
 impl Sample {
     /// Create an empty sample that may contain the given variables
-    pub fn new(vars: HashSet<u32>) -> Self {
+    pub fn new(vars: IntSet<u32>) -> Self {
         Self {
             complete_configs: vec![],
             partial_configs: vec![],
@@ -94,7 +94,7 @@ impl Sample {
         literals.sort_unstable();
         literals.dedup();
 
-        let vars: HashSet<u32> = literals.iter().map(|x| x.unsigned_abs()).collect();
+        let vars: IntSet<u32> = literals.iter().map(|x| x.unsigned_abs()).collect();
 
         let mut sample = Self {
             complete_configs: vec![],
@@ -108,13 +108,13 @@ impl Sample {
     }
 
     pub fn new_from_samples(samples: &[&Self]) -> Self {
-        let vars: HashSet<u32> = samples
+        let vars: IntSet<u32> = samples
             .iter()
             .flat_map(|sample| sample.vars.iter())
             .cloned()
             .collect();
 
-        let literals: HashSet<i32> = samples
+        let literals: IntSet<i32> = samples
             .iter()
             .flat_map(|sample| sample.get_literals().iter().copied())
             .collect();
@@ -127,7 +127,7 @@ impl Sample {
 
     /// Create a sample that only contains a single configuration with a single literal
     pub fn from_literal(literal: i32, number_of_variables: usize) -> Self {
-        let mut sample = Self::new(HashSet::from([literal.unsigned_abs()]));
+        let mut sample = Self::new([literal.unsigned_abs()].into_iter().collect());
         sample.literals = vec![literal];
         sample.add_complete(Config::from(&[literal], number_of_variables));
         sample
@@ -137,7 +137,7 @@ impl Sample {
         &self.literals
     }
 
-    pub fn get_vars(&self) -> &HashSet<u32> {
+    pub fn get_vars(&self) -> &IntSet<u32> {
         &self.vars
     }
 
@@ -169,10 +169,9 @@ impl Sample {
     ///
     /// # Examples
     /// ```
-    /// use std::collections::HashSet;
     /// use ddnnife::ddnnf::anomalies::t_wise_sampling::{Config, Sample};
     ///
-    /// let sample = Sample::new(HashSet::from([1,2,3]));
+    /// let sample = Sample::new([1,2,3].into_iter().collect());
     ///
     /// assert!(sample.is_config_complete(&Config::from(&[1,2,3], 3)));
     /// assert!(!sample.is_config_complete(&Config::from(&[1,2], 3)));
@@ -211,9 +210,8 @@ impl Sample {
     ///
     /// # Examples
     /// ```
-    /// use std::collections::HashSet;
     /// use ddnnife::ddnnf::anomalies::t_wise_sampling::{Config, Sample};
-    /// let mut s = Sample::new(HashSet::from([1,2,3]));
+    /// let mut s = Sample::new([1,2,3].into_iter().collect());
     ///
     /// assert!(s.is_empty());
     /// s.add_partial(Config::from(&[1,3], 3));
@@ -247,7 +245,7 @@ mod test {
         let sample = Sample {
             complete_configs: vec![Config::from(&[1, 2, 3, -4, -5], 5)],
             partial_configs: vec![],
-            vars: HashSet::from([1, 2, 3, 4, 5]),
+            vars: [1, 2, 3, 4, 5].into_iter().collect(),
             literals: vec![1, 2, 3, -4, -5],
         };
 
