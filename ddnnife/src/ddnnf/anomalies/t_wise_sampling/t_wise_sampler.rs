@@ -12,23 +12,34 @@ use rand::prelude::SliceRandom;
 use std::cmp::min;
 use streaming_iterator::StreamingIterator;
 
-pub struct TWiseSampler<'a, A: AndMerger, O: OrMerger> {
+pub struct TWiseSampler<'a, 'l, A: AndMerger, O: OrMerger> {
     /// The d-DNNF to sample.
     pub(crate) ddnnf: &'a Ddnnf,
     /// Map that holds the [SamplingResult]s for the nodes.
     pub(crate) partial_samples: IntMap<usize, SamplingResult>,
+    /// The set of literals to cover `t`-wise.
+    ///
+    /// Can be used to restrict the covering to a given set of literals or variables.
+    /// If unset, all literals are covered.
+    literals: Option<&'l IntSet<i32>>,
     /// The merger for and nodes.
     and_merger: A,
     /// The merger for or nodes.
     or_merger: O,
 }
 
-impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
+impl<'a, 'l, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, A, O> {
     /// Constructs a new sampler.
-    pub fn new(ddnnf: &'a Ddnnf, and_merger: A, or_merger: O) -> Self {
+    pub fn new(
+        ddnnf: &'a Ddnnf,
+        and_merger: A,
+        or_merger: O,
+        literals: Option<&'l IntSet<i32>>,
+    ) -> Self {
         Self {
             ddnnf,
             partial_samples: int_hash::map_with_capacity(ddnnf.nodes.len()),
+            literals,
             and_merger,
             or_merger,
         }
@@ -65,6 +76,7 @@ impl<'a, A: AndMerger, O: OrMerger> TWiseSampler<'a, A, O> {
                 t,
                 self.ddnnf.number_of_variables as usize,
                 &sat_solver,
+                self.literals,
             );
 
             complete_partial_configs(
@@ -226,6 +238,7 @@ pub fn trim_and_resample(
     t: usize,
     number_of_variables: usize,
     sat_solver: &SatWrapper,
+    literals: Option<&IntSet<i32>>,
 ) -> Sample {
     if sample.is_empty() {
         return sample;
@@ -236,7 +249,16 @@ pub fn trim_and_resample(
 
     let (mut new_sample, literals_to_resample) = trim_sample(&sample, &ranks, avg_rank);
 
-    let mut literals_to_resample: Vec<i32> = literals_to_resample.into_iter().collect();
+    let mut literals_to_resample: Vec<i32> = literals_to_resample
+        .into_iter()
+        .filter(|literal| {
+            if let Some(literals) = literals {
+                return literals.contains(literal);
+            }
+
+            true
+        })
+        .collect();
     literals_to_resample.sort_unstable();
     literals_to_resample.shuffle(&mut rng());
 

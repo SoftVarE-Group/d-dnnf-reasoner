@@ -9,6 +9,7 @@ mod t_wise_sampler;
 
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
+use crate::int_hash::IntSet;
 use crate::{Ddnnf, DdnnfKind};
 use SamplingResult::ResultWithSample;
 pub use config::Config;
@@ -29,17 +30,18 @@ use t_wise_sampler::{complete_partial_configs_optimal, trim_and_resample};
 
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
-    pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
+    pub fn sample_t_wise(&self, t: usize, literals: Option<&IntSet<i32>>) -> SamplingResult {
         // Setup everything needed for the sampling process.
         let sat_solver = SatWrapper::new(self);
         let and_merger = ZippingMerger {
             t,
             sat_solver: &sat_solver,
             ddnnf: self,
+            literals,
         };
-        let or_merger = SimilarityMerger { t };
+        let or_merger = SimilarityMerger { t, literals };
 
-        TWiseSampler::new(self, and_merger, or_merger).sample(t)
+        TWiseSampler::new(self, and_merger, or_merger, literals).sample(t)
     }
 }
 
@@ -59,7 +61,7 @@ impl ExtendedDdnnf {
         };
         let or_merger = AttributeSimilarityMerger { t, ext_ddnnf: self };
 
-        let mut sampler = TWiseSampler::new(&self.ddnnf, and_merger, or_merger);
+        let mut sampler = TWiseSampler::new(&self.ddnnf, and_merger, or_merger, None);
 
         for node_id in 0..sampler.ddnnf.nodes.len() {
             let partial_sample = sampler.partial_sample(node_id);
@@ -88,6 +90,7 @@ impl ExtendedDdnnf {
                 t,
                 self.ddnnf.number_of_variables as usize,
                 &sat_solver,
+                None,
             );
 
             complete_partial_configs_optimal(&mut sample, self);
@@ -135,6 +138,7 @@ impl ExtendedDdnnf {
             t,
             self.ddnnf.number_of_variables as usize,
             &sat_solver,
+            None,
         );
         complete_partial_configs_optimal(&mut sample, self);
 
@@ -198,7 +202,7 @@ mod test {
         let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         for t in 1..=4 {
-            check_validity_of_sample(vp9.sample_t_wise(t).get_sample().unwrap(), &vp9, t);
+            check_validity_of_sample(vp9.sample_t_wise(t, None).get_sample().unwrap(), &vp9, t);
         }
     }
 
@@ -207,7 +211,11 @@ mod test {
         let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
         let t = 1;
 
-        check_validity_of_sample(auto1.sample_t_wise(t).get_sample().unwrap(), &mut auto1, t);
+        check_validity_of_sample(
+            auto1.sample_t_wise(t, None).get_sample().unwrap(),
+            &mut auto1,
+            t,
+        );
     }
 
     #[test]

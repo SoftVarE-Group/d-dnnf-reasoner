@@ -118,7 +118,7 @@ pub fn handle_query(query: Query, ddnnf: &mut Ddnnf) -> Result<String> {
             None => Err(Error::other(ERROR_UNSAT)),
         },
         Query::TWise { limit, fitness } => Ok(if fitness.is_empty() {
-            ddnnf.sample_t_wise(limit)
+            ddnnf.sample_t_wise(limit, None)
         } else {
             let ext_ddnnf = ExtendedDdnnf::with_fitness_values(ddnnf.clone(), fitness);
             ext_ddnnf.sample_t_wise(limit)

@@ -43,32 +43,33 @@ fun atomicSets(ddnnf: DdnnfMut, candidates: List<Int>?, assumptions: List<Int>, 
     return ddnnf.atomicSets(candidatesUInt, assumptions, cross)
 }
 
-fun sampleTWise(ddnnf: Ddnnf, t: Int): SamplingResult {
+fun sampleTWise(ddnnf: Ddnnf, t: Int, literals: List<Int>?): SamplingResult {
     require(t >= 0) { "t must be positive." }
-    return ddnnf.sampleTWise(t.toULong())
+    return ddnnf.sampleTWise(t.toULong(), literals)
 }
 
-fun isSample(result: SamplingResult): Boolean = when(result) {
+fun isSample(result: SamplingResult): Boolean = when (result) {
     is SamplingResult.ResultWithSample -> true
     else -> false
 }
 
-fun isEmpty(result: SamplingResult): Boolean = when(result) {
+fun isEmpty(result: SamplingResult): Boolean = when (result) {
     is SamplingResult.Empty -> true
     else -> false
 }
 
-fun isVoid(result: SamplingResult): Boolean = when(result) {
+fun isVoid(result: SamplingResult): Boolean = when (result) {
     is SamplingResult.Void -> true
     else -> false
 }
 
 @Throws(IllegalArgumentException::class)
 fun getSample(result: SamplingResult): Sample {
-    when(result) {
+    when (result) {
         is SamplingResult.ResultWithSample -> {
             return result.v1
         }
+
         else -> {
             throw IllegalArgumentException("Invalid sampling result type: ${result::class}")
         }

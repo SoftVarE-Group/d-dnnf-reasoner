@@ -28,6 +28,14 @@ uniffi::custom_type!(IntSetu32, Vec<u32>, {
     try_lift: |vec| Ok(vec.into_iter().collect()),
 });
 
+type IntSeti32 = IntSet<i32>;
+
+uniffi::custom_type!(IntSeti32, Vec<i32>, {
+    remote,
+    lower: |hashset| hashset.into_iter().collect(),
+    try_lift: |vec| Ok(vec.into_iter().collect()),
+});
+
 type HashSeti32 = HashSet<i32>;
 
 uniffi::custom_type!(HashSeti32, Vec<i32>, {

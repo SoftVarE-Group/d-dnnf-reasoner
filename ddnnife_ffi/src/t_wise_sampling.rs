@@ -4,10 +4,10 @@ use ddnnife::int_hash::IntSet;
 
 #[uniffi::export]
 impl Ddnnf {
-    /// Generates various statistics about this d-DNNF.
+    /// Generates samples so that all t-wise interactions between literals are covered.
     #[uniffi::method]
-    pub fn sample_t_wise(&self, t: usize) -> SamplingResult {
-        self.0.sample_t_wise(t).into()
+    pub fn sample_t_wise(&self, t: usize, literals: Option<IntSet<i32>>) -> SamplingResult {
+        self.0.sample_t_wise(t, literals.as_ref()).into()
     }
 }
 

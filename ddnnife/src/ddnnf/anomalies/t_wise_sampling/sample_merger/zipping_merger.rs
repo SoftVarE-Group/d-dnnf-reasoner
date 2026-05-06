@@ -5,21 +5,23 @@ use super::super::{
 use super::{AndMerger, SampleMerger};
 use super::{Config, Sample};
 use crate::Ddnnf;
+use crate::int_hash::IntSet;
 use std::cmp::min;
 use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Clone)]
-pub struct ZippingMerger<'a> {
+pub struct ZippingMerger<'a, 'l> {
     pub t: usize,
     pub sat_solver: &'a SatWrapper<'a>,
     pub ddnnf: &'a Ddnnf,
+    pub literals: Option<&'l IntSet<i32>>,
 }
 
 // Mark ZippingMerger as an AndMerger
-impl AndMerger for ZippingMerger<'_> {}
+impl AndMerger for ZippingMerger<'_, '_> {}
 
-impl SampleMerger for ZippingMerger<'_> {
+impl SampleMerger for ZippingMerger<'_, '_> {
     fn merge(&self, node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
@@ -31,7 +33,7 @@ impl SampleMerger for ZippingMerger<'_> {
 
         let mut sample = Self::zip_samples(left, right, self.ddnnf.number_of_variables as usize);
 
-        for interaction in Self::interactions(left, right, self.t).iter() {
+        for interaction in self.interactions(left, right, self.t).iter() {
             cover_with_caching_twise(
                 &mut sample,
                 interaction,
@@ -68,12 +70,12 @@ impl SampleMerger for ZippingMerger<'_> {
     }
 }
 
-impl ZippingMerger<'_> {
+impl ZippingMerger<'_, '_> {
     /// Generates all t-wise interactions between two samples.
-    fn interactions(left: &Sample, right: &Sample, t: usize) -> Vec<Vec<i32>> {
+    fn interactions(&self, left: &Sample, right: &Sample, t: usize) -> Vec<Vec<i32>> {
         Self::generate_interactions(
-            Self::generate_self_interactions(left, t),
-            Self::generate_self_interactions(right, t),
+            self.generate_self_interactions(left, t),
+            self.generate_self_interactions(right, t),
         )
     }
 
@@ -125,13 +127,25 @@ impl ZippingMerger<'_> {
     ///
     /// In case no interaction of any given size is found, an empty set is still present.
     fn generate_self_interactions(
+        &self,
         sample: &Sample,
         t: usize,
     ) -> impl DoubleEndedIterator<Item = HashSet<Vec<i32>>> {
         // Extract all decided literals from the existing configs.
         let configs: Vec<Vec<i32>> = sample
             .iter()
-            .map(|config| config.get_decided_literals().collect())
+            .map(|config| {
+                config
+                    .get_decided_literals()
+                    .filter(|literal| {
+                        if let Some(literals) = self.literals {
+                            return literals.contains(literal);
+                        }
+
+                        true
+                    })
+                    .collect()
+            })
             .collect();
 
         // From 1 to t ...
@@ -236,6 +250,7 @@ mod test {
             t: 3,
             sat_solver: &sat_solver,
             ddnnf: &ddnnf,
+            literals: None,
         };
 
         let mut left_sample = new_with_literals([2, 3].into_iter().collect(), vec![-2, 3]);

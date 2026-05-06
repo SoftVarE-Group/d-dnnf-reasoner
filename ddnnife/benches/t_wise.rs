@@ -7,7 +7,7 @@ fn bench_t_wise(c: &mut Criterion, name: &str, path: &Path, t: usize) {
     let ddnnf = Ddnnf::from_file(path, None);
     let id = format!("t-wise {name} t={t}");
     c.bench_function(&id, |bencher| {
-        bencher.iter(|| ddnnf.sample_t_wise(black_box(t)))
+        bencher.iter(|| ddnnf.sample_t_wise(black_box(t), None))
     });
 }
 
