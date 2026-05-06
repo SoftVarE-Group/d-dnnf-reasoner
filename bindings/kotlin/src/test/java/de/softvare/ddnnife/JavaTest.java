@@ -69,7 +69,7 @@ class JavaTest {
 
     @Test
     void tWise() {
-        SamplingResult result = sampleTWise(ddnnf, 1);
+        SamplingResult result = sampleTWise(ddnnf, 1, null);
         assertTrue(isSample(result));
 
         Sample sample = getSample(result);

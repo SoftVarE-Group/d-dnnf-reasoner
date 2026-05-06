@@ -6,6 +6,7 @@ use ddnnife::DdnnfKind;
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use ddnnife::ddnnf::statistics::Statistics;
+use ddnnife::int_hash::IntSet;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
@@ -120,6 +121,22 @@ enum Operation {
         /// but also the larger the number of test cases required.
         #[clap(short, default_value_t = 2)]
         t: usize,
+        /// Restricts the covering to the given set of literals.
+        /// By default, all literals are covered.
+        ///
+        /// Can be supplied multiple times with the values being combined.
+        /// Multiple values are delimited by `,`.
+        /// Only one of `literals` or `variables` can be set.
+        #[clap(short, long, allow_negative_numbers = true, value_delimiter = ',')]
+        literals: Option<Vec<i32>>,
+        /// Restricts the covering to the given set of variables.
+        /// By default, all literals are covered.
+        ///
+        /// Can be supplied multiple times with the values being combined.
+        /// Multiple values are delimited by `,`.
+        /// Only one of `literals` or `variables` can be set.
+        #[clap(short, long, value_delimiter = ',')]
+        variables: Option<Vec<u32>>,
     },
     /// Checks a t-wise sample for validity.
     TWiseCheck {
@@ -281,8 +298,37 @@ fn main() -> io::Result<()> {
                     }
                 }
             }
-            Operation::TWise { t } => {
-                writer.write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())?;
+            Operation::TWise {
+                t,
+                literals,
+                variables,
+            } => {
+                if literals.is_some() && variables.is_some() {
+                    return Err(Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Only one of `literals` or `variables` can be set.",
+                    ));
+                }
+
+                let literals: Option<IntSet<i32>> = literals
+                    .as_ref()
+                    .map(|literals| literals.iter().copied().collect());
+
+                let variables: Option<IntSet<i32>> = variables.as_ref().map(|variables| {
+                    variables
+                        .iter()
+                        .copied()
+                        .map(|variable| variable as i32)
+                        .flat_map(|variable| [variable, -variable].into_iter())
+                        .collect()
+                });
+
+                writer.write_all(
+                    ddnnf
+                        .sample_t_wise(*t, literals.or(variables).as_ref())
+                        .to_string()
+                        .as_bytes(),
+                )?;
             }
             Operation::TWiseCheck {
                 sample,

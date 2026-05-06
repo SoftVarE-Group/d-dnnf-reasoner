@@ -3,6 +3,7 @@ from ddnnife import Ddnnf
 ddnnf = Ddnnf.from_file("../../example_input/busybox-1.18.0_c2d.nnf", None)
 features = 854
 
+
 def test_sat():
     ddnnf_mut = ddnnf.as_mut()
     assert ddnnf_mut.is_sat([])
@@ -31,6 +32,7 @@ def test_core_and_dead():
     core = ddnnf_mut.dead([])
     assert len(core) == 18
 
+
 def test_core():
     core = ddnnf.get_core()
     assert len(core) == 41
@@ -54,7 +56,7 @@ def test_atomic_sets():
 
 
 def test_t_wise():
-    sample = ddnnf.sample_t_wise(1)
+    sample = ddnnf.sample_t_wise(1, None)
     assert sample.is_RESULT_WITH_SAMPLE()
     assert len(sample[0].vars) == features
 

@@ -9,14 +9,15 @@ use std::cmp::{Ordering, min};
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
-pub struct SimilarityMerger {
+pub struct SimilarityMerger<'l> {
     pub t: usize,
+    pub literals: Option<&'l IntSet<i32>>,
 }
 
 // Mark SimilarityMerger as an OrMerger
-impl OrMerger for SimilarityMerger {}
+impl OrMerger for SimilarityMerger<'_> {}
 
-impl SampleMerger for SimilarityMerger {
+impl SampleMerger for SimilarityMerger<'_> {
     fn merge<'a>(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
@@ -48,7 +49,7 @@ impl SampleMerger for SimilarityMerger {
             .map(|(index, _)| index)
         {
             let next = candidates.swap_remove(next);
-            if next.is_t_wise_covered_by(&new_sample, self.t) {
+            if next.is_t_wise_covered_by(&new_sample, self.t, self.literals) {
                 continue;
             }
 
@@ -122,7 +123,12 @@ impl<'a> Candidate<'a> {
         }
     }
 
-    fn is_t_wise_covered_by(&self, sample: &Sample, t: usize) -> bool {
+    fn is_t_wise_covered_by(
+        &self,
+        sample: &Sample,
+        t: usize,
+        literals: Option<&IntSet<i32>>,
+    ) -> bool {
         if self.max_intersect == self.literals.len() {
             return true;
         }
@@ -139,7 +145,18 @@ impl<'a> Candidate<'a> {
             return false;
         }
 
-        let mut literals: Vec<i32> = self.config.get_decided_literals().collect();
+        let mut literals: Vec<i32> = self
+            .config
+            .get_decided_literals()
+            .filter(|literal| {
+                if let Some(literals) = literals {
+                    return literals.contains(literal);
+                }
+
+                true
+            })
+            .collect();
+
         literals.shuffle(&mut rng());
         debug_assert!(!literals.contains(&0));
 
@@ -154,7 +171,10 @@ mod test {
 
     #[test]
     fn test_similarity_merger() {
-        let merger = SimilarityMerger { t: 2 };
+        let merger = SimilarityMerger {
+            t: 2,
+            literals: None,
+        };
 
         let left = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
         let right = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
@@ -182,7 +202,7 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
-        assert!(candidate.is_t_wise_covered_by(&sample, 2));
+        assert!(candidate.is_t_wise_covered_by(&sample, 2, None));
 
         let mut candidate = Candidate::new(&candidate_config);
         let sample = Sample::new_from_configs(vec![
@@ -195,6 +215,6 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
-        assert!(!candidate.is_t_wise_covered_by(&sample, 2));
+        assert!(!candidate.is_t_wise_covered_by(&sample, 2, None));
     }
 }
