@@ -1,9 +1,10 @@
 use super::SatWrapper;
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
+use std::num::ParseIntError;
 
 /// Represents a (partial) configuration
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct Config {
     /// A vector of selected features (positive values) and deselected features (negative values)
     pub literals: Vec<i32>,
@@ -31,6 +32,15 @@ impl Extend<i32> for Config {
         self.sat_state_complete = false;
         for literal in iter {
             self.add(literal);
+        }
+    }
+}
+
+impl FromIterator<i32> for Config {
+    fn from_iter<T: IntoIterator<Item = i32>>(iter: T) -> Self {
+        Self {
+            literals: iter.into_iter().collect(),
+            ..Default::default()
         }
     }
 }
@@ -65,6 +75,16 @@ impl Config {
         };
         config.extend(literals.iter().copied());
         config
+    }
+
+    /// Parses a configuration from a line of whitespace-separated literals.
+    pub fn from_str(input: &str, number_of_variables: usize) -> Result<Self, ParseIntError> {
+        let literals = input
+            .split_ascii_whitespace()
+            .map(|literal| literal.parse())
+            .collect::<Result<Vec<i32>, ParseIntError>>()?;
+
+        Ok(Self::from(&literals, number_of_variables))
     }
 
     /// Creates a new config from two disjoint configs.
