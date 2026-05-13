@@ -4,13 +4,14 @@ use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
 use ddnnife::DdnnfKind;
 use ddnnife::ddnnf::Ddnnf;
+use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::info;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Error, Write, stdout};
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader, BufWriter, Error, ErrorKind, Write, stdout};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -119,6 +120,27 @@ enum Operation {
         /// but also the larger the number of test cases required.
         #[clap(short, default_value_t = 2)]
         t: usize,
+    },
+    /// Checks a t-wise sample for validity.
+    TWiseCheck {
+        /// Path to the sample file to check.
+        sample: PathBuf,
+        /// `t` value for checking whether all interactions of a given set of literals or variables
+        /// is covered.
+        #[clap(short, default_value_t = 2)]
+        t: usize,
+        /// When present, it is checked whether the sample covers all t-wise interactions between
+        /// the given literals.
+        ///
+        /// Multiple values are delimited by `,`.
+        #[clap(short, long, allow_negative_numbers = true, value_delimiter = ',')]
+        literals: Option<Vec<i32>>,
+        /// When present, it is checked whether the sample covers all t-wise interactions between
+        /// the given variables.
+        ///
+        /// Multiple values are delimited by `,`.
+        #[clap(short, long, value_delimiter = ',')]
+        variables: Option<Vec<u32>>,
     },
     /// Computes core, dead, false-optional features, and atomic sets.
     Anomalies,
@@ -261,6 +283,48 @@ fn main() -> io::Result<()> {
             }
             Operation::TWise { t } => {
                 writer.write_all(ddnnf.sample_t_wise(*t).to_string().as_bytes())?;
+            }
+            Operation::TWiseCheck {
+                sample,
+                t,
+                literals,
+                variables,
+            } => {
+                let sample = Sample::from_str(
+                    &fs::read_to_string(sample)?,
+                    ddnnf.number_of_variables as usize,
+                )
+                .map_err(|error| Error::new(ErrorKind::InvalidData, error.to_string()))?;
+
+                if !sample.all_complete() {
+                    return Err(Error::other("Some configurations are incomplete."));
+                }
+
+                info!("All configurations are complete.");
+
+                if !sample.all_sat(&ddnnf) {
+                    return Err(Error::other("Some configurations are UNSAT."));
+                }
+
+                info!("All configurations are SAT.");
+
+                if let Some(literals) = literals {
+                    if !sample.covers_literals(&ddnnf, literals, *t) {
+                        return Err(Error::other("Some literals are not covered."));
+                    }
+
+                    info!("All literals are covered.");
+                }
+
+                if let Some(variables) = variables {
+                    if !sample.covers_variables(&ddnnf, variables, *t) {
+                        return Err(Error::other("Some variables are not covered."));
+                    }
+
+                    info!("All variables are covered.");
+                }
+
+                return Ok(());
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
             Operation::Count { features } => {

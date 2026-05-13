@@ -1,9 +1,14 @@
+use crate::Ddnnf;
+use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
+
 use super::Config;
 use super::t_iterator::TInteractionIter;
+use log::debug;
 use std::cmp::{Ordering, min};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::iter;
+use std::num::ParseIntError;
 use streaming_iterator::StreamingIterator;
 
 /// Represents a (partial) sample of configs.
@@ -133,6 +138,48 @@ impl Sample {
         sample
     }
 
+    /// Creates a new sample from a set of lines representing a configuration each.
+    pub fn from_str(input: &str, number_of_variables: usize) -> Result<Self, ParseIntError> {
+        // Transform each line into a configuration.
+        let configs: Vec<Config> = input
+            .lines()
+            .map(|line| Config::from_str(line, number_of_variables))
+            .collect::<Result<Vec<Config>, ParseIntError>>()?;
+
+        // Collect the literals in all configurations.
+        let literals: HashSet<i32> = configs
+            .iter()
+            .flat_map(|config| config.literals.iter())
+            .copied()
+            .collect();
+
+        // Collect the corresponding variables.
+        let vars: HashSet<u32> = literals
+            .iter()
+            .map(|literal| literal.unsigned_abs())
+            .collect();
+
+        // Split the complete and partial configurations.
+        let mut complete_configs = Vec::new();
+        let mut partial_configs = Vec::new();
+
+        configs.into_iter().for_each(|config| {
+            if config.is_complete() {
+                complete_configs.push(config);
+                return;
+            }
+
+            partial_configs.push(config);
+        });
+
+        Ok(Self {
+            complete_configs,
+            partial_configs,
+            vars,
+            literals: literals.into_iter().collect(),
+        })
+    }
+
     pub fn get_literals(&self) -> &[i32] {
         &self.literals
     }
@@ -235,6 +282,71 @@ impl Sample {
 
         TInteractionIter::new(&literals, min(t, literals.len()))
             .all(|interaction| self.covers(interaction))
+    }
+
+    /// Checks whether all configurations of this sample are complete, i.e. the number
+    /// of literals they contain is the same as the number of variables in this sample
+    /// overall.
+    pub fn all_complete(&self) -> bool {
+        self.iter().all(|config| config.is_complete())
+    }
+
+    /// Checks whether all configurations in this sample are SAT.
+    pub fn all_sat(&self, ddnnf: &Ddnnf) -> bool {
+        let sat = SatWrapper::new(ddnnf);
+
+        // Consider each config.
+        self.iter().all(|config| {
+            // Create a mutable clone for checking SAT.
+            let mut config = config.clone();
+            let literals: Vec<i32> = config.get_decided_literals().collect();
+
+            if config.sat_state.is_none() {
+                config.set_sat_state(sat.new_state());
+            }
+
+            // Check that the config is SAT.
+            sat.is_sat_cached(
+                &literals,
+                config
+                    .get_sat_state()
+                    .expect("sat_state should exist because we initialized it a few lines before"),
+            )
+        })
+    }
+
+    /// Checks whether this sample covers all SAT t-wise interactions of the given literals.
+    pub fn covers_literals(&self, ddnnf: &Ddnnf, literals: &[i32], t: usize) -> bool {
+        let sat = SatWrapper::new(ddnnf);
+
+        // Keep track of how many actually vaild interactions are checked.
+        let mut count = 0;
+
+        // Generate all possible t-wise interactions between the given literals.
+        let result = TInteractionIter::new(literals, t)
+            // Only consier those that are actually valid (SAT).
+            .filter(|interaction| sat.is_sat_cached(interaction, &mut sat.new_state()))
+            .inspect(|_| count += 1)
+            // Check that each is covered by this sample.
+            .all(|interaction| self.covers(interaction));
+
+        debug!("Checked {count} interactions.");
+
+        result
+    }
+
+    /// Checks whether this sample covers all SAT t-wise interactions of the given variables.
+    pub fn covers_variables(&self, ddnnf: &Ddnnf, variables: &[u32], t: usize) -> bool {
+        // Generate both polarities of each variable.
+        // Interactions will be later filtered on whether they are SAT.
+        let literals: Vec<i32> = variables
+            .iter()
+            .map(|&variable| variable as i32)
+            .flat_map(|variable| [variable, -variable].into_iter())
+            .collect();
+
+        // Check the generated literals.
+        self.covers_literals(ddnnf, &literals, t)
     }
 }
 
