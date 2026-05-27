@@ -3,7 +3,7 @@ use super::super::t_iterator::TInteractionIter;
 use super::{Config, Sample};
 use super::{OrMerger, SampleMerger};
 use crate::int_hash::IntSet;
-use crate::util::rng;
+use crate::rand::rng;
 use rand::prelude::SliceRandom;
 use std::cmp::{Ordering, min};
 use streaming_iterator::StreamingIterator;

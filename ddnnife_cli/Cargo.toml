@@ -11,9 +11,6 @@ workspace = ".."
 name = "ddnnife"
 path = "src/main.rs"
 
-[features]
-deterministic = ["ddnnife/deterministic"]
-
 [dependencies]
 clap = { workspace = true }
 csv = { workspace = true }

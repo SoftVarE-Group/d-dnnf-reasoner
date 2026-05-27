@@ -285,6 +285,21 @@ If no candidates are supplied, all features of the d-DNNF will be the candidates
 atomic v 1 2 3 4 5 6 7 8 9 10 a 1
 ```
 
+## Determinism
+
+> [!IMPORTANT]
+> The random number generator used by ddnnife is **not** cryptographically safe.
+
+ddnnife makes use of randomness for some of its algorithms.
+Specifically, the following calculations include potentially multiple calls to random number generators:
+
+- t-wise sampling
+- uniform random sampling
+
+Currently, it is possible to seed the random number generation used for t-wise sampling (**not** uniform random sampling).
+This can be done on the CLI via the `--seed` option.
+Specifying a seed will make the operation deterministic while not providing one will result in a pseudorandom operation.
+
 [crate]: https://crates.io/crates/ddnnife
 [pypi]: https://pypi.org/project/ddnnife
 [releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases

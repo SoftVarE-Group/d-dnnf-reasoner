@@ -5,7 +5,10 @@ use super::super::{
 use super::{AndMerger, SampleMerger};
 use super::{Config, Sample};
 use crate::Ddnnf;
+use crate::config;
 use crate::int_hash::IntSet;
+use crate::rand::rng;
+use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
@@ -103,22 +106,16 @@ impl ZippingMerger<'_, '_> {
         });
 
         // Deterministic sampling requires the same iteration order between runs.
-        // As the HashSets used for the rest of the algorithm do not provide such a determinsitic order,
-        // we collect, sort and (determinsitically) shuffle the generated interactions.
-        #[cfg(feature = "deterministic")]
-        {
-            use crate::util::rng;
-            use rand::seq::SliceRandom;
-
+        // As the HashSets used for the rest of the algorithm do not provide such a deterministic order,
+        // we collect, sort and (deterministically) shuffle the generated interactions.
+        if config::is_deterministic() {
             let mut interactions: Vec<Vec<i32>> = interactions.into_iter().collect();
             interactions.sort_unstable();
             interactions.shuffle(&mut rng());
-
             interactions
+        } else {
+            interactions.into_iter().collect()
         }
-
-        #[cfg(not(feature = "deterministic"))]
-        interactions.into_iter().collect()
     }
 
     /// Generates a set of interactions inside a sample ordered by interactions size.

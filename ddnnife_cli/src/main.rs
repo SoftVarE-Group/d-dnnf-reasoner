@@ -3,6 +3,7 @@ mod stream;
 use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
 use ddnnife::DdnnfKind;
+use ddnnife::config;
 use ddnnife::ddnnf::Ddnnf;
 use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use ddnnife::ddnnf::statistics::Statistics;
@@ -46,6 +47,10 @@ struct Args {
     /// Logging level for outputting warnings and other information.
     #[arg(short, long, default_value_t=log::LevelFilter::Info)]
     logging: log::LevelFilter,
+
+    /// Enable deterministic behavior for random operations using the given seed.
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -222,12 +227,18 @@ enum Operation {
 }
 
 fn main() -> io::Result<()> {
-    // Parse the
+    // Parse the CLI arguments.
     let cli = Args::parse();
 
     pretty_env_logger::formatted_builder()
         .filter_level(cli.logging)
         .init();
+
+    // Enable deterministic mode when a seed is given.
+    if let Some(seed) = cli.seed {
+        config::set_seed(seed);
+        config::set_deterministic(true);
+    }
 
     let time = Instant::now();
 
