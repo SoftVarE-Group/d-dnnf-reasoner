@@ -5,7 +5,7 @@ use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::int_hash::{self, IntMap, IntSet};
-use crate::util::rng;
+use crate::rand::rng;
 use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;

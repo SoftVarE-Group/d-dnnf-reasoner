@@ -1,8 +1,4 @@
-use rand::Rng;
 use std::iter;
-
-#[cfg(any(feature = "deterministic", test))]
-use rand::prelude::{SeedableRng, StdRng};
 
 pub fn format_vec_separated_by<T: ToString>(
     vals: impl Iterator<Item = T>,
@@ -25,18 +21,6 @@ where
     vals.map(|res| format_vec(res.into_iter()))
         .collect::<Vec<String>>()
         .join(";")
-}
-
-#[cfg(any(feature = "deterministic", test))]
-#[inline]
-pub fn rng() -> impl Rng {
-    StdRng::seed_from_u64(42)
-}
-
-#[cfg(not(any(feature = "deterministic", test)))]
-#[inline]
-pub fn rng() -> impl Rng {
-    rand::rng()
 }
 
 pub fn zip_assumptions_variables<'a>(
