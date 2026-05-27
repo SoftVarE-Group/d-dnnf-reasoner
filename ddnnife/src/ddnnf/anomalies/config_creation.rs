@@ -1,23 +1,19 @@
-use std::{
-    cmp::min,
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
-
+use crate::Ddnnf;
+use crate::NodeType::*;
 use itertools::Itertools;
 use num::{BigInt, BigRational, ToPrimitive, Zero};
-use once_cell::sync::Lazy;
 use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use rand_distr::{Binomial, Distribution, weighted::WeightedAliasIndex};
 use rand_pcg::{Lcg64Xsh32, Pcg32};
+use std::{
+    cmp::min,
+    collections::HashMap,
+    sync::{LazyLock, RwLock},
+};
 
-use crate::Ddnnf;
-use crate::NodeType::*;
-
-#[allow(clippy::type_complexity)]
-static ENUMERATION_CACHE: Lazy<Arc<Mutex<HashMap<Vec<i32>, usize>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+static ENUMERATION_CACHE: LazyLock<RwLock<HashMap<Vec<i32>, usize>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 impl Ddnnf {
     /// Creates satisfiable complete configurations for a d-DNNF and given assumptions.
@@ -43,7 +39,7 @@ impl Ddnnf {
         assumptions.sort_unstable_by_key(|f| f.abs());
 
         if self.execute_query(assumptions) > BigInt::ZERO {
-            let last_stop = match ENUMERATION_CACHE.lock().unwrap().get(assumptions) {
+            let last_stop = match ENUMERATION_CACHE.read().unwrap().get(assumptions) {
                 Some(&x) => x,
                 None => 0,
             };
@@ -59,7 +55,7 @@ impl Ddnnf {
                 sample.sort_unstable_by_key(|f| f.abs());
             }
 
-            ENUMERATION_CACHE.lock().unwrap().insert(
+            ENUMERATION_CACHE.write().unwrap().insert(
                 assumptions.to_vec(),
                 (min(self.rt(), BigInt::from(last_stop + amount)) % self.rt())
                     .to_usize()

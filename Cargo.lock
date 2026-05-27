@@ -403,7 +403,6 @@ dependencies = [
  "log",
  "nom 8.0.0",
  "num",
- "once_cell",
  "petgraph",
  "rand",
  "rand_distr",
