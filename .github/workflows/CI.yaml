@@ -20,6 +20,7 @@ jobs:
         run: nix flake check -L
 
   Build:
+    needs: [Check]
     strategy:
       fail-fast: false
       matrix:
@@ -31,10 +32,10 @@ jobs:
             runner: ubuntu-24.04
             flake: ddnnife-static
           - double: x86_64-darwin
-            runner: macos-15-intel
+            runner: macos-26-intel
             flake: ddnnife
           - double: aarch64-darwin
-            runner: macos-15
+            runner: macos-26
             flake: ddnnife
           - double: x86_64-windows
             runner: ubuntu-24.04
@@ -58,9 +59,239 @@ jobs:
           name: ddnnife-${{ matrix.target.double }}
           path: result
 
+  Container:
+    needs: [Check]
+    strategy:
+      matrix:
+        target:
+          - double: aarch64-linux
+            architecture: arm64
+            runner: ubuntu-24.04-arm
+          - double: x86_64-linux
+            architecture: amd64
+            runner: ubuntu-24.04
+    env:
+      REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+      IMAGE_NAME: ${{ vars.CONTAINER_IMAGE }}
+      TAG: ${{ github.ref_name }}
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build
+        run: nix build -L .#container
+      - name: Login
+        run: skopeo login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
+      - name: Push
+        run: skopeo copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }}
+      - name: Push latest tag
+        if: github.ref_type == 'tag'
+        run: skopeo copy docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }} docker://$REGISTRY/$IMAGE_NAME:latest-${{ matrix.target.architecture }}
+
+  Kotlin:
+    needs: [Check]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - double:
+              nix: aarch64-linux
+              jvm: linux-aarch64
+            runner: ubuntu-24.04-arm
+            flake:
+              kotlin: kotlin
+              library: libddnnife
+          - double:
+              nix: x86_64-linux
+              jvm: linux-x86-64
+            runner: ubuntu-24.04
+            flake:
+              kotlin: kotlin
+              library: libddnnife
+          - standalone: true
+            suffix: -musl
+            double:
+              nix: aarch64-linux
+            runner: ubuntu-24.04-arm
+            flake:
+              kotlin: kotlin-musl
+          - standalone: true
+            suffix: -musl
+            double:
+              nix: x86_64-linux
+            runner: ubuntu-24.04
+            flake:
+              kotlin: kotlin-musl
+          - double:
+              nix: aarch64-darwin
+              jvm: darwin-aarch64
+            runner: macos-26
+            flake:
+              kotlin: kotlin
+              library: libddnnife
+          - double:
+              nix: x86_64-darwin
+              jvm: darwin-x86-64
+            runner: macos-26-intel
+            flake:
+              kotlin: kotlin
+              library: libddnnife
+          - double:
+              nix: x86_64-windows
+              jvm: win32-x86-64
+            runner: ubuntu-24.04
+            flake:
+              kotlin: kotlin-windows
+              library: libddnnife-windows
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build
+        run: nix build -L .#${{ matrix.target.flake.kotlin }}
+      - name: Export
+        if: ${{ !matrix.target.standalone }}
+        run: |
+          nix build -L .#${{ matrix.target.flake.library }}
+          mkdir -p ${{ runner.temp }}/libddnnife
+          cp -rL result/lib ${{ runner.temp }}/libddnnife/${{ matrix.target.double.jvm }}
+      - name: Upload
+        if: ${{ !matrix.target.standalone }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: libddnnife-${{ matrix.target.double.nix }}
+          path: ${{ runner.temp }}/libddnnife
+      - name: Upload
+        if: matrix.target.standalone
+        uses: actions/upload-artifact@v7
+        with:
+          name: ddnnife-kotlin-${{ matrix.target.double.nix }}${{ matrix.target.suffix }}
+          path: result
+
+  Kotlin-Package:
+    needs: [Kotlin]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          path: nix/libddnnife
+          pattern: libddnnife-*
+          merge-multiple: true
+      - name: Build
+        run: |
+          git add nix/libddnnife
+          nix build -L .#kotlin-bundled
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ddnnife-kotlin
+          path: result
+
+  Python:
+    needs: [Check]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - double: aarch64-linux
+            runner: ubuntu-24.04-arm
+            flake: python
+            test: true
+          - double: aarch64-linux-musl
+            runner: ubuntu-24.04-arm
+            flake: python-static
+          - double: x86_64-linux
+            runner: ubuntu-24.04
+            flake: python
+            test: true
+          - double: x86_64-linux-musl
+            runner: ubuntu-24.04
+            flake: python-static
+          # FIXME: fails to run
+          # - double: x86_64-darwin
+          #   runner: macos-26-intel
+          #   flake: python
+          #   test: true
+          # - double: aarch64-darwin
+          #   runner: macos-26
+          #   flake: python
+          #   test: true
+          - double: x86_64-windows
+            runner: ubuntu-24.04
+            flake: python-windows
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Cache
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build
+        run: nix build -L .#${{ matrix.target.flake }}
+      - name: Test
+        if: matrix.target.test
+        working-directory: bindings/python
+        run: |
+          pip install ddnnife --find-links ../../result
+          pip install pytest
+          pytest --verbose
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ddnnife-python-${{ matrix.target.double }}
+          path: result
+
+  Python-Publish:
+    needs: [Python]
+    runs-on: ubuntu-24.04
+    if: github.ref_type == 'tag'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Nix
+        uses: cachix/install-nix-action@v31
+      - name: Download
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/wheels
+          pattern: ddnnife-python-*
+          merge-multiple: true
+      - name: Publish
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish ${{ runner.temp }}/wheels/*
+
   Publish:
     runs-on: ubuntu-24.04
-    if: ${{ github.ref_type == 'tag' }}
+    if: github.ref_type == 'tag'
     needs:
       - Check
       - Build
@@ -72,7 +303,7 @@ jobs:
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
-          name: softvare-group
+          name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Publish
         env:
