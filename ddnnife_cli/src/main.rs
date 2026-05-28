@@ -9,7 +9,7 @@ use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
-use log::info;
+use log::{info, warn};
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Error, ErrorKind, Write, stdout};
 use std::path::{Path, PathBuf};
@@ -308,20 +308,21 @@ fn main() -> io::Result<()> {
 
                 info!("All configurations are SAT.");
 
-                if let Some(literals) = literals {
-                    if !sample.covers_literals(&ddnnf, literals, *t) {
-                        return Err(Error::other("Some literals are not covered."));
-                    }
+                let (total, covered) = if let Some(literals) = literals {
+                    sample.covered_literals(&ddnnf, literals, *t)
+                } else if let Some(variables) = variables {
+                    sample.covered_variables(&ddnnf, variables, *t)
+                } else {
+                    let variables: Vec<u32> = (1..=ddnnf.number_of_variables).collect();
+                    sample.covered_variables(&ddnnf, &variables, *t)
+                };
 
-                    info!("All literals are covered.");
-                }
+                let coverage = (covered as f64 / total as f64) * 100.0;
 
-                if let Some(variables) = variables {
-                    if !sample.covers_variables(&ddnnf, variables, *t) {
-                        return Err(Error::other("Some variables are not covered."));
-                    }
+                info!("Literal coverage of sample: {:.2}%", coverage);
 
-                    info!("All variables are covered.");
+                if total != covered {
+                    warn!("Some interactions are not covered.");
                 }
 
                 return Ok(());

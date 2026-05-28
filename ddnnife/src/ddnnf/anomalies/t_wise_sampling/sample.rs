@@ -312,28 +312,37 @@ impl Sample {
         })
     }
 
-    /// Checks whether this sample covers all SAT t-wise interactions of the given literals.
-    pub fn covers_literals(&self, ddnnf: &Ddnnf, literals: &[i32], t: usize) -> bool {
+    /// Calculates the number of total possible interactions of the given literals and those
+    /// that are covered by this sample.
+    ///
+    /// A sample with full t-wise coverage would result in two identical values.
+    ///
+    /// **Note:** `literals` are expected to be unique.
+    pub fn covered_literals(&self, ddnnf: &Ddnnf, literals: &[i32], t: usize) -> (usize, usize) {
         let sat = SatWrapper::new(ddnnf);
 
-        // Keep track of how many actually vaild interactions are checked.
-        let mut count = 0;
-
         // Generate all possible t-wise interactions between the given literals.
-        let result = TInteractionIter::new(literals, t)
-            // Only consier those that are actually valid (SAT).
+        TInteractionIter::new(literals, t)
+            // Only consider those that are actually valid (SAT).
             .filter(|interaction| sat.is_sat_cached(interaction, &mut sat.new_state()))
-            .inspect(|_| count += 1)
-            // Check that each is covered by this sample.
-            .all(|interaction| self.covers(interaction));
+            // Count how many interactions there are and which are covered.
+            .fold((0, 0), |(total, covered), interaction| {
+                if self.covers(interaction) {
+                    return (total + 1, covered + 1);
+                }
 
-        debug!("Checked {count} interactions.");
-
-        result
+                debug!("Uncovered interaction: {:?}", interaction);
+                (total + 1, covered)
+            })
     }
 
-    /// Checks whether this sample covers all SAT t-wise interactions of the given variables.
-    pub fn covers_variables(&self, ddnnf: &Ddnnf, variables: &[u32], t: usize) -> bool {
+    /// Calculates the number of total possible interactions of the given variables and those
+    /// that are covered by this sample.
+    ///
+    /// A sample with full t-wise coverage would result in two identical values.
+    ///
+    /// **Note:** `variables` are expected to be unique.
+    pub fn covered_variables(&self, ddnnf: &Ddnnf, variables: &[u32], t: usize) -> (usize, usize) {
         // Generate both polarities of each variable.
         // Interactions will be later filtered on whether they are SAT.
         let literals: Vec<i32> = variables
@@ -343,7 +352,7 @@ impl Sample {
             .collect();
 
         // Check the generated literals.
-        self.covers_literals(ddnnf, &literals, t)
+        self.covered_literals(ddnnf, &literals, t)
     }
 }
 
