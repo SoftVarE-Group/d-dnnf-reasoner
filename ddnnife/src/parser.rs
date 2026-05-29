@@ -576,6 +576,7 @@ pub fn parse_queries_file(path: &Path) -> Vec<(usize, Vec<i32>)> {
     parsed_queries
 }
 
+#[allow(clippy::explicit_counter_loop)]
 pub fn build_attributes(path: &Path) -> HashMap<String, Attribute> {
     let file = open_file_savely(path);
     let mut reader = ReaderBuilder::new()
