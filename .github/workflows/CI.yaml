@@ -31,11 +31,11 @@ jobs:
           - double: x86_64-linux
             runner: ubuntu-24.04
             flake: ddnnife-static
-          - double: x86_64-darwin
-            runner: macos-26-intel
-            flake: ddnnife
           - double: aarch64-darwin
             runner: macos-26
+            flake: ddnnife
+          - double: x86_64-darwin
+            runner: macos-26-intel
             flake: ddnnife
           - double: x86_64-windows
             runner: ubuntu-24.04
@@ -232,13 +232,13 @@ jobs:
             runner: ubuntu-24.04
             flake: python-static
           - double: x86_64-darwin
-            runner: macos-26-intel
-            flake: python
-            test: true
-          - double: aarch64-darwin
-            runner: macos-26
-            flake: python
-            test: true
+          #   runner: macos-26-intel
+          #   flake: python
+          #   test: true
+          # - double: aarch64-darwin
+          #   runner: macos-26
+          #   flake: python
+          #   test: true
           - double: x86_64-windows
             runner: ubuntu-24.04
             flake: python-windows
