@@ -11,6 +11,7 @@
   crane,
   fenix,
   lib,
+  libiconv,
   pkgs,
   cranePkgs ? null,
   stdenv,
@@ -131,6 +132,29 @@ craneLib.${craneAction} (
   // lib.optionalAttrs dynamicMusl {
     CARGO_BUILD_RUSTFLAGS = "-C target-feature=-crt-static";
   }
+  # On macOS, replace the link to Nix' libiconv to point to the system provided one.
+  //
+    lib.optionalAttrs
+      (
+        stdenv.buildPlatform.isDarwin
+        && builtins.elem component [
+          "ddnnife_cli"
+          "ddnnife_ffi"
+        ]
+      )
+      (
+        let
+          fileToPatch =
+            {
+              ddnnife_cli = "$out/bin/ddnnife";
+              ddnnife_ffi = "$out/lib/libddnnife.dylib";
+            }
+            .${component};
+        in
+        {
+          postInstall = "install_name_tool -change ${libiconv}/lib/libiconv.2.dylib /usr/lib/libiconv.2.dylib ${fileToPatch}";
+        }
+      )
   // lib.optionalAttrs benchmark {
     pname = "${name}-bench";
     cargoTestCommand = "cargo bench > benchmark.txt";
