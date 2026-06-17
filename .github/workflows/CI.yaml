@@ -231,7 +231,10 @@ jobs:
           - double: x86_64-linux-musl
             runner: ubuntu-24.04
             flake: python-static
-          - double: x86_64-darwin
+          - double: x86_64-windows
+            runner: ubuntu-24.04
+            flake: python-windows
+          # - double: x86_64-darwin
           #   runner: macos-26-intel
           #   flake: python
           #   test: true
@@ -239,9 +242,6 @@ jobs:
           #   runner: macos-26
           #   flake: python
           #   test: true
-          - double: x86_64-windows
-            runner: ubuntu-24.04
-            flake: python-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
