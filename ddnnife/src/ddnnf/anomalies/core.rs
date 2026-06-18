@@ -1,5 +1,5 @@
 use crate::Ddnnf;
-use num::Zero;
+use log::info;
 use std::collections::HashSet;
 
 impl Ddnnf {
@@ -54,23 +54,23 @@ impl Ddnnf {
             return self.core.iter().copied().collect();
         }
 
-        let mut assumptions = assumptions.to_vec();
-        let mut core = Vec::new();
-        let reference = self.execute_query(&assumptions);
+        let reference = self.execute_query(assumptions);
+        info!("Count under assumptions: {reference}");
 
-        for i in 1_i32..=self.number_of_variables as i32 {
-            assumptions.push(i);
-            let inter = self.execute_query(&assumptions);
-            if reference == inter {
-                core.push(i);
-            }
-            if inter.is_zero() {
-                core.push(-i);
-            }
-            assumptions.pop();
-        }
+        self.annotate_partial_derivatives_assumptions(assumptions);
 
-        core
+        self.literals
+            .iter()
+            .filter_map(|(literal, node)| {
+                let partial_derivative = &self.nodes[*node].partial_derivative;
+
+                if *partial_derivative == reference {
+                    return Some(*literal);
+                }
+
+                None
+            })
+            .collect()
     }
 
     pub fn core_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
@@ -83,5 +83,20 @@ impl Ddnnf {
         let mut features = self.core_dead_with_assumptions(assumptions);
         features.retain(|feature| feature.is_negative());
         features
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::parser::build_ddnnf;
+    use std::path::Path;
+
+    #[test]
+    fn core_assumptions() {
+        let mut ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), None);
+        let mut result = ddnnf.core_dead_with_assumptions(&[-3]);
+        result.sort_unstable();
+        let expected = vec![-3, 1, 2, 6, 10, 15, 19, 25, 31, 40];
+        assert_eq!(result, expected);
     }
 }

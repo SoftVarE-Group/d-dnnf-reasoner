@@ -207,7 +207,10 @@ enum Operation {
         number: usize,
     },
     /// Computes the core and dead features.
-    Core,
+    Core {
+        #[arg(short, long, allow_negative_numbers = true)]
+        assumptions: Vec<i32>,
+    },
     /// Transforms the smooth d-DNNF into the mermaid.md format.
     Mermaid {
         /// The numbers of the features that should be included or excluded
@@ -485,8 +488,8 @@ fn main() -> io::Result<()> {
             Operation::Anomalies => {
                 ddnnf.write_anomalies(&mut writer)?;
             }
-            Operation::Core => {
-                let mut core: Vec<i32> = ddnnf.core.clone().into_iter().collect();
+            Operation::Core { assumptions } => {
+                let mut core = ddnnf.core_dead_with_assumptions(assumptions);
                 core.sort_unstable_by_key(|key| key.abs());
                 writer.write_all(format_vec(core.iter()).as_bytes())?;
             }
