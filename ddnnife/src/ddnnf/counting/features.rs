@@ -4,10 +4,36 @@ use std::error::Error;
 use std::path::Path;
 
 impl Ddnnf {
+    /// Calculates the count of multiple literals (iterables) each under fixed assumptions.
+    /// Results in one count per iterable, each valid under the given assumptions together with the iterable.
+    ///
+    /// Uses partial derivatives and therefore does not involve re-counting.
+    pub fn count_iterables(&mut self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+        // Calculate the original count under the given assumptions.
+        let original = self.execute_query(assumptions);
+
+        // Calculate the partial derivatives under the given assumptions.
+        self.annotate_partial_derivatives_assumptions(assumptions);
+
+        // Calculate the count for each iterable.
+        iterables
+            .iter()
+            .map(|iterable| {
+                // Check whether there is a node for the inverse literal.
+                match self.literals.get(&-iterable) {
+                    // When there is a node, use its partial derivative to reduce the original count.
+                    Some(&node) => &original - &self.nodes[node].partial_derivative,
+                    // Otherwise simply return the original count.
+                    None => original.clone(),
+                }
+            })
+            .collect()
+    }
+
     pub fn card_of_each_feature(&mut self) -> impl Iterator<Item = (i32, BigInt, f64)> + '_ {
         self.annotate_partial_derivatives();
         let rc = self.rc();
-        (1_i32..self.number_of_variables as i32 + 1).map(move |variable| {
+        (1_i32..=self.number_of_variables as i32).map(move |variable| {
             let cardinality = self.card_of_feature_with_partial_derivatives(variable);
             let ratio = BigRational::from((cardinality.clone(), rc.clone()))
                 .to_f64()
@@ -65,8 +91,43 @@ mod test {
     use file_diff::diff_files;
     use std::fs::{self, File};
     use std::path::Path;
+    use std::str::FromStr;
 
     use super::*;
+
+    #[test]
+    fn count_multiple() {
+        let mut ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
+        let result = ddnnf.count_iterables(&[], &[3, 5]);
+        let expected = vec![
+            BigInt::from_str(
+                "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000",
+            ).unwrap(),
+            BigInt::from_str(
+                "19558927176703111970630256604805514155483434271585300434767867070716031103221451966433957821099471645560819328082732687237237092292630699169456731901173780106030980101589212366582299152026173440000000000000000000000000",
+            ).unwrap(),
+        ];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn count_multiple_assumptions() {
+        let mut ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
+        let result = ddnnf.count_iterables(&[1, -2, 3], &[6, 7, 42, -42]);
+        let expected = vec![
+            BigInt::from_str(
+                "384036445892876423001158498633581630304377700405713169569644761117385361664929390339942080733590146400289868636317852176378625909465473907063530151791820800000000000000000000000",
+            ).unwrap(),
+            BigInt::from_str(
+                "19365940433914281159887479845625056570904516516184828136213103529095442189043204367066948281569355315080124708098083707795934801510156013623320772608000000000000000000000000000",
+            ).unwrap(),
+            BigInt::ZERO,
+            BigInt::from_str(
+                "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000",
+            ).unwrap(),
+        ];
+        assert_eq!(result, expected);
+    }
 
     #[test]
     fn card_multi_queries() {

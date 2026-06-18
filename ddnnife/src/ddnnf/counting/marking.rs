@@ -45,6 +45,53 @@ impl Ddnnf {
     }
 
     #[inline]
+    pub(crate) fn annotate_partial_derivatives_assumptions(&mut self, assumptions: &[i32]) {
+        // TODO: use external data structure?
+        // Set temp counts.
+        self.operate_on_partial_config_default(assumptions, Ddnnf::calc_count);
+
+        self.nodes
+            .iter_mut()
+            .for_each(|node| node.partial_derivative.set_zero());
+
+        if let Some(root) = self.nodes.last_mut() {
+            root.partial_derivative.set_one();
+        }
+
+        (0..self.nodes.len())
+            .rev()
+            .for_each(|index| self.annotate_single_partial_derivative_assumptions(index));
+    }
+
+    #[inline]
+    fn annotate_single_partial_derivative_assumptions(&mut self, i: usize) {
+        match &self.nodes[i].ntype {
+            NodeType::And { children } => {
+                let children_c = children.clone();
+                for &child in children_c.iter() {
+                    let mut current_node_partial_derivative =
+                        self.nodes[i].partial_derivative.clone();
+
+                    for &other_child in children_c.iter() {
+                        if child != other_child {
+                            current_node_partial_derivative *= &self.nodes[other_child].temp;
+                        }
+                    }
+
+                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
+                }
+            }
+            NodeType::Or { children } => {
+                let current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
+                for child in children.clone() {
+                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    #[inline]
     pub(crate) fn card_of_feature_with_partial_derivatives(&mut self, feature: i32) -> BigInt {
         match self.literals.get(&-feature).cloned() {
             Some(i) => self.rc() - &self.nodes[i].partial_derivative,
