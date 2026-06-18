@@ -1,4 +1,5 @@
 use super::super::Ddnnf;
+use log::info;
 use num::{BigInt, BigRational, ToPrimitive};
 use std::error::Error;
 use std::path::Path;
@@ -11,6 +12,7 @@ impl Ddnnf {
     pub fn count_iterables(&mut self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
         // Calculate the original count under the given assumptions.
         let original = self.execute_query(assumptions);
+        info!("Count under assumptions: {original}");
 
         // Calculate the partial derivatives under the given assumptions.
         self.annotate_partial_derivatives_assumptions(assumptions);
