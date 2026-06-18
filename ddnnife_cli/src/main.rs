@@ -61,8 +61,12 @@ enum Operation {
         /// (positive number to include, negative to exclude). Can be one or multiple features.
         /// A feature f has to be ∈ ℤ and the only allowed seperator is a whitespace.
         /// The default is no assumption. The Output gets displayed on the terminal.
-        #[arg(num_args = 0.., allow_negative_numbers = true)]
-        features: Option<Vec<i32>>,
+        #[arg(short, long, allow_negative_numbers = true)]
+        assumptions: Vec<i32>,
+        /// Literals to consider each on their own under the assumptions.
+        /// Results in a count per iterable.
+        #[arg(short, long, allow_negative_numbers = true)]
+        iterables: Vec<i32>,
     },
     /// Computes the cardinality of a single feature for all features. Is single threaded.
     CountFeatures,
@@ -385,20 +389,28 @@ fn main() -> io::Result<()> {
                 return Ok(());
             }
             // computes the cardinality for the partial configuration that can be mentioned with parameters
-            Operation::Count { features } => {
-                let features = features.clone().unwrap_or(vec![]);
-                let count = ddnnf.execute_query(&features);
+            Operation::Count {
+                assumptions,
+                iterables,
+            } => {
+                if iterables.is_empty() {
+                    let count = ddnnf.execute_query(assumptions);
+                    writer.write_all(count.to_string().as_ref())?;
 
-                writer.write_all(count.to_string().as_ref())?;
-
-                let marked_nodes = ddnnf.get_marked_nodes_clone(&features);
-                info!(
-                    "While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
-                    That are {:.2}%",
-                    marked_nodes.len(),
-                    ddnnf.nodes.len(),
-                    marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0
-                );
+                    let marked_nodes = ddnnf.get_marked_nodes_clone(assumptions);
+                    info!(
+                        "While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
+                        That are {:.2}%",
+                        marked_nodes.len(),
+                        ddnnf.nodes.len(),
+                        marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0
+                    );
+                } else {
+                    ddnnf
+                        .count_iterables(assumptions, iterables)
+                        .iter()
+                        .try_for_each(|count| writeln!(writer, "{count}"))?;
+                };
             }
             // computes the cardinality of features and saves the results in a .csv file
             // the cardinalities are always sorted from lowest to highest (also for multiple threads)

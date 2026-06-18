@@ -25,13 +25,14 @@ impl DdnnfMut {
         self.0.lock().unwrap().0.execute_query(assumptions)
     }
 
-    /// Computes the cardinality of this d-DNNF for multiple variables.
+    /// Computes the cardinality of this d-DNNF for multiple iterables.
     #[uniffi::method]
-    fn count_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<BigInt> {
-        let mut ddnnf = self.0.lock().unwrap();
-        util::zip_assumptions_variables(assumptions, variables)
-            .map(|assumptions| ddnnf.0.execute_query(&assumptions))
-            .collect()
+    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+        self.0
+            .lock()
+            .unwrap()
+            .0
+            .count_iterables(assumptions, iterables)
     }
 
     /// Computes whether this d-DNNF is satisfiable.
