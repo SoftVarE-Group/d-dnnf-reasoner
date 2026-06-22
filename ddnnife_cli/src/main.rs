@@ -299,10 +299,10 @@ fn main() -> io::Result<()> {
                 candidates,
                 cross,
             } => {
-                for set in ddnnf.get_atomic_sets(candidates.clone(), assumptions, *cross) {
-                    writer.write_all(format_vec(set.iter()).as_bytes())?;
-                    writer.write_all("\n".as_bytes())?;
-                }
+                ddnnf
+                    .get_atomic_sets(candidates.clone(), assumptions, *cross)
+                    .into_iter()
+                    .try_for_each(|set| writeln!(writer, "{}", format_vec(set.into_iter())))?;
             }
             Operation::Urs {
                 assumptions,

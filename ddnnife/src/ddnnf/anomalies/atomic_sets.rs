@@ -132,34 +132,31 @@ impl Ddnnf {
         assumptions: &[i32],
         cross: bool,
     ) -> Vec<Vec<i16>> {
-        let mut combinations: Vec<(BigInt, i32)> = Vec::new();
-
         // If there are no candidates supplied, we consider all features to be a candidate
-        let considered_features = match candidates {
+        let mut considered: Vec<i32> = match candidates {
             Some(c) => c,
             None => (1..=self.number_of_variables).collect(),
-        };
+        }
+        .into_iter()
+        .map(|variable| variable as i32)
+        .collect();
+
+        if cross {
+            let mut inverse: Vec<i32> = considered.iter().map(|literal| -literal).collect();
+            considered.append(&mut inverse);
+        }
 
         // We can't find any atomic set if there are no candidates
-        if considered_features.is_empty() {
+        if considered.is_empty() {
             return vec![];
         }
 
-        // compute the cardinality of features to obtain atomic set candidates
-        for feature in considered_features {
-            let signed_feature = feature as i32;
-            combinations.push((
-                self.execute_query(&[&[signed_feature], assumptions].concat()),
-                signed_feature,
-            ));
+        let mut combinations: Vec<(BigInt, i32)> = self
+            .count_iterables(assumptions, &considered)
+            .into_iter()
+            .zip(considered)
+            .collect();
 
-            if cross {
-                combinations.push((
-                    self.execute_query(&[&[-signed_feature], assumptions].concat()),
-                    -signed_feature,
-                ));
-            }
-        }
         combinations.sort_unstable(); // sorting is required to group in the next step
 
         // Group the features by their cardinality of feature count.
