@@ -248,7 +248,7 @@ mod test {
             String::from("1 2 6 10 15 19 25 31 40"),
             handle_string_query(&mut vp9, "core assumptions 1").unwrap()
         );
-        
+
         assert_eq!(
             handle_string_query(&mut auto1, "core a 1 2 3")
                 .unwrap()

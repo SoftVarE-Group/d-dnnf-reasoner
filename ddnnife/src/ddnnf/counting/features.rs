@@ -21,6 +21,10 @@ impl Ddnnf {
         iterables
             .iter()
             .map(|iterable| {
+                // We cannot flip an already "flipped" variable again
+                if assumptions.contains(iterable) {
+                    return original.clone();
+                }
                 // Check whether there is a node for the inverse literal.
                 match self.literals.get(&-iterable) {
                     // When there is a node, use its partial derivative to reduce the original count.
