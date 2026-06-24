@@ -57,6 +57,10 @@ impl Ddnnf {
         let reference = self.execute_query(assumptions);
         info!("Count under assumptions: {reference}");
 
+        if reference == 0.into() {
+            return (-(self.number_of_variables as i32)..0).collect();
+        }
+
         self.annotate_partial_derivatives_assumptions(assumptions);
 
         self.literals
