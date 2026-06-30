@@ -68,6 +68,14 @@ impl Ddnnf {
             .filter_map(|(literal, node)| {
                 let partial_derivative = &self.nodes[*node].partial_derivative;
 
+                if assumptions.contains(literal) {
+                    return Some(*literal);
+                }
+
+                if assumptions.contains(&-literal) {
+                    return None;
+                }
+
                 if *partial_derivative == reference {
                     return Some(*literal);
                 }
