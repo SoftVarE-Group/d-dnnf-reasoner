@@ -1,5 +1,6 @@
 use crate::DdnnfMut;
 use ddnnife::ddnnf;
+use ddnnife::util;
 use num::BigInt;
 use std::collections::HashSet;
 use std::fs::File;
@@ -53,12 +54,54 @@ impl Ddnnf {
         self.0.rc()
     }
 
+    /// Computes the cardinality of this d-DNNF for multiple iterables.
+    #[uniffi::method]
+    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+        self.0.count_iterables(assumptions, iterables)
+    }
+
     /// Returns the core features of this d-DNNF.
     ///
     /// This is only calculated once at creation of the d-DNNF.
     #[uniffi::method]
     pub fn get_core(&self) -> HashSet<i32> {
         self.0.get_core()
+    }
+
+    /// Computes the core features of this d-DNNF.
+    #[uniffi::method]
+    fn core(&self, assumptions: &[i32]) -> Vec<i32> {
+        self.0.core_with_assumptions(assumptions)
+    }
+
+    /// Computes the core features of this d-DNNF for multiple variables.
+    #[uniffi::method]
+    fn core_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
+        let mut core: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+            .flat_map(|assumptions| self.0.core_with_assumptions(&assumptions).into_iter())
+            .collect();
+
+        core.sort();
+        core.dedup();
+        core
+    }
+
+    /// Computes the dead features of this d-DNNF.
+    #[uniffi::method]
+    fn dead(&self, assumptions: &[i32]) -> Vec<i32> {
+        self.0.dead_with_assumptions(assumptions)
+    }
+
+    /// Computes the dead features of this d-DNNF for multiple variables.
+    #[uniffi::method]
+    fn dead_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
+        let mut dead: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+            .flat_map(|assumptions| self.0.dead_with_assumptions(&assumptions).into_iter())
+            .collect();
+
+        dead.sort();
+        dead.dedup();
+        dead
     }
 
     /// Generates the c2d format representation of this d-DNNF.
