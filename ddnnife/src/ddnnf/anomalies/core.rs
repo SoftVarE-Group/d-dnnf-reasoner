@@ -28,7 +28,7 @@ impl Ddnnf {
 
     #[inline]
     /// Reduces a query by removing included core features and excluded dead features
-    pub(crate) fn reduce_query(&mut self, features: &[i32]) -> Vec<i32> {
+    pub(crate) fn reduce_query(&self, features: &[i32]) -> Vec<i32> {
         features
             .iter()
             .filter({
@@ -41,7 +41,7 @@ impl Ddnnf {
 
     #[inline]
     /// Checks if a query is satisfiable. That is not the case if either a core feature is excluded or a dead feature is included
-    pub(crate) fn query_is_not_sat(&mut self, features: &[i32]) -> bool {
+    pub(crate) fn query_is_not_sat(&self, features: &[i32]) -> bool {
         // if there is an included dead or an excluded core feature
         features.iter().any(|f| self.makes_query_unsat(f))
     }
@@ -49,24 +49,26 @@ impl Ddnnf {
     /// Calculates the core and dead features for a given assumption.
     ///
     /// The return values are not deduplicated, they might be put into a `HashSet`.
-    pub fn core_dead_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+    pub fn core_dead_with_assumptions(&self, assumptions: &[i32]) -> Vec<i32> {
         if assumptions.is_empty() {
             return self.core.iter().copied().collect();
         }
 
-        let reference = self.execute_query(assumptions);
+        let (reference, _counts) = self
+            .operate_on_partial_config_default_external(assumptions, Ddnnf::calc_count_external);
+
         info!("Count under assumptions: {reference}");
 
         if reference == 0.into() {
             return (-(self.number_of_variables as i32)..0).collect();
         }
 
-        self.annotate_partial_derivatives_assumptions(assumptions);
+        let partial_derivatives = self.partial_derivatives_assumptions(assumptions);
 
         self.literals
             .iter()
             .filter_map(|(literal, node)| {
-                let partial_derivative = &self.nodes[*node].partial_derivative;
+                let partial_derivative = &partial_derivatives[*node];
 
                 if assumptions.contains(literal) {
                     return Some(*literal);
@@ -85,13 +87,13 @@ impl Ddnnf {
             .collect()
     }
 
-    pub fn core_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+    pub fn core_with_assumptions(&self, assumptions: &[i32]) -> Vec<i32> {
         let mut features = self.core_dead_with_assumptions(assumptions);
         features.retain(|feature| feature.is_positive());
         features
     }
 
-    pub fn dead_with_assumptions(self: &mut Ddnnf, assumptions: &[i32]) -> Vec<i32> {
+    pub fn dead_with_assumptions(&self, assumptions: &[i32]) -> Vec<i32> {
         let mut features = self.core_dead_with_assumptions(assumptions);
         features.retain(|feature| feature.is_negative());
         features
@@ -105,7 +107,7 @@ mod test {
 
     #[test]
     fn core_assumptions() {
-        let mut ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), None);
+        let ddnnf = build_ddnnf(Path::new("./tests/data/VP9_d4.nnf"), None);
         let mut result = ddnnf.core_dead_with_assumptions(&[-3]);
         result.sort_unstable();
         let expected = vec![-3, 1, 2, 6, 10, 15, 19, 25, 31, 40];

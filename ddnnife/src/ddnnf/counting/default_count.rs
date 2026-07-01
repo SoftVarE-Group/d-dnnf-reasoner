@@ -1,6 +1,9 @@
 use super::super::node::NodeType::*;
-use crate::Ddnnf;
+use crate::{Ddnnf, Node};
 use num::{BigInt, One, Zero};
+
+/// Counts for each node in a d-DNNF.
+pub type Counts = Vec<BigInt>;
 
 impl Ddnnf {
     #[inline]
@@ -20,6 +23,17 @@ impl Ddnnf {
                     .sum()
             }
             _ => self.nodes[i].temp.set_one(), // True and Literal
+        }
+    }
+
+    /// Calculates the cardinality of a node.
+    ///
+    /// Uses an external data structure for tracking node counts.
+    pub fn calc_count_external(&self, node: &Node, counts: &Counts) -> BigInt {
+        match &node.ntype {
+            And { children } => children.iter().map(|&child| &counts[child]).product(),
+            Or { children } => children.iter().map(|&child| &counts[child]).sum(),
+            _ => BigInt::one(),
         }
     }
 
@@ -85,6 +99,45 @@ impl Ddnnf {
             }
             self.rt()
         }
+    }
+
+    /// Calculates the count under the given assumptions using the provided counting method.
+    /// Additionally returns the count values of all nodes.
+    ///
+    /// An empty d-DNNF or invalid assumptions result in a count of zero.
+    pub(crate) fn operate_on_partial_config_default_external(
+        &self,
+        assumptions: &[i32],
+        operation: fn(&Ddnnf, &Node, &Counts) -> BigInt,
+    ) -> (BigInt, Counts) {
+        // Exit early in case of invalid d-DNNF or assumptions.
+        if self.nodes.is_empty() || self.query_is_not_sat(assumptions) {
+            return (BigInt::ZERO, vec![BigInt::ZERO; self.nodes.len()]);
+        }
+
+        // Simplify the assumptions by using knowledge about core variables.
+        let assumptions: Vec<i32> = self.reduce_query(assumptions);
+
+        // Temporary counts of nodes for usage during upward propagation.
+        let mut counts = Vec::with_capacity(self.nodes.len());
+
+        // Count all nodes from bottom to top.
+        self.nodes.iter().for_each(|node| {
+            // The provided counting function is used for all nodes except those negated by the assumptions.
+            counts.push(match node.ntype {
+                Literal { literal } => {
+                    if assumptions.contains(&-literal) {
+                        BigInt::ZERO
+                    } else {
+                        operation(self, node, &counts)
+                    }
+                }
+                _ => operation(self, node, &counts),
+            });
+        });
+
+        let root_count = counts.last().expect("Failed to access root count").clone();
+        (root_count, counts)
     }
 }
 

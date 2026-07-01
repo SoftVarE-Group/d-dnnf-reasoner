@@ -9,26 +9,29 @@ impl Ddnnf {
     /// Results in one count per iterable, each valid under the given assumptions together with the iterable.
     ///
     /// Uses partial derivatives and therefore does not involve re-counting.
-    pub fn count_iterables(&mut self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+    pub fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
         // Calculate the original count under the given assumptions.
-        let original = self.execute_query(assumptions);
+        let (original, _counts) = self
+            .operate_on_partial_config_default_external(assumptions, Ddnnf::calc_count_external);
+
         info!("Count under assumptions: {original}");
 
         // Calculate the partial derivatives under the given assumptions.
-        self.annotate_partial_derivatives_assumptions(assumptions);
+        let partial_derivatives = self.partial_derivatives_assumptions(assumptions);
 
         // Calculate the count for each iterable.
         iterables
             .iter()
             .map(|iterable| {
-                // We cannot flip an already "flipped" variable again
+                // We cannot flip an already "flipped" variable again.
                 if assumptions.contains(iterable) {
                     return original.clone();
                 }
+
                 // Check whether there is a node for the inverse literal.
                 match self.literals.get(&-iterable) {
                     // When there is a node, use its partial derivative to reduce the original count.
-                    Some(&node) => &original - &self.nodes[node].partial_derivative,
+                    Some(&node) => &original - &partial_derivatives[node],
                     // Otherwise simply return the original count.
                     None => original.clone(),
                 }
@@ -103,7 +106,7 @@ mod test {
 
     #[test]
     fn count_multiple() {
-        let mut ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
+        let ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
         let result = ddnnf.count_iterables(&[], &[3, 5]);
         let expected = vec![
             BigInt::from_str(
@@ -118,7 +121,7 @@ mod test {
 
     #[test]
     fn count_multiple_assumptions() {
-        let mut ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
+        let ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
         let result = ddnnf.count_iterables(&[1, -2, 3], &[6, 7, 42, -42]);
         let expected = vec![
             BigInt::from_str(
