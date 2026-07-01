@@ -1,5 +1,8 @@
+use super::default_count::Counts;
 use crate::{Ddnnf, NodeType};
 use num::{BigInt, One, Zero};
+
+pub type PartialDerivatives = Vec<BigInt>;
 
 impl Ddnnf {
     #[inline]
@@ -44,48 +47,56 @@ impl Ddnnf {
         }
     }
 
-    #[inline]
-    pub(crate) fn annotate_partial_derivatives_assumptions(&mut self, assumptions: &[i32]) {
-        // TODO: use external data structure?
-        // Set temp counts.
-        self.operate_on_partial_config_default(assumptions, Ddnnf::calc_count);
+    /// Calculates partial derivatives under the given assumptions.
+    pub fn partial_derivatives_assumptions(&self, assumptions: &[i32]) -> PartialDerivatives {
+        // Count all nodes under the given assumptions.
+        let (_count, counts) = self
+            .operate_on_partial_config_default_external(assumptions, Ddnnf::calc_count_external);
 
-        self.nodes
-            .iter_mut()
-            .for_each(|node| node.partial_derivative.set_zero());
+        // Initialize all nodes to have partial derivatives of zero.
+        let mut partial_derivatives = vec![BigInt::ZERO; self.nodes.len()];
 
-        if let Some(root) = self.nodes.last_mut() {
-            root.partial_derivative.set_one();
+        // By definition, the root has a partial derivative of one.
+        if let Some(root) = partial_derivatives.last_mut() {
+            root.set_one();
         }
 
-        (0..self.nodes.len())
-            .rev()
-            .for_each(|index| self.annotate_single_partial_derivative_assumptions(index));
+        // From top to bottom, calculate each nodes partial derivative.
+        (0..self.nodes.len()).rev().for_each(|node_index| {
+            self.partial_derivatives_single(node_index, &mut partial_derivatives, &counts);
+        });
+
+        partial_derivatives
     }
 
-    #[inline]
-    fn annotate_single_partial_derivative_assumptions(&mut self, i: usize) {
-        match &self.nodes[i].ntype {
+    /// Calculates the partial derivatives for children of a single node.
+    ///
+    /// Updates `partial_derivatives` with the calculated values.
+    fn partial_derivatives_single(
+        &self,
+        node_index: usize,
+        partial_derivatives: &mut PartialDerivatives,
+        counts: &Counts,
+    ) {
+        let node = &self.nodes[node_index];
+        match &node.ntype {
             NodeType::And { children } => {
-                let children_c = children.clone();
-                for &child in children_c.iter() {
-                    let mut current_node_partial_derivative =
-                        self.nodes[i].partial_derivative.clone();
+                children.iter().for_each(|&child| {
+                    let mut current = partial_derivatives[node_index].clone();
 
-                    for &other_child in children_c.iter() {
-                        if child != other_child {
-                            current_node_partial_derivative *= &self.nodes[other_child].temp;
-                        }
-                    }
+                    children
+                        .iter()
+                        .filter(|&&other| other != child)
+                        .for_each(|&other| current *= &counts[other]);
 
-                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
-                }
+                    partial_derivatives[child] += &current;
+                });
             }
             NodeType::Or { children } => {
-                let current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
-                for child in children.clone() {
-                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
-                }
+                let current = partial_derivatives[node_index].clone();
+                children
+                    .iter()
+                    .for_each(|&child| partial_derivatives[child] += &current);
             }
             _ => (),
         }
