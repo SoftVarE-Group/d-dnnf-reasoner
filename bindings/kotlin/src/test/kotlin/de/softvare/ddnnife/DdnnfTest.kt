@@ -36,7 +36,6 @@ internal class DdnnfTest {
         val both = ddnnf.getCore()
         assertEquals(41, both.size)
 
-        val ddnnf = ddnnf.asMut()
         val core = ddnnf.core(emptyList())
         assertEquals(23, core.size)
 

@@ -25,11 +25,10 @@ def test_core_and_dead():
     both = ddnnf.get_core()
     assert len(both) == 41
 
-    ddnnf_mut = ddnnf.as_mut()
-    core = ddnnf_mut.core([])
+    core = ddnnf.core([])
     assert len(core) == 23
 
-    core = ddnnf_mut.dead([])
+    core = ddnnf.dead([])
     assert len(core) == 18
 
 

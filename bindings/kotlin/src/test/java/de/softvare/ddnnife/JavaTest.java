@@ -1,15 +1,19 @@
 package de.softvare.ddnnife;
 
-import java.math.BigInteger;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-
 import static de.softvare.ddnnife.JavaUtils.*;
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.math.BigInteger;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
 class JavaTest {
-    private final Ddnnf ddnnf = ddnnfFromFile("../../example_input/busybox-1.18.0_c2d.nnf", null);
+
+    private final Ddnnf ddnnf = ddnnfFromFile(
+        "../../example_input/busybox-1.18.0_c2d.nnf",
+        null
+    );
     private final Integer features = 854;
 
     @Test
@@ -24,8 +28,9 @@ class JavaTest {
     void count() {
         // Only the root count.
         BigInteger count = ddnnf.rc();
-        BigInteger expected =
-                new BigInteger("2061138519356781760670618805653750167349287991336595876373542198990734653489713239449032049664199494301454199336000050382457451123894821886472278234849758979132037884598159833615564800000000000000000000");
+        BigInteger expected = new BigInteger(
+            "2061138519356781760670618805653750167349287991336595876373542198990734653489713239449032049664199494301454199336000050382457451123894821886472278234849758979132037884598159833615564800000000000000000000"
+        );
         assertEquals(count, expected);
 
         // The count for a given assumption.
@@ -39,11 +44,10 @@ class JavaTest {
         List<Integer> both = ddnnf.getCore();
         assertEquals(41, both.size());
 
-        DdnnfMut ddnnfMut = ddnnf.asMut();
-        List<Integer> core = ddnnfMut.core(emptyList());
+        List<Integer> core = ddnnf.core(emptyList());
         assertEquals(23, core.size());
 
-        List<Integer> dead = ddnnfMut.dead(emptyList());
+        List<Integer> dead = ddnnf.dead(emptyList());
         assertEquals(18, dead.size());
     }
 
@@ -63,7 +67,12 @@ class JavaTest {
 
     @Test
     void atomicSetsTest() {
-        List<List<Short>> atomicSets = atomicSets(ddnnf.asMut(), null, List.of(1), true);
+        List<List<Short>> atomicSets = atomicSets(
+            ddnnf.asMut(),
+            null,
+            List.of(1),
+            true
+        );
         assertEquals(features, atomicSets.getFirst().size());
     }
 
@@ -93,12 +102,15 @@ class JavaTest {
 
     @Test
     void trivial() {
-      Ddnnf trivialDdnnf = ddnnfFromFile("../../ddnnife/tests/data/stub_true.nnf", null);
-      assert(trivialDdnnf.isTrivial());
+        Ddnnf trivialDdnnf = ddnnfFromFile(
+            "../../ddnnife/tests/data/stub_true.nnf",
+            null
+        );
+        assert trivialDdnnf.isTrivial();
     }
 
     @Test
     void nonTrivial() {
-      assert(!ddnnf.isTrivial());
+        assert !ddnnf.isTrivial();
     }
 }
