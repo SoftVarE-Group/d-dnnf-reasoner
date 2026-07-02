@@ -119,7 +119,7 @@ impl Ddnnf {
         let assumptions: Vec<i32> = self.reduce_query(assumptions);
 
         // Temporary counts of nodes for usage during upward propagation.
-        let mut counts = Vec::with_capacity(self.nodes.len());
+        let mut counts = Counts::with_capacity(self.nodes.len());
 
         // Count all nodes from bottom to top.
         self.nodes.iter().for_each(|node| {

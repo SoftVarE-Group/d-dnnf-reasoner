@@ -40,10 +40,11 @@ impl Ddnnf {
     }
 
     pub fn card_of_each_feature(&mut self) -> impl Iterator<Item = (i32, BigInt, f64)> + '_ {
-        self.annotate_partial_derivatives();
+        let partial_derivatives = self.partial_derivatives_assumptions(&[]);
         let rc = self.rc();
         (1_i32..=self.number_of_variables as i32).map(move |variable| {
-            let cardinality = self.card_of_feature_with_partial_derivatives(variable);
+            let cardinality =
+                self.card_of_feature_with_partial_derivatives(variable, &partial_derivatives);
             let ratio = BigRational::from((cardinality.clone(), rc.clone()))
                 .to_f64()
                 .unwrap();
@@ -72,7 +73,7 @@ impl Ddnnf {
     ///
     /// ```
     pub fn card_of_each_feature_csv(&mut self, file_path: &Path) -> Result<(), Box<dyn Error>> {
-        self.annotate_partial_derivatives();
+        //self.annotate_partial_derivatives();
 
         // start the csv writer with the file_path
         let mut wtr = csv::Writer::from_path(file_path)?;
