@@ -5,48 +5,6 @@ use num::{BigInt, One, Zero};
 pub type PartialDerivatives = Vec<BigInt>;
 
 impl Ddnnf {
-    #[inline]
-    pub(crate) fn annotate_partial_derivatives(&mut self) {
-        for node in self.nodes.iter_mut() {
-            node.partial_derivative.set_zero();
-        }
-
-        let total_nodes = self.nodes.len();
-        self.nodes[total_nodes - 1].partial_derivative.set_one();
-
-        for i in (0..total_nodes).rev() {
-            self.annotate_single_partial_derivative(i);
-        }
-    }
-
-    #[inline]
-    fn annotate_single_partial_derivative(&mut self, i: usize) {
-        match &self.nodes[i].ntype {
-            NodeType::And { children } => {
-                let children_c = children.clone();
-                for &child in children_c.iter() {
-                    let mut current_node_partial_derivative =
-                        self.nodes[i].partial_derivative.clone();
-
-                    for &other_child in children_c.iter() {
-                        if child != other_child {
-                            current_node_partial_derivative *= &self.nodes[other_child].count;
-                        }
-                    }
-
-                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
-                }
-            }
-            NodeType::Or { children } => {
-                let current_node_partial_derivative = self.nodes[i].partial_derivative.clone();
-                for child in children.clone() {
-                    self.nodes[child].partial_derivative += &current_node_partial_derivative;
-                }
-            }
-            _ => (),
-        }
-    }
-
     /// Calculates partial derivatives under the given assumptions.
     pub fn partial_derivatives_assumptions(&self, assumptions: &[i32]) -> PartialDerivatives {
         // Count all nodes under the given assumptions.
@@ -103,9 +61,14 @@ impl Ddnnf {
     }
 
     #[inline]
-    pub(crate) fn card_of_feature_with_partial_derivatives(&mut self, feature: i32) -> BigInt {
+    pub(crate) fn card_of_feature_with_partial_derivatives(
+        &mut self,
+        feature: i32,
+        partial_derivatives: &PartialDerivatives,
+    ) -> BigInt {
         match self.literals.get(&-feature).cloned() {
-            Some(i) => self.rc() - &self.nodes[i].partial_derivative,
+            //Some(i) => self.rc() - &self.nodes[i].partial_derivative,
+            Some(i) => self.rc() - &partial_derivatives[i],
             // there is no literal corresponding to the feature number and because of that we don't have to do anything besides returning the count of the model
             None => self.rc(),
         }

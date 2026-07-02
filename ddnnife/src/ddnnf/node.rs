@@ -9,8 +9,6 @@ pub struct Node {
     pub count: BigInt,
     /// The cardinality during the different queries
     pub temp: BigInt,
-    /// The cardinality during the different queries
-    pub partial_derivative: BigInt,
     /// Every node excpet the root has (multiple) parent nodes
     pub(crate) parents: Vec<usize>,
     /// the different kinds of nodes with its additional fields
@@ -36,7 +34,6 @@ impl Node {
             marker: false,
             count,
             temp: BigInt::ZERO,
-            partial_derivative: BigInt::ZERO,
             parents: Vec::new(),
             ntype,
         }
@@ -102,7 +99,6 @@ mod test {
                 marker: false,
                 count: BigInt::from(42),
                 temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
                 parents: vec![],
                 ntype: NodeType::And {
                     children: vec![1, 5, 10]
@@ -120,7 +116,6 @@ mod test {
                 marker: false,
                 count: BigInt::from(42),
                 temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
                 parents: vec![],
                 ntype: NodeType::And {
                     children: vec![1, 5, 10]
@@ -133,7 +128,6 @@ mod test {
                 marker: false,
                 count: BigInt::from(42),
                 temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
                 parents: vec![],
                 ntype: NodeType::Or {
                     children: vec![1, 5, 10]
@@ -146,7 +140,6 @@ mod test {
                 marker: false,
                 count: BigInt::from(1),
                 temp: BigInt::ZERO,
-                partial_derivative: BigInt::ZERO,
                 parents: vec![],
                 ntype: NodeType::Literal { literal: 42 }
             }
