@@ -1,5 +1,6 @@
 use crate::Ddnnf;
 use log::info;
+use num::Zero;
 use std::collections::HashSet;
 
 impl Ddnnf {
@@ -59,7 +60,7 @@ impl Ddnnf {
 
         info!("Count under assumptions: {reference}");
 
-        if reference == 0.into() {
+        if reference.is_zero() {
             return (-(self.number_of_variables as i32)..0).collect();
         }
 
