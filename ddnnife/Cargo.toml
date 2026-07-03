@@ -12,7 +12,6 @@ bimap = "0.6"
 bitvec = "1"
 csv = { workspace = true }
 ddnnife_cnf = { workspace = true }
-file_diff = "1"
 itertools = "0.14"
 log = { workspace = true }
 nom = "8"
@@ -24,10 +23,10 @@ rand_pcg = "0.9"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 streaming-iterator = "0.1"
-workctl = "0.2"
 
 [dev-dependencies]
 criterion = "0.8"
+file_diff = "1"
 
 [[bench]]
 name = "load"
