@@ -25,7 +25,7 @@ pub enum DdnnfKind {
 }
 
 /// A Ddnnf holds all the nodes as a vector, also includes meta data and further information that is used for optimations
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Ddnnf {
     /// Flag indicating whether the d-DNNF is a special case: tautology or contradiction.
     ///
@@ -40,22 +40,6 @@ pub struct Ddnnf {
     /// An interim save for the marking algorithm
     pub md: Vec<usize>,
     pub number_of_variables: u32,
-    /// The number of threads
-    pub max_worker: u16,
-}
-
-impl Default for Ddnnf {
-    fn default() -> Self {
-        Ddnnf {
-            kind: DdnnfKind::default(),
-            nodes: Vec::new(),
-            literals: HashMap::new(),
-            core: HashSet::new(),
-            md: Vec::new(),
-            number_of_variables: 0,
-            max_worker: 4,
-        }
-    }
 }
 
 impl Ddnnf {
@@ -70,7 +54,6 @@ impl Ddnnf {
             core: HashSet::new(),
             md: Vec::new(),
             number_of_variables,
-            max_worker: 4,
         };
 
         ddnnf.calculate_core();
