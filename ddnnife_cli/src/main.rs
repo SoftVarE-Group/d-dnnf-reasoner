@@ -33,7 +33,7 @@ struct Args {
 
     /// Operation to perform on the d-DNNF.
     #[clap(subcommand)]
-    operation: Option<Operation>,
+    operation: Operation,
 
     /// The number of total features.
     /// This is strictly necessary if the d-DNNF has the d4 format without a header.
@@ -233,6 +233,15 @@ enum Operation {
     ToCnf,
 }
 
+impl Default for Operation {
+    fn default() -> Self {
+        Self::Count {
+            assumptions: Default::default(),
+            iterables: Default::default(),
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     // Parse the CLI arguments.
     let cli = Args::parse();
@@ -276,242 +285,232 @@ fn main() -> io::Result<()> {
     let elapsed_time = time.elapsed().as_secs_f32();
     info!("Elapsed time for parsing, and overall count: {elapsed_time:.3}s.");
 
-    if let Some(operation) = cli.operation {
-        // change the number of threads used for cardinality of features and partial configurations
-        match operation {
-            Operation::CountQueries { jobs, .. } | Operation::Sat { jobs, .. } => {
-                ddnnf.max_worker = jobs;
-            }
-            _ => (),
+    let mut writer: Box<dyn Write> = if let Some(path) = &cli.output {
+        Box::new(BufWriter::new(
+            File::create(path).expect("Unable to create file"),
+        ))
+    } else {
+        Box::new(BufWriter::new(stdout()))
+    };
+
+    match cli.operation {
+        Operation::AtomicSets {
+            assumptions,
+            candidates,
+            cross,
+        } => {
+            ddnnf
+                .get_atomic_sets(candidates, &assumptions, cross)
+                .into_iter()
+                .try_for_each(|set| writeln!(writer, "{}", format_vec(set.into_iter())))?;
         }
+        Operation::Urs {
+            assumptions,
+            seed,
+            number,
+        } => {
+            if let Some(samples) = ddnnf.uniform_random_sampling(&assumptions, number, seed) {
+                for sample in samples {
+                    writer.write_all(format_vec(sample.iter()).as_bytes())?;
+                    writer.write_all("\n".as_bytes())?;
+                }
+            }
+        }
+        Operation::TWise {
+            t,
+            literals,
+            variables,
+        } => {
+            if literals.is_some() && variables.is_some() {
+                return Err(Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Only one of `literals` or `variables` can be set.",
+                ));
+            }
 
-        let mut writer: Box<dyn Write> = if let Some(path) = &cli.output {
-            Box::new(BufWriter::new(
-                File::create(path).expect("Unable to create file"),
-            ))
-        } else {
-            Box::new(BufWriter::new(stdout()))
-        };
+            let literals: Option<IntSet<i32>> = literals
+                .as_ref()
+                .map(|literals| literals.iter().copied().collect());
 
-        match &operation {
-            Operation::AtomicSets {
-                assumptions,
-                candidates,
-                cross,
-            } => {
+            let variables: Option<IntSet<i32>> = variables.as_ref().map(|variables| {
+                variables
+                    .iter()
+                    .copied()
+                    .map(|variable| variable as i32)
+                    .flat_map(|variable| [variable, -variable].into_iter())
+                    .collect()
+            });
+
+            writer.write_all(
                 ddnnf
-                    .get_atomic_sets(candidates.clone(), assumptions, *cross)
-                    .into_iter()
-                    .try_for_each(|set| writeln!(writer, "{}", format_vec(set.into_iter())))?;
-            }
-            Operation::Urs {
-                assumptions,
-                seed,
-                number,
-            } => {
-                if let Some(samples) = ddnnf.uniform_random_sampling(assumptions, *number, *seed) {
-                    for sample in samples {
-                        writer.write_all(format_vec(sample.iter()).as_bytes())?;
-                        writer.write_all("\n".as_bytes())?;
-                    }
-                }
-            }
-            Operation::TWise {
-                t,
-                literals,
-                variables,
-            } => {
-                if literals.is_some() && variables.is_some() {
-                    return Err(Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "Only one of `literals` or `variables` can be set.",
-                    ));
-                }
+                    .sample_t_wise(t, literals.or(variables).as_ref())
+                    .to_string()
+                    .as_bytes(),
+            )?;
+        }
+        Operation::TWiseCheck {
+            sample,
+            t,
+            literals,
+            variables,
+        } => {
+            let sample = Sample::from_str(
+                &fs::read_to_string(sample)?,
+                ddnnf.number_of_variables as usize,
+            )
+            .map_err(|error| Error::new(ErrorKind::InvalidData, error.to_string()))?;
 
-                let literals: Option<IntSet<i32>> = literals
-                    .as_ref()
-                    .map(|literals| literals.iter().copied().collect());
+            if !sample.all_complete() {
+                return Err(Error::other("Some configurations are incomplete."));
+            }
 
-                let variables: Option<IntSet<i32>> = variables.as_ref().map(|variables| {
-                    variables
-                        .iter()
-                        .copied()
-                        .map(|variable| variable as i32)
-                        .flat_map(|variable| [variable, -variable].into_iter())
-                        .collect()
+            info!("All configurations are complete.");
+
+            if !sample.all_sat(&ddnnf) {
+                return Err(Error::other("Some configurations are UNSAT."));
+            }
+
+            info!("All configurations are SAT.");
+
+            let (total, covered) = if let Some(literals) = literals {
+                sample.covered_literals(&ddnnf, &literals, t)
+            } else if let Some(variables) = variables {
+                sample.covered_variables(&ddnnf, &variables, t)
+            } else {
+                let variables: Vec<u32> = (1..=ddnnf.number_of_variables).collect();
+                sample.covered_variables(&ddnnf, &variables, t)
+            };
+
+            let coverage = (covered as f64 / total as f64) * 100.0;
+
+            info!("Literal coverage of sample: {:.2}%", coverage);
+
+            if total != covered {
+                warn!("Some interactions are not covered.");
+            }
+
+            return Ok(());
+        }
+        // computes the cardinality for the partial configuration that can be mentioned with parameters
+        Operation::Count {
+            assumptions,
+            iterables,
+        } => {
+            if iterables.is_empty() {
+                let count = ddnnf.execute_query(&assumptions);
+                writer.write_all(count.to_string().as_ref())?;
+
+                let marked_nodes = ddnnf.get_marked_nodes_clone(&assumptions);
+                info!(
+                    "While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
+                        That are {:.2}%",
+                    marked_nodes.len(),
+                    ddnnf.nodes.len(),
+                    marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0
+                );
+            } else {
+                ddnnf
+                    .count_iterables(&assumptions, &iterables)
+                    .iter()
+                    .try_for_each(|count| writeln!(writer, "{count}"))?;
+            };
+        }
+        // computes the cardinality of features and saves the results in a .csv file
+        // the cardinalities are always sorted from lowest to highest (also for multiple threads)
+        Operation::CountFeatures => {
+            let time = Instant::now();
+
+            let mut csv_writer = csv::Writer::from_writer(writer);
+
+            ddnnf
+                .card_of_each_feature()
+                .for_each(|(variable, cardinality, ratio)| {
+                    csv_writer
+                        .write_record(vec![
+                            variable.to_string(),
+                            cardinality.to_string(),
+                            format!("{:.10e}", ratio),
+                        ])
+                        .unwrap();
                 });
 
-                writer.write_all(
-                    ddnnf
-                        .sample_t_wise(*t, literals.or(variables).as_ref())
-                        .to_string()
-                        .as_bytes(),
-                )?;
-            }
-            Operation::TWiseCheck {
-                sample,
-                t,
-                literals,
-                variables,
-            } => {
-                let sample = Sample::from_str(
-                    &fs::read_to_string(sample)?,
-                    ddnnf.number_of_variables as usize,
-                )
-                .map_err(|error| Error::new(ErrorKind::InvalidData, error.to_string()))?;
+            writer = csv_writer.into_inner().unwrap();
 
-                if !sample.all_complete() {
-                    return Err(Error::other("Some configurations are incomplete."));
-                }
+            let elapsed_time = time.elapsed().as_secs_f64();
 
-                info!("All configurations are complete.");
-
-                if !sample.all_sat(&ddnnf) {
-                    return Err(Error::other("Some configurations are UNSAT."));
-                }
-
-                info!("All configurations are SAT.");
-
-                let (total, covered) = if let Some(literals) = literals {
-                    sample.covered_literals(&ddnnf, literals, *t)
-                } else if let Some(variables) = variables {
-                    sample.covered_variables(&ddnnf, variables, *t)
-                } else {
-                    let variables: Vec<u32> = (1..=ddnnf.number_of_variables).collect();
-                    sample.covered_variables(&ddnnf, &variables, *t)
-                };
-
-                let coverage = (covered as f64 / total as f64) * 100.0;
-
-                info!("Literal coverage of sample: {:.2}%", coverage);
-
-                if total != covered {
-                    warn!("Some interactions are not covered.");
-                }
-
-                return Ok(());
-            }
-            // computes the cardinality for the partial configuration that can be mentioned with parameters
-            Operation::Count {
-                assumptions,
-                iterables,
-            } => {
-                if iterables.is_empty() {
-                    let count = ddnnf.execute_query(assumptions);
-                    writer.write_all(count.to_string().as_ref())?;
-
-                    let marked_nodes = ddnnf.get_marked_nodes_clone(assumptions);
-                    info!(
-                        "While computing the cardinality of the partial configuration {} out of the {} nodes were marked. \
-                        That are {:.2}%",
-                        marked_nodes.len(),
-                        ddnnf.nodes.len(),
-                        marked_nodes.len() as f64 / ddnnf.nodes.len() as f64 * 100.0
-                    );
-                } else {
-                    ddnnf
-                        .count_iterables(assumptions, iterables)
-                        .iter()
-                        .try_for_each(|count| writeln!(writer, "{count}"))?;
-                };
-            }
-            // computes the cardinality of features and saves the results in a .csv file
-            // the cardinalities are always sorted from lowest to highest (also for multiple threads)
-            Operation::CountFeatures => {
-                let time = Instant::now();
-
-                let mut csv_writer = csv::Writer::from_writer(writer);
-
-                ddnnf
-                    .card_of_each_feature()
-                    .for_each(|(variable, cardinality, ratio)| {
-                        csv_writer
-                            .write_record(vec![
-                                variable.to_string(),
-                                cardinality.to_string(),
-                                format!("{:.10e}", ratio),
-                            ])
-                            .unwrap();
-                    });
-
-                writer = csv_writer.into_inner().unwrap();
-
-                let elapsed_time = time.elapsed().as_secs_f64();
-
-                info!(
-                    "Runtime: {} seconds. That is an average of {} seconds per feature.",
-                    elapsed_time,
-                    elapsed_time / ddnnf.number_of_variables as f64
-                );
-            }
-            Operation::CountQueries {
-                queries_input_file, ..
-            } => {
-                compute_queries(
-                    &mut ddnnf,
-                    queries_input_file,
-                    &mut writer,
-                    Ddnnf::execute_query,
-                );
-            }
-            Operation::Sat {
-                queries_input_file, ..
-            } => {
-                compute_queries(&mut ddnnf, queries_input_file, &mut writer, Ddnnf::sat);
-            }
-            Operation::StreamQueries {
-                queries_input_file, ..
-            } => {
-                let file = File::open(queries_input_file)?;
-
-                let queries = BufReader::new(file)
-                    .lines()
-                    .map(|line| {
-                        let line = line?;
-                        Query::parse(&line).map_err(|error| Error::other(error.to_string()))
-                    })
-                    .collect::<Result<Vec<Query>, Error>>()?;
-
-                queries.into_iter().try_for_each(|query| {
-                    writer.write_all(handle_query(query, &mut ddnnf)?.as_bytes())?;
-                    writer.write_all("\n".as_bytes())
-                })?;
-
-                writer.flush()?;
-            }
-            // Switch in the stream mode.
-            Operation::Stream => {
-                stream(&mut ddnnf)?;
-            }
-            // Output the anomalies of the d-DNNF.
-            // Anomalies are: core, dead, false-optional features and atomic sets.
-            Operation::Anomalies => {
-                ddnnf.write_anomalies(&mut writer)?;
-            }
-            Operation::Core { assumptions } => {
-                let mut core = ddnnf.core_dead_with_assumptions(assumptions);
-                core.sort_unstable_by_key(|key| key.abs());
-                writer.write_all(format_vec(core.iter()).as_bytes())?;
-            }
-            Operation::Mermaid { assumptions } => {
-                write_as_mermaid_md(&mut ddnnf, assumptions, &mut writer)?;
-            }
-            Operation::Statistics { pretty } => {
-                let statistics = Statistics::from(&ddnnf);
-
-                if *pretty {
-                    serde_json::to_writer_pretty(&mut writer, &statistics)
-                } else {
-                    serde_json::to_writer(&mut writer, &statistics)
-                }?;
-            }
-            Operation::ToCnf => {
-                writer.write_all(Cnf::from(&ddnnf).to_string().as_bytes())?;
-            }
+            info!(
+                "Runtime: {} seconds. That is an average of {} seconds per feature.",
+                elapsed_time,
+                elapsed_time / ddnnf.number_of_variables as f64
+            );
         }
+        Operation::CountQueries {
+            queries_input_file, ..
+        } => {
+            compute_queries(
+                &mut ddnnf,
+                &queries_input_file,
+                &mut writer,
+                Ddnnf::execute_query,
+            );
+        }
+        Operation::Sat {
+            queries_input_file, ..
+        } => {
+            compute_queries(&mut ddnnf, &queries_input_file, &mut writer, Ddnnf::sat);
+        }
+        Operation::StreamQueries {
+            queries_input_file, ..
+        } => {
+            let file = File::open(queries_input_file)?;
 
-        writer.flush()?;
+            let queries = BufReader::new(file)
+                .lines()
+                .map(|line| {
+                    let line = line?;
+                    Query::parse(&line).map_err(|error| Error::other(error.to_string()))
+                })
+                .collect::<Result<Vec<Query>, Error>>()?;
+
+            queries.into_iter().try_for_each(|query| {
+                writer.write_all(handle_query(query, &mut ddnnf)?.as_bytes())?;
+                writer.write_all("\n".as_bytes())
+            })?;
+
+            writer.flush()?;
+        }
+        // Switch in the stream mode.
+        Operation::Stream => {
+            stream(&mut ddnnf)?;
+        }
+        // Output the anomalies of the d-DNNF.
+        // Anomalies are: core, dead, false-optional features and atomic sets.
+        Operation::Anomalies => {
+            ddnnf.write_anomalies(&mut writer)?;
+        }
+        Operation::Core { assumptions } => {
+            let mut core = ddnnf.core_dead_with_assumptions(&assumptions);
+            core.sort_unstable_by_key(|key| key.abs());
+            writer.write_all(format_vec(core.iter()).as_bytes())?;
+        }
+        Operation::Mermaid { assumptions } => {
+            write_as_mermaid_md(&mut ddnnf, &assumptions, &mut writer)?;
+        }
+        Operation::Statistics { pretty } => {
+            let statistics = Statistics::from(&ddnnf);
+
+            if pretty {
+                serde_json::to_writer_pretty(&mut writer, &statistics)
+            } else {
+                serde_json::to_writer(&mut writer, &statistics)
+            }?;
+        }
+        Operation::ToCnf => {
+            writer.write_all(Cnf::from(&ddnnf).to_string().as_bytes())?;
+        }
     }
+
+    writer.flush()?;
 
     // Optionally write the d-DNNF to a file.
     if let Some(path) = cli.save_ddnnf {

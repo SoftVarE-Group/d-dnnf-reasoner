@@ -43,7 +43,7 @@ fn card_of_pc_c2d() {
     let output = BufWriter::new(File::create(c2d_out).expect("Unable to create file"));
 
     let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1_c2d.nnf"), None);
-    ddnnf.max_worker = 1;
+
     ddnnf
         .operate_on_queries(Ddnnf::execute_query, config_file, output)
         .unwrap_or_default();
@@ -65,7 +65,7 @@ fn card_of_pc_d4() {
     let output = BufWriter::new(File::create(d4_out).expect("Unable to create file"));
 
     let mut ddnnf: Ddnnf = parser::build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
-    ddnnf.max_worker = 1;
+
     ddnnf
         .operate_on_queries(Ddnnf::execute_query, config_file, output)
         .unwrap_or_default();
