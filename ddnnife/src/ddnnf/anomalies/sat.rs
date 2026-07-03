@@ -13,12 +13,14 @@ impl Ddnnf {
     /// If any of those literal propagations reaches the root, the query is unsatisfiable.
     /// Vice versa the query is satisfiable.
     #[inline]
-    pub fn sat(&mut self, features: &[i32]) -> bool {
+    pub fn sat(&self, features: &[i32]) -> bool {
         self.sat_propagate(features, &mut vec![false; self.nodes.len()], None)
     }
 
+    // TODO: replace usages with `sat`
+    /// Equivalent to [sat].
     #[inline]
-    pub fn sat_immutable(&self, features: &[i32]) -> bool {
+    pub fn sat_mut(&mut self, features: &[i32]) -> bool {
         self.sat_propagate(features, &mut vec![false; self.nodes.len()], None)
     }
 

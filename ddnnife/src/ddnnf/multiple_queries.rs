@@ -75,7 +75,7 @@ mod test {
             BufWriter::new(File::create("./tests/data/sat.csv").expect("Unable to create file"));
 
         ddnnf
-            .operate_on_queries(Ddnnf::sat, Path::new("./tests/data/VP9.config"), output)
+            .operate_on_queries(Ddnnf::sat_mut, Path::new("./tests/data/VP9.config"), output)
             .unwrap();
 
         let sat_results = File::open("./tests/data/sat.csv").unwrap();

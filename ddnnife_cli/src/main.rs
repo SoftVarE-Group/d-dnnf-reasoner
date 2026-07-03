@@ -457,7 +457,7 @@ fn main() -> io::Result<()> {
         Operation::Sat {
             queries_input_file, ..
         } => {
-            compute_queries(&mut ddnnf, &queries_input_file, &mut writer, Ddnnf::sat);
+            compute_queries(&mut ddnnf, &queries_input_file, &mut writer, Ddnnf::sat_mut);
         }
         Operation::StreamQueries {
             queries_input_file, ..

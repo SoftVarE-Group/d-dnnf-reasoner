@@ -46,6 +46,12 @@ impl Ddnnf {
         self.0.is_trivial()
     }
 
+    /// Computes whether this d-DNNF is satisfiable under the given assumptions.
+    #[uniffi::method]
+    fn is_sat(&self, assumptions: &[i32]) -> bool {
+        self.0.sat(assumptions)
+    }
+
     /// Returns the current count of the root node in the d-DNNF.
     ///
     /// This value is the same during all computations.

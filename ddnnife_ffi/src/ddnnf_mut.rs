@@ -24,12 +24,6 @@ impl DdnnfMut {
         self.0.lock().unwrap().0.execute_query(assumptions)
     }
 
-    /// Computes whether this d-DNNF is satisfiable.
-    #[uniffi::method]
-    fn is_sat(&self, assumptions: &[i32]) -> bool {
-        self.0.lock().unwrap().0.sat(assumptions)
-    }
-
     /// Generates satisfiable configurations for this d-DNNF.
     #[uniffi::method]
     fn enumerate(&self, assumptions: &[i32], amount: usize) -> Vec<Vec<i32>> {

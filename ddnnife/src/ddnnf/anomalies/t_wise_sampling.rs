@@ -179,7 +179,7 @@ mod test {
                     literals.len(),
                     "config is not complete"
                 );
-                assert!(ddnnf.sat_immutable(&literals[..]));
+                assert!(ddnnf.sat(&literals[..]));
             });
 
         let all_literals = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32)
@@ -187,7 +187,7 @@ mod test {
             .collect_vec();
 
         TInteractionIter::new(&all_literals[..], t)
-            .filter(|interaction| ddnnf.sat_immutable(interaction))
+            .filter(|interaction| ddnnf.sat(interaction))
             .for_each(|interaction| {
                 assert!(
                     sample.covers(interaction),

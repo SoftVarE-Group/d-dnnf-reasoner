@@ -11,7 +11,6 @@ internal class DdnnfTest {
 
     @Test
     fun sat() {
-        val ddnnf = ddnnf.asMut()
         assert(ddnnf.isSat(emptyList()))
         assert(ddnnf.isSat(listOf(-2)))
         assert(!ddnnf.isSat(listOf(1)))

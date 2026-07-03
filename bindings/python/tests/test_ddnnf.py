@@ -5,10 +5,9 @@ features = 854
 
 
 def test_sat():
-    ddnnf_mut = ddnnf.as_mut()
-    assert ddnnf_mut.is_sat([])
-    assert ddnnf_mut.is_sat([-2])
-    assert not ddnnf_mut.is_sat([1])
+    assert ddnnf.is_sat([])
+    assert ddnnf.is_sat([-2])
+    assert not ddnnf.is_sat([1])
 
 
 def test_count():

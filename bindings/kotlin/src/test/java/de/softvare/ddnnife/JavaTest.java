@@ -18,10 +18,9 @@ class JavaTest {
 
     @Test
     void sat() {
-        DdnnfMut ddnnfMut = ddnnf.asMut();
-        assertTrue(ddnnfMut.isSat(emptyList()));
-        assertTrue(ddnnfMut.isSat(List.of(-2)));
-        assertFalse(ddnnfMut.isSat(List.of(1)));
+        assertTrue(ddnnf.isSat(emptyList()));
+        assertTrue(ddnnf.isSat(List.of(-2)));
+        assertFalse(ddnnf.isSat(List.of(1)));
     }
 
     @Test
