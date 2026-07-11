@@ -43,9 +43,9 @@ fun atomicSets(ddnnf: DdnnfMut, candidates: List<Int>?, assumptions: List<Int>, 
     return ddnnf.atomicSets(candidatesUInt, assumptions, cross)
 }
 
-fun sampleTWise(ddnnf: Ddnnf, t: Int, literals: List<Int>?): SamplingResult {
+fun sampleTWise(ddnnf: Ddnnf, t: Int, preset: List<Config>, literals: List<Int>?): SamplingResult {
     require(t >= 0) { "t must be positive." }
-    return ddnnf.sampleTWise(t.toULong(), literals)
+    return ddnnf.sampleTWise(t.toULong(), preset, literals)
 }
 
 fun isSample(result: SamplingResult): Boolean = when (result) {

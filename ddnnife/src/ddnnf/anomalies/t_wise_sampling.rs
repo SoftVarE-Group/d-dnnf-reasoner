@@ -26,22 +26,33 @@ use std::cmp::min;
 use streaming_iterator::StreamingIterator;
 use t_iterator::TInteractionIter;
 use t_wise_sampler::TWiseSampler;
-use t_wise_sampler::{complete_partial_configs_optimal, trim_and_resample};
 
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
-    pub fn sample_t_wise(&self, t: usize, literals: Option<&IntSet<i32>>) -> SamplingResult {
+    pub fn sample_t_wise(
+        &self,
+        t: usize,
+        preset: &Sample,
+        literals: Option<&IntSet<i32>>,
+    ) -> SamplingResult {
         // Setup everything needed for the sampling process.
         let sat_solver = SatWrapper::new(self);
+
         let and_merger = ZippingMerger {
             t,
             sat_solver: &sat_solver,
             ddnnf: self,
             literals,
+            preset,
         };
-        let or_merger = SimilarityMerger { t, literals };
 
-        TWiseSampler::new(self, and_merger, or_merger, literals).sample(t)
+        let or_merger = SimilarityMerger {
+            t,
+            literals,
+            preset,
+        };
+
+        TWiseSampler::new(self, and_merger, or_merger, literals, preset).sample(t)
     }
 }
 
@@ -61,7 +72,9 @@ impl ExtendedDdnnf {
         };
         let or_merger = AttributeSimilarityMerger { t, ext_ddnnf: self };
 
-        let mut sampler = TWiseSampler::new(&self.ddnnf, and_merger, or_merger, None);
+        let preset = Sample::default();
+
+        let mut sampler = TWiseSampler::new(&self.ddnnf, and_merger, or_merger, None, &preset);
 
         for node_id in 0..sampler.ddnnf.nodes.len() {
             let partial_sample = sampler.partial_sample(node_id);
@@ -84,16 +97,16 @@ impl ExtendedDdnnf {
                 "Complete Configs must not contain undecided variables."
             );
 
-            sample = trim_and_resample(
+            sample.trim_and_resample(
                 root_id,
-                sample,
                 t,
                 self.ddnnf.number_of_variables as usize,
                 &sat_solver,
                 None,
+                &Sample::default(),
             );
 
-            complete_partial_configs_optimal(&mut sample, self);
+            sample.complete_partial_configs_optimal(self);
 
             ResultWithSample(sample)
         } else {
@@ -132,15 +145,16 @@ impl ExtendedDdnnf {
                 );
             });
 
-        sample = trim_and_resample(
+        sample.trim_and_resample(
             root_id,
-            sample,
             t,
             self.ddnnf.number_of_variables as usize,
             &sat_solver,
             None,
+            &Sample::default(),
         );
-        complete_partial_configs_optimal(&mut sample, self);
+
+        sample.complete_partial_configs_optimal(self);
 
         sample.literals = literals;
 
@@ -202,7 +216,13 @@ mod test {
         let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         for t in 1..=4 {
-            check_validity_of_sample(vp9.sample_t_wise(t, None).get_sample().unwrap(), &vp9, t);
+            check_validity_of_sample(
+                vp9.sample_t_wise(t, &Sample::default(), None)
+                    .get_sample()
+                    .unwrap(),
+                &vp9,
+                t,
+            );
         }
     }
 
@@ -212,7 +232,10 @@ mod test {
         let t = 1;
 
         check_validity_of_sample(
-            auto1.sample_t_wise(t, None).get_sample().unwrap(),
+            auto1
+                .sample_t_wise(t, &Sample::default(), None)
+                .get_sample()
+                .unwrap(),
             &mut auto1,
             t,
         );

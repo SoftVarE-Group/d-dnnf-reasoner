@@ -65,12 +65,13 @@ internal class DdnnfTest {
 
     @Test
     fun tWise() {
-        val result = ddnnf.sampleTWise(1u, null)
-        when(result) {
+        val result = ddnnf.sampleTWise(1u, emptyList(), null)
+        when (result) {
             is SamplingResult.ResultWithSample -> {
                 val sample = result.v1
                 assertEquals(features, sample.vars.size)
             }
+
             else -> {
                 fail("T-wise sample is invalid.")
             }
@@ -88,12 +89,12 @@ internal class DdnnfTest {
 
     @Test
     fun trivial() {
-      val trivialDdnnf = Ddnnf.fromFile("../../ddnnife/tests/data/stub_true.nnf", null)
-      assert(trivialDdnnf.isTrivial())
+        val trivialDdnnf = Ddnnf.fromFile("../../ddnnife/tests/data/stub_true.nnf", null)
+        assert(trivialDdnnf.isTrivial())
     }
 
     @Test
     fun nonTrivial() {
-      assert(!ddnnf.isTrivial())
+        assert(!ddnnf.isTrivial())
     }
 }
