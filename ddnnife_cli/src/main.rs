@@ -130,6 +130,11 @@ enum Operation {
         /// but also the larger the number of test cases required.
         #[clap(short, default_value_t = 2)]
         t: usize,
+        /// Path to a file containing preset configurations to use for covering.
+        ///
+        /// If set, the configurations will be included as-is within the final sample.
+        #[clap(short, long)]
+        preset: Option<PathBuf>,
         /// Restricts the covering to the given set of literals.
         /// By default, all literals are covered.
         ///
@@ -318,6 +323,7 @@ fn main() -> io::Result<()> {
         }
         Operation::TWise {
             t,
+            preset,
             literals,
             variables,
         } => {
@@ -341,9 +347,19 @@ fn main() -> io::Result<()> {
                     .collect()
             });
 
+            let preset = if let Some(path) = preset {
+                Sample::from_str(
+                    &fs::read_to_string(path)?,
+                    ddnnf.number_of_variables as usize,
+                )
+                .map_err(|error| Error::new(ErrorKind::InvalidData, error.to_string()))?
+            } else {
+                Sample::default()
+            };
+
             writer.write_all(
                 ddnnf
-                    .sample_t_wise(t, literals.or(variables).as_ref())
+                    .sample_t_wise(t, &preset, literals.or(variables).as_ref())
                     .to_string()
                     .as_bytes(),
             )?;

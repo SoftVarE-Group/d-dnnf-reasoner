@@ -1,5 +1,6 @@
 mod query;
 
+use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 pub use query::Query;
 
 use ddnnife::Ddnnf;
@@ -118,7 +119,7 @@ pub fn handle_query(query: Query, ddnnf: &mut Ddnnf) -> Result<String> {
             None => Err(Error::other(ERROR_UNSAT)),
         },
         Query::TWise { limit, fitness } => Ok(if fitness.is_empty() {
-            ddnnf.sample_t_wise(limit, None)
+            ddnnf.sample_t_wise(limit, &Sample::default(), None)
         } else {
             let ext_ddnnf = ExtendedDdnnf::with_fitness_values(ddnnf.clone(), fitness);
             ext_ddnnf.sample_t_wise(limit)

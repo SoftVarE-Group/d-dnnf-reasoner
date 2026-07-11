@@ -43,6 +43,7 @@ pub fn cover_with_caching(
 pub fn cover_with_caching_twise(
     sample: &mut Sample,
     interaction: &[i32],
+    preset: &Sample,
     sat_solver: &SatWrapper,
     node_id: usize,
     number_of_vars: usize,
@@ -52,7 +53,7 @@ pub fn cover_with_caching_twise(
         "Interaction contains undecided literals: {interaction:?}",
     );
 
-    if sample.covers(interaction) {
+    if sample.covers(interaction) || preset.covers(interaction) {
         return; // already covered
     }
 

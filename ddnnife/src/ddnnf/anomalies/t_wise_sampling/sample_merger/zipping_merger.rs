@@ -14,17 +14,18 @@ use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Clone)]
-pub struct ZippingMerger<'a, 'l> {
+pub struct ZippingMerger<'a, 'l, 'p> {
     pub t: usize,
     pub sat_solver: &'a SatWrapper<'a>,
     pub ddnnf: &'a Ddnnf,
     pub literals: Option<&'l IntSet<i32>>,
+    pub preset: &'p Sample,
 }
 
 // Mark ZippingMerger as an AndMerger
-impl AndMerger for ZippingMerger<'_, '_> {}
+impl AndMerger for ZippingMerger<'_, '_, '_> {}
 
-impl SampleMerger for ZippingMerger<'_, '_> {
+impl SampleMerger for ZippingMerger<'_, '_, '_> {
     fn merge(&self, node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
@@ -40,6 +41,7 @@ impl SampleMerger for ZippingMerger<'_, '_> {
             cover_with_caching_twise(
                 &mut sample,
                 interaction,
+                self.preset,
                 self.sat_solver,
                 node_id,
                 self.ddnnf.number_of_variables as usize,
@@ -73,7 +75,7 @@ impl SampleMerger for ZippingMerger<'_, '_> {
     }
 }
 
-impl ZippingMerger<'_, '_> {
+impl ZippingMerger<'_, '_, '_> {
     /// Generates all t-wise interactions between two samples.
     fn interactions(&self, left: &Sample, right: &Sample, t: usize) -> Vec<Vec<i32>> {
         Self::generate_interactions(
@@ -248,6 +250,7 @@ mod test {
             sat_solver: &sat_solver,
             ddnnf: &ddnnf,
             literals: None,
+            preset: &Sample::default(),
         };
 
         let mut left_sample = new_with_literals([2, 3].into_iter().collect(), vec![-2, 3]);
