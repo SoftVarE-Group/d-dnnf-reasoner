@@ -1,5 +1,6 @@
 use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use ddnnife::Ddnnf;
+use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use std::path::Path;
 
 static BENCHMARKS: [(&str, &str, usize); 4] = [
@@ -20,7 +21,7 @@ fn benchmark(c: &mut Criterion) {
     for (path, name, t) in BENCHMARKS {
         let ddnnf = Ddnnf::from_file(&data_dir.join(path), None);
         group.bench_with_input(BenchmarkId::new(name, t), &t, |bencher, t| {
-            bencher.iter(|| ddnnf.sample_t_wise(*t, None))
+            bencher.iter(|| ddnnf.sample_t_wise(*t, &Sample::default(), None))
         });
     }
 

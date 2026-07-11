@@ -55,7 +55,7 @@ def test_atomic_sets():
 
 
 def test_t_wise():
-    sample = ddnnf.sample_t_wise(1, None)
+    sample = ddnnf.sample_t_wise(1, [], None)
     assert sample.is_RESULT_WITH_SAMPLE()
     assert len(sample[0].vars) == features
 

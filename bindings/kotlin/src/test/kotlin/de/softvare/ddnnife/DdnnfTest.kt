@@ -78,7 +78,7 @@ internal class DdnnfTest {
 
   @Test
   fun tWise() {
-    val result = ddnnf.sampleTWise(1u, null)
+    val result = ddnnf.sampleTWise(1u, emptyList(), null)
     when (result) {
       is SamplingResult.ResultWithSample -> {
         val sample = result.v1
