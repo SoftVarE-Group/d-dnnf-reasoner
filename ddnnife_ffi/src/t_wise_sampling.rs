@@ -6,8 +6,22 @@ use ddnnife::int_hash::IntSet;
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
     #[uniffi::method]
-    pub fn sample_t_wise(&self, t: usize, literals: Option<IntSet<i32>>) -> SamplingResult {
-        self.0.sample_t_wise(t, literals.as_ref()).into()
+    pub fn sample_t_wise(
+        &self,
+        t: usize,
+        preset: Vec<Config>,
+        literals: Option<IntSet<i32>>,
+    ) -> SamplingResult {
+        let configs: Vec<t_wise_sampling::Config> = preset
+            .into_iter()
+            .map(|config| {
+                t_wise_sampling::Config::from(&config.0, self.0.number_of_variables as usize)
+            })
+            .collect();
+
+        let preset = t_wise_sampling::Sample::new_from_configs(configs);
+
+        self.0.sample_t_wise(t, &preset, literals.as_ref()).into()
     }
 }
 

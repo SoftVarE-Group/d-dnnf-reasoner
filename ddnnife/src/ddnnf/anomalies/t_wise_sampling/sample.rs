@@ -6,7 +6,7 @@ use crate::int_hash::IntSet;
 use log::debug;
 use std::cmp::{Ordering, min};
 use std::fmt::{Display, Formatter};
-use std::iter;
+use std::iter::{self, Chain};
 use std::num::ParseIntError;
 use streaming_iterator::StreamingIterator;
 
@@ -36,6 +36,17 @@ impl PartialOrd<Self> for Sample {
 impl Ord for Sample {
     fn cmp(&self, other: &Self) -> Ordering {
         self.len().cmp(&other.len())
+    }
+}
+
+impl IntoIterator for Sample {
+    type Item = Config;
+    type IntoIter = Chain<std::vec::IntoIter<Config>, std::vec::IntoIter<Config>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.complete_configs
+            .into_iter()
+            .chain(self.partial_configs)
     }
 }
 
