@@ -9,15 +9,16 @@ use std::cmp::{Ordering, min};
 use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
-pub struct SimilarityMerger<'l> {
+pub struct SimilarityMerger<'l, 'p> {
     pub t: usize,
     pub literals: Option<&'l IntSet<i32>>,
+    pub preset: &'p Sample,
 }
 
 // Mark SimilarityMerger as an OrMerger
-impl OrMerger for SimilarityMerger<'_> {}
+impl OrMerger for SimilarityMerger<'_, '_> {}
 
-impl SampleMerger for SimilarityMerger<'_> {
+impl SampleMerger for SimilarityMerger<'_, '_> {
     fn merge<'a>(&self, _node_id: usize, left: &Sample, right: &Sample) -> Sample {
         if left.is_empty() {
             return right.clone();
@@ -49,7 +50,7 @@ impl SampleMerger for SimilarityMerger<'_> {
             .map(|(index, _)| index)
         {
             let next = candidates.swap_remove(next);
-            if next.is_t_wise_covered_by(&new_sample, self.t, self.literals) {
+            if next.is_t_wise_covered_by(&new_sample, self.preset, self.t, self.literals) {
                 continue;
             }
 
@@ -123,15 +124,22 @@ impl<'a> Candidate<'a> {
         }
     }
 
+    /// Checks whether the candidate configuration is t-wise covered by the given sample or preset configurations.
     fn is_t_wise_covered_by(
         &self,
         sample: &Sample,
+        _preset: &Sample,
         t: usize,
         literals: Option<&IntSet<i32>>,
     ) -> bool {
         if self.max_intersect == self.literals.len() {
             return true;
         }
+
+        // TODO
+        /*if _preset.is_t_wise_covered(self.config, t) {
+            return true;
+        }*/
 
         /*
         If the largest intersect between the candidate and the samples configs is smaller than
@@ -160,8 +168,10 @@ impl<'a> Candidate<'a> {
         literals.shuffle(&mut rng());
         debug_assert!(!literals.contains(&0));
 
-        TInteractionIter::new(&literals, min(t, literals.len()))
-            .all(|interaction| sample.covers(interaction))
+        TInteractionIter::new(&literals, min(t, literals.len())).all(|interaction| {
+            // TODO
+            sample.covers(interaction) //|| _preset.covers(interaction)
+        })
     }
 }
 
@@ -174,6 +184,7 @@ mod test {
         let merger = SimilarityMerger {
             t: 2,
             literals: None,
+            preset: &Sample::default(),
         };
 
         let left = Sample::new_from_configs(vec![Config::from(&[1], 1)]);
@@ -202,7 +213,7 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
-        assert!(candidate.is_t_wise_covered_by(&sample, 2, None));
+        assert!(candidate.is_t_wise_covered_by(&sample, &Sample::default(), 2, None));
 
         let mut candidate = Candidate::new(&candidate_config);
         let sample = Sample::new_from_configs(vec![
@@ -215,6 +226,6 @@ mod test {
             .iter()
             .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
 
-        assert!(!candidate.is_t_wise_covered_by(&sample, 2, None));
+        assert!(!candidate.is_t_wise_covered_by(&sample, &Sample::default(), 2, None));
     }
 }
