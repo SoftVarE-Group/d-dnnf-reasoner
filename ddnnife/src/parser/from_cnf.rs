@@ -1,4 +1,4 @@
-use crate::{
+use super::{
     c2d_lexer::{parse_alt_space1_number1, split_numbers},
     d4_lexer::parse_signed_alt_space1_number1,
 };
@@ -29,7 +29,11 @@ pub enum CNFToken {
     Header { features: usize, clauses: usize },
 }
 
-use crate::util::format_vec;
+fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
+    vals.map(|v| v.to_string())
+        .collect::<Vec<String>>()
+        .join(" ")
+}
 
 /// Lexes a line and checks whether it is a CNF header, comment or clause.
 /// We are only interested in the header, because it contains the information about the number of features.

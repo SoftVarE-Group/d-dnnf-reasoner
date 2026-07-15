@@ -1,6 +1,5 @@
 use crate::DdnnfMut;
 use ddnnife::ddnnf;
-use ddnnife::util;
 use num::BigInt;
 use std::collections::HashSet;
 use std::fs::File;
@@ -77,7 +76,7 @@ impl Ddnnf {
     /// Computes the core features of this d-DNNF for multiple variables.
     #[uniffi::method]
     fn core_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
-        let mut core: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+        let mut core: Vec<i32> = crate::zip_assumptions_variables(assumptions, variables)
             .flat_map(|assumptions| self.0.core_with_assumptions(&assumptions).into_iter())
             .collect();
 
@@ -95,7 +94,7 @@ impl Ddnnf {
     /// Computes the dead features of this d-DNNF for multiple variables.
     #[uniffi::method]
     fn dead_multiple(&self, assumptions: &[i32], variables: &[i32]) -> Vec<i32> {
-        let mut dead: Vec<i32> = util::zip_assumptions_variables(assumptions, variables)
+        let mut dead: Vec<i32> = crate::zip_assumptions_variables(assumptions, variables)
             .flat_map(|assumptions| self.0.dead_with_assumptions(&assumptions).into_iter())
             .collect();
 

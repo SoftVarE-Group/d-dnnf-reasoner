@@ -1,5 +1,5 @@
+use super::c2d_lexer::TId;
 use super::{calc_and_count, calc_or_count};
-use crate::c2d_lexer::TId;
 use crate::{DdnnfKind, Node, NodeType};
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::DfsPostOrder;

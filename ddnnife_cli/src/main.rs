@@ -9,7 +9,6 @@ use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::int_hash::IntSet;
 use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
-use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::{info, warn};
 use std::fs::{self, File};
@@ -541,4 +540,10 @@ fn compute_queries<T: ToString + Ord + Send + 'static>(
         elapsed_time,
         elapsed_time / dparser::parse_queries_file(queries_file).len() as f64
     );
+}
+
+fn format_vec<T: ToString>(vals: impl Iterator<Item = T>) -> String {
+    vals.map(|v| v.to_string())
+        .collect::<Vec<String>>()
+        .join(" ")
 }

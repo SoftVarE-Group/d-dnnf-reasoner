@@ -2,9 +2,9 @@ mod query;
 
 pub use query::Query;
 
+use crate::format_vec;
 use ddnnife::Ddnnf;
 use ddnnife::ddnnf::extended_ddnnf::ExtendedDdnnf;
-use ddnnife::util::{format_vec, format_vec_vec};
 use ddnnife_cnf::Cnf;
 use log::trace;
 use std::fs::File;
@@ -187,12 +187,26 @@ fn run_operation<T: ToString>(
         .join(";")
 }
 
+fn format_vec_vec<T>(vals: impl Iterator<Item = T>) -> String
+where
+    T: IntoIterator,
+    T::Item: ToString,
+{
+    vals.map(|res| {
+        res.into_iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<String>>()
+            .join(" ")
+    })
+    .collect::<Vec<String>>()
+    .join(";")
+}
+
 #[cfg(test)]
 mod test {
-    use super::{Query, handle_query};
+    use super::{Query, format_vec, handle_query};
     use ddnnife::Ddnnf;
     use ddnnife::parser::build_ddnnf;
-    use ddnnife::util::format_vec;
     use num::{BigInt, One};
     use std::collections::HashSet;
     use std::io::{Error, Result};
