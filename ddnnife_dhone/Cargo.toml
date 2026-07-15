@@ -10,6 +10,7 @@ workspace = ".."
 [[bin]]
 name = "dhone"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 clap = { workspace = true }
