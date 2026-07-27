@@ -131,9 +131,9 @@ impl Sample {
 
     /// Create a sample that only contains a single configuration with a single literal
     pub fn from_literal(literal: i32, number_of_variables: usize) -> Self {
-        let mut sample = Self::new([literal.unsigned_abs()].into_iter().collect());
+        let mut sample = Self::new((0..number_of_variables as u32).collect());
         sample.literals = vec![literal];
-        sample.add_complete(Config::from(&[literal], number_of_variables));
+        sample.add(Config::from(&[literal], number_of_variables));
         sample
     }
 
