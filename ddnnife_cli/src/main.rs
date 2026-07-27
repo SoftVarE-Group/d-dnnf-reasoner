@@ -8,7 +8,7 @@ use ddnnife::ddnnf::Ddnnf;
 use ddnnife::ddnnf::anomalies::t_wise_sampling::Sample;
 use ddnnife::ddnnf::statistics::Statistics;
 use ddnnife::int_hash::IntSet;
-use ddnnife::parser::{self as dparser, persisting::write_as_mermaid_md};
+use ddnnife::parser::{self as dparser};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::{info, warn};
@@ -494,7 +494,7 @@ fn main() -> io::Result<()> {
             writer.write_all(format_vec(core.iter()).as_bytes())?;
         }
         Operation::Mermaid { assumptions } => {
-            write_as_mermaid_md(&mut ddnnf, &assumptions, &mut writer)?;
+            writer.write_all(ddnnf.mermaidify(&assumptions).as_bytes())?;
         }
         Operation::Statistics { pretty } => {
             let statistics = Statistics::from(&ddnnf);
