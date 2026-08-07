@@ -183,8 +183,12 @@ fn complete_partial_configs(
     sat_solver: &SatWrapper,
     number_of_variables: i32,
 ) {
+    sample
+        .complete_configs
+        .reserve(sample.partial_configs.len());
+
     let vars: Vec<i32> = (1..=number_of_variables).collect();
-    for config in sample.partial_configs.iter_mut() {
+    for mut config in sample.partial_configs.drain(..sample.partial_configs.len()) {
         for &var in vars.iter() {
             if config.contains(var) || config.contains(-var) {
                 continue;
@@ -204,7 +208,11 @@ fn complete_partial_configs(
                 config.add(-var);
             }
         }
+
+        sample.complete_configs.push(config);
     }
+
+    sample.partial_configs.shrink_to_fit();
 
     debug_assert!(
         sample
