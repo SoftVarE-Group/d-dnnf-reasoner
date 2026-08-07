@@ -1,3 +1,7 @@
+mod intersection;
+
+pub use intersection::intersection_sorted;
+
 use std::iter;
 
 pub fn format_vec_separated_by<T: ToString>(

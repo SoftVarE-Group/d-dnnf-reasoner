@@ -4,6 +4,7 @@ use super::{Config, Sample};
 use super::{OrMerger, SampleMerger};
 use crate::int_hash::IntSet;
 use crate::rand::rng;
+use crate::util;
 use rand::prelude::SliceRandom;
 use std::cmp::{Ordering, min};
 use streaming_iterator::StreamingIterator;
@@ -39,8 +40,8 @@ impl SampleMerger for SimilarityMerger<'_> {
         let next = candidates.pop()
             .expect("There should be at least one candidate because we checked that both samples are not empty");
 
-        candidates.iter_mut().for_each(|c| c.update(&next.literals));
         new_sample.add(next.config.clone());
+        candidates.iter_mut().for_each(|c| c.update(&next));
 
         while let Some(next) = candidates
             .iter()
@@ -54,8 +55,7 @@ impl SampleMerger for SimilarityMerger<'_> {
             }
 
             new_sample.add(next.config.clone());
-
-            candidates.iter_mut().for_each(|c| c.update(&next.literals));
+            candidates.iter_mut().for_each(|c| c.update(&next));
         }
         new_sample
     }
@@ -74,8 +74,10 @@ fn snd<'a>((_, candidate): &(usize, &'a Candidate<'_>)) -> &'a Candidate<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Candidate<'a> {
+    /// The configuration this candidate tracks.
     config: &'a Config,
-    literals: IntSet<i32>,
+    /// The literals of the configuration, **sorted**.
+    literals: Vec<i32>,
     max_intersect: usize,
     total_intersect: usize,
 }
@@ -102,19 +104,22 @@ impl Ord for Candidate<'_> {
 
 impl<'a> Candidate<'a> {
     fn new(config: &'a Config) -> Self {
-        let literals: IntSet<i32> = config.get_decided_literals().collect();
+        let mut literals: Vec<i32> = config.get_decided_literals().collect();
+        literals.sort_unstable();
+
         debug_assert!(!literals.contains(&0));
         debug_assert!(!literals.is_empty());
+
         Self {
+            config,
             literals,
             max_intersect: 0,
-            config,
             total_intersect: 0,
         }
     }
 
-    fn update(&mut self, other_literals: &IntSet<i32>) {
-        let intersect = self.literals.intersection(other_literals).count();
+    fn update(&mut self, other: &Self) {
+        let intersect = util::intersection_sorted(&self.literals, &other.literals);
 
         self.total_intersect += intersect;
 
@@ -146,8 +151,9 @@ impl<'a> Candidate<'a> {
         }
 
         let mut literals: Vec<i32> = self
-            .config
-            .get_decided_literals()
+            .literals
+            .iter()
+            .copied()
             .filter(|literal| {
                 if let Some(literals) = literals {
                     return literals.contains(literal);
@@ -200,7 +206,7 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
+            .for_each(|c| candidate.update(&Candidate::new(c)));
 
         assert!(candidate.is_t_wise_covered_by(&sample, 2, None));
 
@@ -213,7 +219,7 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&c.get_decided_literals().collect::<IntSet<_>>()));
+            .for_each(|c| candidate.update(&Candidate::new(c)));
 
         assert!(!candidate.is_t_wise_covered_by(&sample, 2, None));
     }
