@@ -17,6 +17,17 @@ class JavaTest {
     private final Integer features = 854;
 
     @Test
+    void config() {
+        if (DdnnifeConfig.getSeed() == null) {
+            DdnnifeConfig.setSeed(42);
+            assertEquals(42, DdnnifeConfig.getSeed());
+        }
+
+        DdnnifeConfig.setDeterministic(true);
+        assertTrue(DdnnifeConfig.isDeterministic());
+    }
+
+    @Test
     void sat() {
         DdnnfMut ddnnfMut = ddnnf.asMut();
         assertTrue(ddnnfMut.isSat(emptyList()));
