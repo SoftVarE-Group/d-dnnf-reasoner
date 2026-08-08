@@ -105,7 +105,7 @@ where
 
         let rank_cp = self.rank.clone();
 
-        for (node, _) in rank_cp.iter() {
+        for node in rank_cp.keys() {
             let root = self.find((*node).clone());
 
             if let std::collections::hash_map::Entry::Vacant(e) = result.entry(root.clone()) {
