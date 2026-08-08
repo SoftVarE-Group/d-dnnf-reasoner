@@ -75,3 +75,28 @@ fun getSample(result: SamplingResult): Sample {
         }
     }
 }
+
+class DdnnifeConfig {
+    companion object {
+        @JvmStatic
+        fun setDeterministic(enable: Boolean) {
+            return de.softvare.ddnnife.setDeterministic(enable)
+        }
+
+        @JvmStatic
+        fun isDeterministic(): Boolean {
+            return de.softvare.ddnnife.isDeterministic()
+        }
+
+        @JvmStatic
+        fun setSeed(seed: Long) {
+            require(seed >= 0) { "Seed must be positive." }
+            return de.softvare.ddnnife.setSeed(seed.toULong())
+        }
+
+        @JvmStatic
+        fun getSeed(): Long? {
+            return de.softvare.ddnnife.getSeed()?.toLong()
+        }
+    }
+}

@@ -1,6 +1,7 @@
 uniffi::setup_scaffolding!();
 
 mod cnf;
+mod config;
 mod ddnnf;
 mod ddnnf_mut;
 mod statistics;

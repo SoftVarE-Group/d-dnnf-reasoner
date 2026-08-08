@@ -3,11 +3,23 @@ package de.softvare.ddnnife
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.fail
 
 internal class DdnnfTest {
     private val ddnnf = Ddnnf.fromFile("../../example_input/busybox-1.18.0_c2d.nnf", null)
     private val features = 854
+
+    @Test
+    fun config() {
+        if (getSeed() == null) {
+            setSeed(42U)
+            assertEquals(42U, getSeed())
+        }
+
+        setDeterministic(true)
+        assert(isDeterministic())
+    }
 
     @Test
     fun sat() {
@@ -66,11 +78,12 @@ internal class DdnnfTest {
     @Test
     fun tWise() {
         val result = ddnnf.sampleTWise(1u, null)
-        when(result) {
+        when (result) {
             is SamplingResult.ResultWithSample -> {
                 val sample = result.v1
                 assertEquals(features, sample.vars.size)
             }
+
             else -> {
                 fail("T-wise sample is invalid.")
             }
@@ -88,12 +101,12 @@ internal class DdnnfTest {
 
     @Test
     fun trivial() {
-      val trivialDdnnf = Ddnnf.fromFile("../../ddnnife/tests/data/stub_true.nnf", null)
-      assert(trivialDdnnf.isTrivial())
+        val trivialDdnnf = Ddnnf.fromFile("../../ddnnife/tests/data/stub_true.nnf", null)
+        assert(trivialDdnnf.isTrivial())
     }
 
     @Test
     fun nonTrivial() {
-      assert(!ddnnf.isTrivial())
+        assert(!ddnnf.isTrivial())
     }
 }
