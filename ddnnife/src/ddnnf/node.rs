@@ -75,7 +75,7 @@ impl Display for Node {
 }
 
 fn deconstruct_children(f: &mut Formatter<'_>, children: &[usize]) -> std::fmt::Result {
-    write!(f, "{} ", &children.len().to_string())?;
+    write!(f, "{} ", children.len())?;
     children.iter().enumerate().try_for_each(|(i, child)| {
         write!(f, "{child}")?;
 

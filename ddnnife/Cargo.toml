@@ -12,14 +12,14 @@ bimap = "0.6"
 bitvec = "1"
 csv = { workspace = true }
 ddnnife_cnf = { workspace = true }
-itertools = "0.14"
+itertools = "0.15"
 log = { workspace = true }
 nom = "8"
 num = { workspace = true }
 petgraph = "0.8"
-rand = "0.9"
-rand_distr = "0.5"
-rand_pcg = "0.9"
+rand = "0.10"
+rand_distr = "0.6"
+rand_pcg = "0.10"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 streaming-iterator = "0.1"

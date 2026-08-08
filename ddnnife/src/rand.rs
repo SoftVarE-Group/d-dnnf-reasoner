@@ -1,8 +1,14 @@
 use crate::config;
-use rand::{SeedableRng, rngs::SmallRng};
+use rand::{
+    SeedableRng,
+    rngs::{SmallRng, SysRng},
+};
 use std::sync::{LazyLock, OnceLock, RwLock, RwLockWriteGuard};
 
-static RNG: LazyLock<RwLock<SmallRng>> = LazyLock::new(|| RwLock::new(SmallRng::from_os_rng()));
+static RNG: LazyLock<RwLock<SmallRng>> = LazyLock::new(|| {
+    RwLock::new(SmallRng::try_from_rng(&mut SysRng).expect("Failed to initialize RNG"))
+});
+
 static RNG_DETERMINISTIC: OnceLock<RwLock<SmallRng>> = OnceLock::new();
 
 /// Returns a handle to a random number generator.
