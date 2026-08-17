@@ -1,35 +1,31 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use ddnnife::Ddnnf;
-use std::hint::black_box;
 use std::path::Path;
 
-fn bench_t_wise(c: &mut Criterion, name: &str, path: &Path, t: usize) {
-    let ddnnf = Ddnnf::from_file(path, None);
-    let id = format!("t-wise {name} t={t}");
-    c.bench_function(&id, |bencher| {
-        bencher.iter(|| ddnnf.sample_t_wise(black_box(t), None))
-    });
+static BENCHMARKS: [(&str, &str, usize); 4] = [
+    ("axTLS_d4.nnf", "axTLS (d4)", 2),
+    ("busybox_c2d.nnf", "BusyBox (c2d)", 2),
+    ("VP9_d4.nnf", "VP9 (d4)", 2),
+    ("X264_c2d.nnf", "X264 (c2d)", 2),
+];
+
+fn benchmark(c: &mut Criterion) {
+    let mut group = c.benchmark_group("t-wise");
+    group.sampling_mode(SamplingMode::Flat);
+    group.significance_level(0.01);
+    group.noise_threshold(0.05);
+
+    let data_dir = Path::new("tests/data");
+
+    for (path, name, t) in BENCHMARKS {
+        let ddnnf = Ddnnf::from_file(&data_dir.join(path), None);
+        group.bench_with_input(BenchmarkId::new(name, t), &t, |bencher, t| {
+            bencher.iter(|| ddnnf.sample_t_wise(*t, None))
+        });
+    }
+
+    group.finish();
 }
 
-fn small_c2d_2(c: &mut Criterion) {
-    let path = Path::new("../example_input/small_example_c2d.nnf");
-    bench_t_wise(c, "small (c2d)", path, 2);
-}
-
-fn small_c2d_3(c: &mut Criterion) {
-    let path = Path::new("../example_input/small_example_c2d.nnf");
-    bench_t_wise(c, "small (c2d)", path, 3);
-}
-
-fn busybox_c2d_2(c: &mut Criterion) {
-    let path = Path::new("../example_input/busybox-1.18.0_c2d.nnf");
-    bench_t_wise(c, "busybox (c2d)", path, 2);
-}
-
-fn busybox_c2d_3(c: &mut Criterion) {
-    let path = Path::new("../example_input/busybox-1.18.0_c2d.nnf");
-    bench_t_wise(c, "busybox (c2d)", path, 3);
-}
-
-criterion_group!(benches, small_c2d_2, small_c2d_3, busybox_c2d_2,);
+criterion_group!(benches, benchmark);
 criterion_main!(benches);
