@@ -15,7 +15,7 @@ fn card_of_features_normal_and_reloaded_test() {
 
     // save nnf in c2d format
     let saved_nnf = Path::new("./tests/data/auto1_d4_to_c2d.nnf");
-    let mut file = File::create(&saved_nnf).unwrap();
+    let mut file = File::create(saved_nnf).unwrap();
     file.write_all(ddnnf.to_string().as_bytes()).unwrap();
 
     // compute the cardinality of features for the saved file
