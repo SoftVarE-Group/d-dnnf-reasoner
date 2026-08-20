@@ -346,11 +346,20 @@ impl Sample {
     /// Calculates the scores of all configurations to be used for trimming and resampling.
     ///
     /// Currently calculates one score: Unique interaction coverage.
-    fn scores(&self, t: usize, _preset: &Sample) -> (Vec<f64>, f64) {
+    fn scores(&self, t: usize, preset: &Sample) -> (Vec<f64>, f64) {
         // Compute the literal coverages once for the scores to re-use them.
         let coverages = CoverageMap::new(self);
 
-        let scores: Vec<f64> = self.unique_coverage_scores(t, &coverages).collect();
+        // Calculate all individual scores.
+        let parts: Vec<Vec<f64>> = vec![
+            self.unique_coverage_scores(t, &coverages),
+            self.preset_scores(t, preset, &coverages),
+        ];
+
+        // Sum the scores for each configuration.
+        let scores: Vec<f64> = (0..self.len())
+            .map(|index| parts.iter().map(|part| part[index]).sum())
+            .collect();
 
         // Calculate the average score over all configurations.
         let average = scores.iter().sum::<f64>() / scores.len() as f64;
@@ -362,11 +371,7 @@ impl Sample {
     ///
     /// The unique coverage score is higher for those configs that cover many unique interactions,
     /// relative to their size.
-    fn unique_coverage_scores(
-        &self,
-        t: usize,
-        coverages: &CoverageMap,
-    ) -> impl Iterator<Item = f64> {
+    fn unique_coverage_scores(&self, t: usize, coverages: &CoverageMap) -> Vec<f64> {
         // Calculate how many unique interactions each configuration covers.
         let mut unique_coverage = vec![0; self.len()];
 
@@ -378,8 +383,44 @@ impl Sample {
             .for_each(|config| unique_coverage[*config] += 1);
 
         // Calculate the rank of each configuration based on its unique coverage.
-        self.iter().enumerate().map(move |(index, config)| {
-            unique_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
-        })
+        self.iter()
+            .enumerate()
+            .map(move |(index, config)| {
+                unique_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
+            })
+            .collect()
+    }
+
+    /// Calculates the preset score of all configs.
+    ///
+    /// The preset score is higher for those configs that cover many interactions that are not part of the preset,
+    /// relative to their size.
+    fn preset_scores(&self, t: usize, preset: &Sample, coverages: &CoverageMap) -> Vec<f64> {
+        if preset.is_empty() {
+            return vec![0f64; self.len()];
+        }
+
+        // Calculate how many non-preset interactions each config covers.
+        let mut preset_coverage = vec![0; self.len()];
+
+        // For each interaction ...
+        TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t))
+            // ... that is not covered by the preset ...
+            .filter(|interaction| !preset.covers(interaction))
+            // ... find and mark those configs that cover this interaction.
+            .for_each(|interaction| {
+                let covering = coverages.coverage(interaction);
+
+                covering
+                    .iter_ones()
+                    .for_each(|index| preset_coverage[index] += 1);
+            });
+
+        self.iter()
+            .enumerate()
+            .map(move |(index, config)| {
+                preset_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
+            })
+            .collect()
     }
 }
