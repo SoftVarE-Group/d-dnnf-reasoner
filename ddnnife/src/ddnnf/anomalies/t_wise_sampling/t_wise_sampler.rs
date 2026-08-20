@@ -3,6 +3,7 @@ use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
+use crate::ddnnf::anomalies::t_wise_sampling::Config;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::int_hash::{self, IntMap, IntSet};
 use crate::rand::rng;
@@ -10,7 +11,7 @@ use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
-use std::mem;
+use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 pub struct TWiseSampler<'a, 'l, 'p, A: AndMerger, O: OrMerger> {
@@ -250,16 +251,19 @@ impl Sample {
         literals: Option<&IntSet<i32>>,
         preset: &Sample,
     ) {
+        // Ensure that the preset is always part of the final sample,
+        // even if it is empty.
         if self.is_empty() {
-            let _ = mem::replace(self, preset.clone());
+            *self = preset.clone();
             return;
         }
 
+        self.extend(preset.clone());
+
         let t = min(self.get_vars().len(), t);
 
-        // Trim the sample before adding the preset configurations to ensure they are not removed.
-        let (mut new_sample, literals_to_resample) = trim_sample(self, t);
-        new_sample.extend(preset.clone());
+        // Trim the sample and collect the literals to resample.
+        let (mut new_sample, literals_to_resample) = trim_sample(self, t, preset);
 
         // Convert the set of literals to resample into a vector.
         // In case a restriction on the literals to cover is given, apply it during this conversion.
@@ -290,27 +294,27 @@ impl Sample {
         }
 
         // Choose the smaller sample of the resampled or the original one.
-        // Account for the preset configurations when considering the original as they were not added previously.
-        if new_sample.len() <= self.len() + preset.len() {
-            let _ = mem::replace(self, new_sample);
-        } else {
-            self.extend(preset.clone());
+        if new_sample.len() <= self.len() {
+            *self = new_sample;
         }
     }
 }
 
-/// Removes those configs from the given sample that rank below the average.
+/// Removes those configs from the given sample that rank score the average.
+/// Does not trim configs that are part of the preset.
 ///
 /// Returns the remaining sample as well as the literals to resample.
-fn trim_sample(sample: &Sample, t: usize) -> (Sample, IntSet<i32>) {
+fn trim_sample(sample: &Sample, t: usize, preset: &Sample) -> (Sample, IntSet<i32>) {
     let mut literals_to_resample: IntSet<i32> = IntSet::default();
     let mut new_sample = Sample::new_from_samples(&[sample]);
     let complete_len = sample.complete_configs.len();
 
-    let (ranks, avg_rank) = sample.calc_ranks(t);
+    let (scores, average) = sample.scores(t, preset);
 
+    let preset: HashSet<Config> = preset.iter().cloned().collect();
     for (index, config) in sample.iter().enumerate() {
-        if ranks[index] < avg_rank {
+        // Trim those configs that score below the average and are not part of the preset.
+        if scores[index] < average && !preset.contains(config) {
             literals_to_resample.extend(config.get_decided_literals());
         } else if index < complete_len {
             new_sample.add_complete(config.clone());
@@ -323,30 +327,42 @@ fn trim_sample(sample: &Sample, t: usize) -> (Sample, IntSet<i32>) {
 }
 
 impl Sample {
-    /// Calculates the ranks of each configuration and the average.
-    fn calc_ranks(&self, t: usize) -> (Vec<f64>, f64) {
-        let mut unique_coverage = vec![0; self.len()];
-        let mut iter =
-            TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t));
-        while let Some(interaction) = iter.next() {
-            if let Some(conf_index) = self.find_unique_covering_conf(interaction) {
-                unique_coverage[conf_index] += 1;
-            }
-        }
+    /// Calculates the scores of all configurations to be used for trimming and resampling.
+    ///
+    /// Currently calculates two scores: Unique interaction coverage and preset interaction coverage.
+    fn scores(&self, t: usize, _preset: &Sample) -> (Vec<f64>, f64) {
+        // With an empty preset, do not calculate the preset score.
+        let scores: Vec<f64> = self.unique_coverage_scores(t).collect();
 
-        let mut ranks = vec![0.0; self.len()];
-        let mut sum: f64 = 0.0;
-
-        for (index, config) in self.iter().enumerate() {
-            let config_size = config.n_decided_literals;
-            ranks[index] = unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
-            sum += ranks[index];
-        }
-
-        let avg_rank = sum / self.len() as f64;
-        (ranks, avg_rank)
+        // Calculate the average score over all configurations.
+        let average = scores.iter().sum::<f64>() / scores.len() as f64;
+        (scores, average)
     }
 
+    /// Calculates the unique coverage score of each configuration.
+    ///
+    /// The unique coverage score is higher for those configs that cover many unique interactions,
+    /// relative to their size.
+    fn unique_coverage_scores(&self, t: usize) -> impl Iterator<Item = f64> {
+        // Calculate how many unique interactions each configuration covers.
+        let mut unique_coverage = vec![0; self.len()];
+
+        // For each interaction ...
+        TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t))
+            // ... check whether there is a config uniquely covering this interaction ...
+            .filter_map(|interaction| self.find_unique_covering_conf(interaction))
+            // ... and in case there is, mark the corresponding config as such.
+            .for_each(|config| unique_coverage[*config] += 1);
+
+        // Calculate the rank of each configuration based on its unique coverage.
+        self.iter().enumerate().map(move |(index, config)| {
+            unique_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
+        })
+    }
+
+    /// Finds the index of the configuration that uniquely covers the given interaction, if such a configuration exists.
+    ///
+    /// Returns `None` if no or more than one configurations cover the given interaction.
     fn find_unique_covering_conf(&self, interaction: &[i32]) -> Option<usize> {
         let mut result = None;
 
