@@ -4,7 +4,6 @@
   pythonLib ? false,
   test ? true,
   deny ? false,
-  format ? false,
   lint ? false,
   benchmark ? false,
   documentation ? false,
@@ -74,8 +73,6 @@ let
       "cargoDeny"
     else if documentation then
       "cargoDoc"
-    else if format then
-      "cargoFmt"
     else if lint then
       "cargoClippy"
     else
