@@ -127,7 +127,7 @@ craneLib.${craneAction} (
 
     cargoExtraArgs = lib.optionalString (component != null) "--package ${component}";
     cargoTestExtraArgs = cargoExtraArgs;
-    cargoClippyExtraArgs = "--all-features -- --deny warnings";
+    cargoClippyExtraArgs = "--all-targets --all-features -- --deny warnings";
   }
   // lib.optionalAttrs dynamicMusl {
     CARGO_BUILD_RUSTFLAGS = "-C target-feature=-crt-static";

@@ -208,12 +208,12 @@ mod test {
 
     #[test]
     fn ddnnf_t_wise_sampling_validity_big_model() {
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
         let t = 1;
 
         check_validity_of_sample(
             auto1.sample_t_wise(t, None).get_sample().unwrap(),
-            &mut auto1,
+            &auto1,
             t,
         );
     }

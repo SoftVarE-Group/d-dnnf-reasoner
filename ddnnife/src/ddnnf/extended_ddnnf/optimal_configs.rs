@@ -435,15 +435,18 @@ pub(crate) mod test {
     fn test_merge_top_k_results_and() {
         let number_of_variables: usize = 4;
 
-        let mut ddnnf = Ddnnf::default();
-        ddnnf.number_of_variables = number_of_variables as u32;
+        let ddnnf = Ddnnf {
+            number_of_variables: number_of_variables as u32,
+            ..Default::default()
+        };
+
         let ext_ddnnf = ExtendedDdnnf {
             ddnnf,
             attrs: Default::default(),
             objective_fn_vals: Some(vec![3.0, 3.0, 2.0, 2.0]),
         };
 
-        let sorted_lists = vec![
+        let sorted_lists = [
             vec![
                 OptimalConfig::from(&[1, 2], &ext_ddnnf),   //1.a: value = 6
                 OptimalConfig::from(&[-1, 2], &ext_ddnnf),  //1.b: value = 3
@@ -456,7 +459,7 @@ pub(crate) mod test {
             ],
         ];
 
-        let expected = vec![
+        let expected = [
             OptimalConfig::from(&[1, 2, 3, 4], &ext_ddnnf), //1.a + 2.a: value = 10
             OptimalConfig::from(&[1, 2, -3, 4], &ext_ddnnf), //1.a + 2.b: value = 8
             OptimalConfig::from(&[-1, 2, 3, 4], &ext_ddnnf), //1.b + 2.a: value = 7
@@ -476,17 +479,18 @@ pub(crate) mod test {
 
     #[test]
     fn test_merge_top_k_results_or() {
-        let number_of_variables: usize = 4;
+        let ddnnf = Ddnnf {
+            number_of_variables: 4,
+            ..Default::default()
+        };
 
-        let mut ddnnf = Ddnnf::default();
-        ddnnf.number_of_variables = number_of_variables as u32;
         let ext_ddnnf = ExtendedDdnnf {
             ddnnf,
             attrs: Default::default(),
             objective_fn_vals: Some(vec![3.0, 3.0, 2.0, 2.0]),
         };
 
-        let sorted_lists = vec![
+        let sorted_lists = [
             vec![
                 OptimalConfig::from(&[1, 2], &ext_ddnnf),   //1.a: value = 6
                 OptimalConfig::from(&[-1, 2], &ext_ddnnf),  //1.b: value = 3
@@ -498,7 +502,7 @@ pub(crate) mod test {
             ],
         ];
 
-        let expected = vec![
+        let expected = [
             OptimalConfig::from(&[1, 2], &ext_ddnnf),   //1.a: value = 6
             OptimalConfig::from(&[3, 4], &ext_ddnnf),   //2.a: value = 4
             OptimalConfig::from(&[-1, 2], &ext_ddnnf),  //1.b: value = 3
