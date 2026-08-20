@@ -339,6 +339,31 @@ impl Sample {
         (scores, average)
     }
 
+    /// Calculates the preset score of all configs.
+    ///
+    /// The preset score is higher for those configs that cover many interactions that are not part of the preset,
+    /// relative to their size.
+    fn _preset_scores(&self, t: usize, preset: &Sample) -> impl Iterator<Item = f64> {
+        // Calculate how many non-preset interactions each config covers.
+        let mut preset_coverage = vec![0; self.len()];
+
+        // For each interaction ...
+        TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t))
+            // ... that is not covered by the preset ...
+            .filter(|interaction| !preset.covers(interaction))
+            // ... find and mark those configs that cover this interaction.
+            .for_each(|interaction| {
+                self.iter()
+                    .enumerate()
+                    .filter(|(_, config)| config.covers(interaction))
+                    .for_each(|(index, _)| preset_coverage[index] += 1)
+            });
+
+        self.iter().enumerate().map(move |(index, config)| {
+            preset_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
+        })
+    }
+
     /// Calculates the unique coverage score of each configuration.
     ///
     /// The unique coverage score is higher for those configs that cover many unique interactions,
