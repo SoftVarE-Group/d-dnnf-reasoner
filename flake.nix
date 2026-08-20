@@ -8,6 +8,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     crane.url = "github:ipetkov/crane/v0.23.4";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -16,6 +20,7 @@
       nixpkgs,
       fenix,
       crane,
+      treefmt-nix,
       ...
     }:
     let
@@ -28,9 +33,13 @@
         "x86_64-darwin"
         "x86_64-linux"
       ];
+
+      treefmt =
+        system:
+        (treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./nix/treefmt.nix).config.build;
     in
     {
-      formatter = lib.genAttrs systems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
+      formatter = lib.genAttrs systems (system: (treefmt system).wrapper);
       packages = lib.genAttrs systems (
         system:
         let
@@ -153,7 +162,7 @@
           };
         in
         {
-          format = pkgs.callPackage ./nix/ddnnife.nix (defaultAttrs // { format = true; });
+          format = (treefmt system).check self;
           lint = pkgs.callPackage ./nix/ddnnife.nix (defaultAttrs // { lint = true; });
           deny = pkgs.callPackage ./nix/ddnnife.nix (defaultAttrs // { deny = true; });
         }
