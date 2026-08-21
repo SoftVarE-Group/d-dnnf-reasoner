@@ -8,7 +8,6 @@ use std::cmp::{Ordering, min};
 use std::fmt::{Display, Formatter};
 use std::iter;
 use std::num::ParseIntError;
-use streaming_iterator::StreamingIterator;
 
 /// Represents a (partial) sample of configs.
 /// The sample differentiates between complete and partial configs.
@@ -278,7 +277,7 @@ impl Sample {
         debug_assert!(!literals.contains(&0));
 
         TInteractionIter::new(&literals, min(t, literals.len()))
-            .all(|interaction| self.covers(interaction))
+            .all(|interaction| self.covers(&interaction))
     }
 
     /// Checks whether all configurations of this sample are complete, i.e. the number
@@ -327,7 +326,7 @@ impl Sample {
             .filter(|interaction| sat.is_sat_cached(interaction, &mut sat.new_state()))
             // Count how many interactions there are and which are covered.
             .fold((0, 0), |(total, covered), interaction| {
-                if self.covers(interaction) {
+                if self.covers(&interaction) {
                     return (total + 1, covered + 1);
                 }
 

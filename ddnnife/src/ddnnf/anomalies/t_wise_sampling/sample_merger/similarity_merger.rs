@@ -7,7 +7,6 @@ use crate::rand::rng;
 use crate::util;
 use rand::prelude::SliceRandom;
 use std::cmp::{Ordering, min};
-use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Copy, Clone)]
 pub struct SimilarityMerger<'l> {
@@ -167,7 +166,7 @@ impl<'a> Candidate<'a> {
         debug_assert!(!literals.contains(&0));
 
         TInteractionIter::new(&literals, min(t, literals.len()))
-            .all(|interaction| sample.covers(interaction))
+            .all(|interaction| sample.covers(&interaction))
     }
 }
 

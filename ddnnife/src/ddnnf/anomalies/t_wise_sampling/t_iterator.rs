@@ -1,64 +1,92 @@
-use std::iter;
-use streaming_iterator::StreamingIterator;
+use num::{BigInt, ToPrimitive, integer::binomial};
 
-/// This is a [StreamingIterator] that produces t-wise indices. These can be mapped into a list
-/// of literals to get t-wise interactions of those literals. [TInteractionIter] provides this
-/// functionality.
-pub(super) struct TIndicesIter {
-    number_of_vars: usize,
+/// Iterator over indices of `t`-wise interactions.
+#[derive(Debug)]
+struct TIndicesIter {
+    /// The number of elements to be combined.
+    n: usize,
+    /// The interaction size to generate.
     t: usize,
-    first: bool,
-    tuple: Vec<usize>,
+    /// The currently generated interaction.
+    next: Vec<usize>,
+    /// Indicates whether the end of iteration is reached.
+    finished: bool,
 }
 
-impl StreamingIterator for TIndicesIter {
-    type Item = [usize];
+impl Iterator for TIndicesIter {
+    type Item = Vec<usize>;
 
-    fn advance(&mut self) {
-        if self.first {
-            self.first = false;
-            return;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.finished {
+            return None;
         }
 
-        self.tuple[0] += 1;
-        if self.tuple[0] >= self.number_of_vars {
-            let mut p: usize = 0;
+        let result = Some(self.next.clone());
 
-            // carry over to the next places - like 0999 -> 1000
-            while self.tuple[p] >= self.number_of_vars - p && self.tuple[self.t] == 0 {
-                self.tuple[p] = 0;
-                p += 1; // go to next place
-                self.tuple[p] += 1;
-            }
+        // Increment the first index.
+        self.next[0] += 1;
 
-            // ensure that we don't have duplicates - like 1000 -> 1234
-            if let Some(bound) = self.t.checked_sub(2) {
-                for j in (0..=bound).rev() {
-                    if self.tuple[j] < self.tuple[j + 1] {
-                        self.tuple[j] = self.tuple[j + 1] + 1;
-                    }
-                }
-            }
+        // If no overflow occurred there is nothing left to do.
+        if self.next[0] < self.n {
+            return result;
         }
+
+        // Otherwise, handle overflow incrementally.
+        // Handle all indices that exceed the maximum value of their position (`n - i`).
+        let mut i = 0;
+        while i < self.next.len() - 1 && self.next[i] >= self.n - i {
+            // Reset the current (overflowing) position.
+            self.next[i] = 0;
+
+            // Increment the next position to account for the overflow.
+            self.next[i + 1] += 1;
+
+            // Continue the overflow check at the next position.
+            i += 1;
+        }
+
+        // Remove duplicates occurring after overflows.
+        // Cases such as `[0, 2, 0]` do not represent an actual t-wise interaction.
+        // Increment them to the next t-wise interaction such as `[3, 2, 0]`.
+        (0..self.t - 1).rev().for_each(|i| {
+            let following = self.next[i + 1];
+            if self.next[i] < following {
+                self.next[i] = following + 1;
+            }
+        });
+
+        // We are done if the first index would be out of range for the next iteration.
+        if self.next[0] == self.n {
+            self.finished = true;
+        }
+
+        result
     }
 
-    fn get(&self) -> Option<&Self::Item> {
-        if self.tuple[self.t] == 0 {
-            Some(&self.tuple[..self.t]) // return a slice of length t
-        } else {
-            None
-        }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = binomial(BigInt::from(self.n), BigInt::from(self.t))
+            .to_usize()
+            .expect("There are too many t-wise iterations");
+
+        (size, Some(size))
     }
 }
 
 impl TIndicesIter {
-    pub fn new(number_of_vars: usize, t: usize) -> Self {
-        let tuple = (0..t).rev().chain(iter::once(0)).collect();
+    /// Creates a new iterator for `t`-wise interactions over `n` elements.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `n < t`.
+    pub fn new(n: usize, t: usize) -> Self {
+        assert!(n >= t);
+
         Self {
-            number_of_vars,
+            n,
             t,
-            first: true,
-            tuple,
+            next: (0..t).rev().collect(),
+            // For `t == 0`, there is nothing to do.
+            finished: t == 0,
         }
     }
 }
@@ -66,42 +94,45 @@ impl TIndicesIter {
 /// This is a [StreamingIterator] to produce t-wise interactions over a slice of literals.
 /// This implementation only ever allocates a single [Vec] to hold the current interaction. It is
 /// therefore much more performant than variants that implement the [Iterator] trait.
-pub(super) struct TInteractionIter<'a> {
+pub struct TInteractionIter<'a> {
     indices_iter: TIndicesIter,
     literals: &'a [i32],
-    interaction: Vec<i32>,
 }
 
-impl StreamingIterator for TInteractionIter<'_> {
-    type Item = [i32];
+impl<'a> Iterator for TInteractionIter<'a> {
+    type Item = Vec<i32>;
 
-    fn advance(&mut self) {
-        self.indices_iter.advance();
-
-        if let Some(indices) = self.indices_iter.get() {
-            for (value, index) in self.interaction.iter_mut().zip(indices) {
-                *value = self.literals[*index];
-            }
-        }
+    fn next(&mut self) -> Option<Self::Item> {
+        self.indices_iter.next().map(|indices| {
+            indices
+                .into_iter()
+                .map(|index| self.literals[index])
+                .collect()
+        })
     }
 
-    fn get(&self) -> Option<&Self::Item> {
-        if self.indices_iter.get().is_some() {
-            Some(&self.interaction)
-        } else {
-            None
-        }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.indices_iter.size_hint()
     }
 }
 
 impl<'a> TInteractionIter<'a> {
-    pub(super) fn new(literals: &'a [i32], t: usize) -> Self {
-        debug_assert!(literals.len() >= t);
+    /// Creates a new iterator over t-wise interactions of the given literals.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number if literals is not at least `t`.
+    pub fn new(literals: &'a [i32], t: usize) -> Self {
+        assert!(
+            literals.len() >= t,
+            "For t-wise iteration, there must be at least t literals."
+        );
+
         debug_assert!(!literals.contains(&0));
+
         Self {
             indices_iter: TIndicesIter::new(literals.len(), t),
             literals,
-            interaction: vec![0; t],
         }
     }
 }
@@ -114,16 +145,16 @@ mod test {
     fn test_t_indices_iter() {
         let mut iter = TIndicesIter::new(5, 3);
 
-        assert_eq!(Some([2, 1, 0].as_slice()), iter.next());
-        assert_eq!(Some([3, 1, 0].as_slice()), iter.next());
-        assert_eq!(Some([4, 1, 0].as_slice()), iter.next());
-        assert_eq!(Some([3, 2, 0].as_slice()), iter.next());
-        assert_eq!(Some([4, 2, 0].as_slice()), iter.next());
-        assert_eq!(Some([4, 3, 0].as_slice()), iter.next());
-        assert_eq!(Some([3, 2, 1].as_slice()), iter.next());
-        assert_eq!(Some([4, 2, 1].as_slice()), iter.next());
-        assert_eq!(Some([4, 3, 1].as_slice()), iter.next());
-        assert_eq!(Some([4, 3, 2].as_slice()), iter.next());
+        assert_eq!(Some(vec![2, 1, 0]), iter.next());
+        assert_eq!(Some(vec![3, 1, 0]), iter.next());
+        assert_eq!(Some(vec![4, 1, 0]), iter.next());
+        assert_eq!(Some(vec![3, 2, 0]), iter.next());
+        assert_eq!(Some(vec![4, 2, 0]), iter.next());
+        assert_eq!(Some(vec![4, 3, 0]), iter.next());
+        assert_eq!(Some(vec![3, 2, 1]), iter.next());
+        assert_eq!(Some(vec![4, 2, 1]), iter.next());
+        assert_eq!(Some(vec![4, 3, 1]), iter.next());
+        assert_eq!(Some(vec![4, 3, 2]), iter.next());
         assert_eq!(None, iter.next());
     }
 }

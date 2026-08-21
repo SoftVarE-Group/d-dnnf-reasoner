@@ -10,7 +10,6 @@ use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
-use streaming_iterator::StreamingIterator;
 
 pub struct TWiseSampler<'a, 'l, A: AndMerger, O: OrMerger> {
     /// The d-DNNF to sample.
@@ -274,7 +273,7 @@ pub fn trim_and_resample(
     while let Some(interaction) = iter.next() {
         cover_with_caching(
             &mut new_sample,
-            interaction,
+            &interaction,
             sat_solver,
             node_id,
             number_of_variables,
@@ -312,7 +311,7 @@ fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
     let mut iter =
         TInteractionIter::new(sample.get_literals(), min(sample.get_literals().len(), t));
     while let Some(interaction) = iter.next() {
-        if let Some(conf_index) = find_unique_covering_conf(sample, interaction) {
+        if let Some(conf_index) = find_unique_covering_conf(sample, &interaction) {
             unique_coverage[conf_index] += 1;
         }
     }

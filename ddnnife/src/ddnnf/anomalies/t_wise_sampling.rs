@@ -23,7 +23,6 @@ use sample_merger::zipping_merger::ZippingMerger;
 pub use sampling_result::SamplingResult;
 use sat_wrapper::SatWrapper;
 use std::cmp::min;
-use streaming_iterator::StreamingIterator;
 use t_iterator::TInteractionIter;
 use t_wise_sampler::TWiseSampler;
 use t_wise_sampler::{complete_partial_configs_optimal, trim_and_resample};
@@ -157,7 +156,6 @@ mod test {
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::path::Path;
-    use streaming_iterator::StreamingIterator;
 
     fn check_validity_of_sample(sample: &Sample, ddnnf: &Ddnnf, t: usize) {
         let sample_literals: HashSet<i32> = sample.get_literals().iter().copied().collect();
@@ -190,7 +188,7 @@ mod test {
             .filter(|interaction| ddnnf.sat_immutable(interaction))
             .for_each(|interaction| {
                 assert!(
-                    sample.covers(interaction),
+                    sample.covers(&interaction),
                     "Valid interaction {:?} is not covered.",
                     interaction
                 )

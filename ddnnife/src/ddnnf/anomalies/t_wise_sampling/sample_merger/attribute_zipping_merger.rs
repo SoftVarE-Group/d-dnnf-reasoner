@@ -7,7 +7,6 @@ use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::ddnnf::extended_ddnnf::objective_function::FloatOrd;
 use itertools::Itertools;
 use std::cmp::min;
-use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Clone)]
 pub struct AttributeZippingMerger<'a> {

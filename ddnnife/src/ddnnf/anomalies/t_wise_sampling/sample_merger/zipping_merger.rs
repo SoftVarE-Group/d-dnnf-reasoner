@@ -11,7 +11,6 @@ use crate::rand::rng;
 use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::collections::HashSet;
-use streaming_iterator::StreamingIterator;
 
 #[derive(Debug, Clone)]
 pub struct ZippingMerger<'a, 'l> {
