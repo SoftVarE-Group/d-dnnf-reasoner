@@ -3,7 +3,6 @@ use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
-use crate::ddnnf::anomalies::t_wise_sampling::Config;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::int_hash::{self, IntMap, IntSet};
 use crate::rand::rng;
@@ -11,7 +10,6 @@ use crate::{Ddnnf, DdnnfKind};
 use itertools::Itertools;
 use rand::prelude::SliceRandom;
 use std::cmp::min;
-use std::collections::HashSet;
 use streaming_iterator::StreamingIterator;
 
 pub struct TWiseSampler<'a, 'l, 'p, A: AndMerger, O: OrMerger> {
@@ -24,6 +22,10 @@ pub struct TWiseSampler<'a, 'l, 'p, A: AndMerger, O: OrMerger> {
     /// Can be used to restrict the covering to a given set of literals or variables.
     /// If unset, all literals are covered.
     literals: Option<&'l IntSet<i32>>,
+    /// A preset sample to use for simplifying the sampling process.
+    ///
+    /// Will become part of the computed sample.
+    /// Interactions covered in this sample will not be covered again.
     preset: &'p Sample,
     /// The merger for and nodes.
     and_merger: A,
@@ -33,6 +35,14 @@ pub struct TWiseSampler<'a, 'l, 'p, A: AndMerger, O: OrMerger> {
 
 impl<'a, 'l, 'p, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, 'p, A, O> {
     /// Constructs a new sampler.
+    ///
+    /// # Note
+    ///
+    /// When using a preset, make sure to mark it as such using [Sample::mark_preset].
+    /// Otherwise, the preset is not tracked during sampling and preset configurations
+    /// will be placed anywhere in the final sample.
+    /// With marked configurations, the preset will be at the front of the final sample.
+    /// Their **ordering** within the preset will be changed and partial configurations will be **completed**.
     pub fn new(
         ddnnf: &'a Ddnnf,
         and_merger: A,
@@ -50,6 +60,7 @@ impl<'a, 'l, 'p, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, 'p, A, O> {
         }
     }
 
+    /// Creates a `t`-wise sample.
     pub fn sample(&mut self, t: usize) -> SamplingResult {
         match self.ddnnf.kind {
             DdnnfKind::Tautology => return SamplingResult::Empty,
@@ -89,6 +100,8 @@ impl<'a, 'l, 'p, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, 'p, A, O> {
                 &sat_solver,
                 self.ddnnf.number_of_variables as i32,
             );
+
+            sample.sort_preset();
 
             return sample.into();
         }
@@ -218,6 +231,8 @@ impl Sample {
 
         self.partial_configs.shrink_to_fit();
 
+        assert!(self.partial_configs.is_empty());
+
         debug_assert!(
             self.iter()
                 .all(|config| !config.get_literals().contains(&0))
@@ -242,6 +257,8 @@ impl Sample {
         }
     }
 
+    /// Merges the preset into the computed sample, trims configuration based on their scoring
+    /// and resamples the sample accordingly.
     pub fn trim_and_resample(
         &mut self,
         node_id: usize,
@@ -259,7 +276,6 @@ impl Sample {
         }
 
         self.extend(preset.clone());
-
         let t = min(self.get_vars().len(), t);
 
         // Trim the sample and collect the literals to resample.
@@ -300,7 +316,7 @@ impl Sample {
     }
 }
 
-/// Removes those configs from the given sample that rank score the average.
+/// Removes those configs from the given sample that score below the average.
 /// Does not trim configs that are part of the preset.
 ///
 /// Returns the remaining sample as well as the literals to resample.
@@ -311,10 +327,9 @@ fn trim_sample(sample: &Sample, t: usize, preset: &Sample) -> (Sample, IntSet<i3
 
     let (scores, average) = sample.scores(t, preset);
 
-    let preset: HashSet<Config> = preset.iter().cloned().collect();
     for (index, config) in sample.iter().enumerate() {
-        // Trim those configs that score below the average and are not part of the preset.
-        if scores[index] < average && !preset.contains(config) {
+        // Trim those configs that are not preset and score below the average.
+        if !config.preset && scores[index] < average {
             literals_to_resample.extend(config.get_decided_literals());
         } else if index < complete_len {
             new_sample.add_complete(config.clone());
@@ -329,13 +344,13 @@ fn trim_sample(sample: &Sample, t: usize, preset: &Sample) -> (Sample, IntSet<i3
 impl Sample {
     /// Calculates the scores of all configurations to be used for trimming and resampling.
     ///
-    /// Currently calculates two scores: Unique interaction coverage and preset interaction coverage.
+    /// Currently calculates one score: Unique interaction coverage.
     fn scores(&self, t: usize, _preset: &Sample) -> (Vec<f64>, f64) {
-        // With an empty preset, do not calculate the preset score.
         let scores: Vec<f64> = self.unique_coverage_scores(t).collect();
 
         // Calculate the average score over all configurations.
         let average = scores.iter().sum::<f64>() / scores.len() as f64;
+
         (scores, average)
     }
 

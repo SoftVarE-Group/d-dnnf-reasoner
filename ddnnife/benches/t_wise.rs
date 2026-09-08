@@ -21,7 +21,7 @@ fn benchmark(c: &mut Criterion) {
     for (path, name, t) in BENCHMARKS {
         let ddnnf = Ddnnf::from_file(&data_dir.join(path), None);
         group.bench_with_input(BenchmarkId::new(name, t), &t, |bencher, t| {
-            bencher.iter(|| ddnnf.sample_t_wise(*t, &Sample::default(), None))
+            bencher.iter(|| ddnnf.sample_t_wise(*t, Sample::default(), None))
         });
     }
 

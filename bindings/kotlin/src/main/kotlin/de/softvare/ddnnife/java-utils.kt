@@ -49,6 +49,17 @@ fun atomicSets(
   return ddnnf.atomicSets(candidatesUInt, assumptions, cross)
 }
 
+/**
+ * Generates samples so that all t-wise interactions between literals are covered.
+ *
+ * @param ddnnf The d-DNNF to create the sample for.
+ * @param t: Interaction size to cover.
+ * @param preset: A preset sample. If set, the preset configurations will be place at the front of
+ *   the final sample. Their ordering within the preset will be changed and partial configurations
+ *   will be completed.
+ * @param literals: Restricts the covering to the given set of literals. By default, all literals
+ *   are covered.
+ */
 fun sampleTWise(ddnnf: Ddnnf, t: Int, preset: List<Config>, literals: List<Int>?): SamplingResult {
   require(t >= 0) { "t must be positive." }
   return ddnnf.sampleTWise(t.toULong(), preset, literals)

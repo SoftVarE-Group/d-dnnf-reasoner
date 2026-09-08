@@ -132,7 +132,8 @@ enum Operation {
         t: usize,
         /// Path to a file containing preset configurations to use for covering.
         ///
-        /// If set, the configurations will be included as-is within the final sample.
+        /// If set, the preset configurations will be place at the front of the final sample.
+        /// Their ordering within the preset will be changed and partial configurations will be completed.
         #[clap(short, long)]
         preset: Option<PathBuf>,
         /// Restricts the covering to the given set of literals.
@@ -360,7 +361,7 @@ fn main() -> io::Result<()> {
 
             writer.write_all(
                 ddnnf
-                    .sample_t_wise(t, &preset, literals.or(variables).as_ref())
+                    .sample_t_wise(t, preset, literals.or(variables).as_ref())
                     .to_string()
                     .as_bytes(),
             )?;
