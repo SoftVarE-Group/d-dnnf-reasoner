@@ -5,6 +5,9 @@ use ddnnife::int_hash::IntSet;
 #[uniffi::export]
 impl Ddnnf {
     /// Generates samples so that all t-wise interactions between literals are covered.
+    ///
+    /// If set, the preset configurations will be place at the front of the final sample.
+    /// Their ordering within the preset will be changed and partial configurations will be completed.
     #[uniffi::method]
     pub fn sample_t_wise(
         &self,
@@ -21,7 +24,7 @@ impl Ddnnf {
 
         let preset = t_wise_sampling::Sample::new_from_configs(configs);
 
-        self.0.sample_t_wise(t, &preset, literals.as_ref()).into()
+        self.0.sample_t_wise(t, preset, literals.as_ref()).into()
     }
 }
 
