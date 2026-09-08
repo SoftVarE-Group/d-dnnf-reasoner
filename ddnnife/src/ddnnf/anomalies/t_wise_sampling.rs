@@ -32,9 +32,13 @@ impl Ddnnf {
     pub fn sample_t_wise(
         &self,
         t: usize,
-        preset: &Sample,
+        preset: Sample,
         literals: Option<&IntSet<i32>>,
     ) -> SamplingResult {
+        // Mark the preset configurations.
+        let mut preset = preset;
+        preset.mark_preset();
+
         // Setup everything needed for the sampling process.
         let sat_solver = SatWrapper::new(self);
 
@@ -43,16 +47,16 @@ impl Ddnnf {
             sat_solver: &sat_solver,
             ddnnf: self,
             literals,
-            preset,
+            preset: &preset,
         };
 
         let or_merger = SimilarityMerger {
             t,
             literals,
-            preset,
+            preset: &preset,
         };
 
-        TWiseSampler::new(self, and_merger, or_merger, literals, preset).sample(t)
+        TWiseSampler::new(self, and_merger, or_merger, literals, &preset).sample(t)
     }
 }
 
@@ -217,7 +221,7 @@ mod test {
 
         for t in 1..=4 {
             check_validity_of_sample(
-                vp9.sample_t_wise(t, &Sample::default(), None)
+                vp9.sample_t_wise(t, Sample::default(), None)
                     .get_sample()
                     .unwrap(),
                 &vp9,
@@ -233,7 +237,7 @@ mod test {
 
         check_validity_of_sample(
             auto1
-                .sample_t_wise(t, &Sample::default(), None)
+                .sample_t_wise(t, Sample::default(), None)
                 .get_sample()
                 .unwrap(),
             &auto1,

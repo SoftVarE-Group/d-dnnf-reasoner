@@ -12,6 +12,8 @@ pub struct Config {
     sat_state_complete: bool,
     /// The number of decided literals
     pub n_decided_literals: usize,
+    /// Marker for whether this configuration is part of a preset.
+    pub preset: bool,
 }
 
 impl Hash for Config {
@@ -69,9 +71,7 @@ impl Config {
     pub fn from(literals: &[i32], number_of_variables: usize) -> Self {
         let mut config = Self {
             literals: vec![0; number_of_variables],
-            sat_state: None,
-            sat_state_complete: false,
-            n_decided_literals: 0,
+            ..Default::default()
         };
         config.extend(literals.iter().copied());
         config
@@ -114,8 +114,7 @@ impl Config {
         let mut config = Self {
             literals: vec![0; number_of_variables],
             sat_state,
-            sat_state_complete: false, // always false because we can not combine the states
-            n_decided_literals: 0,
+            ..Default::default()
         };
         config.extend(left.get_decided_literals());
         config.extend(right.get_decided_literals());
