@@ -3,6 +3,7 @@ use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
+use crate::ddnnf::anomalies::t_wise_sampling::coverage_map::CoverageMap;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::int_hash::{self, IntMap, IntSet};
 use crate::rand::rng;
@@ -346,7 +347,10 @@ impl Sample {
     ///
     /// Currently calculates one score: Unique interaction coverage.
     fn scores(&self, t: usize, _preset: &Sample) -> (Vec<f64>, f64) {
-        let scores: Vec<f64> = self.unique_coverage_scores(t).collect();
+        // Compute the literal coverages once for the scores to re-use them.
+        let coverages = CoverageMap::new(self);
+
+        let scores: Vec<f64> = self.unique_coverage_scores(t, &coverages).collect();
 
         // Calculate the average score over all configurations.
         let average = scores.iter().sum::<f64>() / scores.len() as f64;
@@ -358,14 +362,18 @@ impl Sample {
     ///
     /// The unique coverage score is higher for those configs that cover many unique interactions,
     /// relative to their size.
-    fn unique_coverage_scores(&self, t: usize) -> impl Iterator<Item = f64> {
+    fn unique_coverage_scores(
+        &self,
+        t: usize,
+        coverages: &CoverageMap,
+    ) -> impl Iterator<Item = f64> {
         // Calculate how many unique interactions each configuration covers.
         let mut unique_coverage = vec![0; self.len()];
 
         // For each interaction ...
         TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t))
             // ... check whether there is a config uniquely covering this interaction ...
-            .filter_map(|interaction| self.find_unique_covering_conf(interaction))
+            .filter_map(|interaction| coverages.find_unqiuely_covering(interaction))
             // ... and in case there is, mark the corresponding config as such.
             .for_each(|config| unique_coverage[*config] += 1);
 
@@ -373,24 +381,5 @@ impl Sample {
         self.iter().enumerate().map(move |(index, config)| {
             unique_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
         })
-    }
-
-    /// Finds the index of the configuration that uniquely covers the given interaction, if such a configuration exists.
-    ///
-    /// Returns `None` if no or more than one configurations cover the given interaction.
-    fn find_unique_covering_conf(&self, interaction: &[i32]) -> Option<usize> {
-        let mut result = None;
-
-        for (index, config) in self.iter().enumerate() {
-            if config.covers(interaction) {
-                if result.is_none() {
-                    result = Some(index);
-                } else {
-                    return None;
-                }
-            }
-        }
-
-        result
     }
 }
