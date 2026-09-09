@@ -1,4 +1,5 @@
 mod config;
+mod coverage_map;
 mod covering_strategies;
 mod sample;
 mod sample_merger;
