@@ -6,7 +6,7 @@ use crate::int_hash::IntSet;
 use log::debug;
 use std::cmp::{Ordering, min};
 use std::fmt::{Display, Formatter};
-use std::iter;
+use std::iter::{self, Chain};
 use std::num::ParseIntError;
 use streaming_iterator::StreamingIterator;
 
@@ -36,6 +36,17 @@ impl PartialOrd<Self> for Sample {
 impl Ord for Sample {
     fn cmp(&self, other: &Self) -> Ordering {
         self.len().cmp(&other.len())
+    }
+}
+
+impl IntoIterator for Sample {
+    type Item = Config;
+    type IntoIter = Chain<std::vec::IntoIter<Config>, std::vec::IntoIter<Config>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.complete_configs
+            .into_iter()
+            .chain(self.partial_configs)
     }
 }
 
@@ -353,6 +364,32 @@ impl Sample {
 
         // Check the generated literals.
         self.covered_literals(ddnnf, &literals, t)
+    }
+
+    /// Marks all configurations of this sample as being part of a preset.
+    ///
+    /// Useful for sorting them later based on this information.
+    /// See [Sample::sort_preset].
+    pub fn mark_preset(&mut self) {
+        self.complete_configs.iter_mut().for_each(|config| {
+            config.preset = true;
+        });
+
+        self.partial_configs.iter_mut().for_each(|config| {
+            config.preset = true;
+        });
+    }
+
+    /// Sorts the configurations of this preset based on whether or not they are part of a preset.
+    ///
+    /// Configurations from a preset come first, the computed configurations afterwards.
+    /// Sorts both complete and partial configs.
+    pub fn sort_preset(&mut self) {
+        self.complete_configs
+            .sort_unstable_by_key(|config| !config.preset);
+
+        self.partial_configs
+            .sort_unstable_by_key(|config| !config.preset);
     }
 }
 

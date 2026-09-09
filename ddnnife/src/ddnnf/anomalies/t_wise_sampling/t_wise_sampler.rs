@@ -3,6 +3,7 @@ use super::sample_merger::{AndMerger, OrMerger, SampleMerger};
 use super::t_iterator::TInteractionIter;
 use super::{Sample, SamplingResult, SatWrapper};
 use crate::NodeType;
+use crate::ddnnf::anomalies::t_wise_sampling::coverage_map::CoverageMap;
 use crate::ddnnf::extended_ddnnf::ExtendedDdnnf;
 use crate::int_hash::{self, IntMap, IntSet};
 use crate::rand::rng;
@@ -12,7 +13,7 @@ use rand::prelude::SliceRandom;
 use std::cmp::min;
 use streaming_iterator::StreamingIterator;
 
-pub struct TWiseSampler<'a, 'l, A: AndMerger, O: OrMerger> {
+pub struct TWiseSampler<'a, 'l, 'p, A: AndMerger, O: OrMerger> {
     /// The d-DNNF to sample.
     pub(crate) ddnnf: &'a Ddnnf,
     /// Map that holds the [SamplingResult]s for the nodes.
@@ -22,19 +23,33 @@ pub struct TWiseSampler<'a, 'l, A: AndMerger, O: OrMerger> {
     /// Can be used to restrict the covering to a given set of literals or variables.
     /// If unset, all literals are covered.
     literals: Option<&'l IntSet<i32>>,
+    /// A preset sample to use for simplifying the sampling process.
+    ///
+    /// Will become part of the computed sample.
+    /// Interactions covered in this sample will not be covered again.
+    preset: &'p Sample,
     /// The merger for and nodes.
     and_merger: A,
     /// The merger for or nodes.
     or_merger: O,
 }
 
-impl<'a, 'l, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, A, O> {
+impl<'a, 'l, 'p, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, 'p, A, O> {
     /// Constructs a new sampler.
+    ///
+    /// # Note
+    ///
+    /// When using a preset, make sure to mark it as such using [Sample::mark_preset].
+    /// Otherwise, the preset is not tracked during sampling and preset configurations
+    /// will be placed anywhere in the final sample.
+    /// With marked configurations, the preset will be at the front of the final sample.
+    /// Their **ordering** within the preset will be changed and partial configurations will be **completed**.
     pub fn new(
         ddnnf: &'a Ddnnf,
         and_merger: A,
         or_merger: O,
         literals: Option<&'l IntSet<i32>>,
+        preset: &'p Sample,
     ) -> Self {
         Self {
             ddnnf,
@@ -42,9 +57,11 @@ impl<'a, 'l, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, A, O> {
             literals,
             and_merger,
             or_merger,
+            preset,
         }
     }
 
+    /// Creates a `t`-wise sample.
     pub fn sample(&mut self, t: usize) -> SamplingResult {
         match self.ddnnf.kind {
             DdnnfKind::Tautology => return SamplingResult::Empty,
@@ -70,21 +87,23 @@ impl<'a, 'l, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, A, O> {
 
         // Trim and resample as the finishing step (if there is anything to do).
         if let SamplingResult::ResultWithSample(mut sample) = result {
-            sample = trim_and_resample(
+            sample.trim_and_resample(
                 root_id,
-                sample,
                 t,
                 self.ddnnf.number_of_variables as usize,
                 &sat_solver,
                 self.literals,
+                self.preset,
             );
 
-            complete_partial_configs(
-                &mut sample,
+            sample.complete_partial_configs(
                 root_id,
                 &sat_solver,
                 self.ddnnf.number_of_variables as i32,
             );
+
+            sample.sort_preset();
+
             return sample.into();
         }
 
@@ -177,125 +196,141 @@ impl<'a, 'l, A: AndMerger, O: OrMerger> TWiseSampler<'a, 'l, A, O> {
     }
 }
 
-fn complete_partial_configs(
-    sample: &mut Sample,
-    root: usize,
-    sat_solver: &SatWrapper,
-    number_of_variables: i32,
-) {
-    sample
-        .complete_configs
-        .reserve(sample.partial_configs.len());
+impl Sample {
+    fn complete_partial_configs(
+        &mut self,
+        root: usize,
+        sat_solver: &SatWrapper,
+        number_of_variables: i32,
+    ) {
+        self.complete_configs.reserve(self.partial_configs.len());
 
-    let vars: Vec<i32> = (1..=number_of_variables).collect();
-    for mut config in sample.partial_configs.drain(..sample.partial_configs.len()) {
-        for &var in vars.iter() {
-            if config.contains(var) || config.contains(-var) {
-                continue;
+        let vars: Vec<i32> = (1..=number_of_variables).collect();
+        for mut config in self.partial_configs.drain(..self.partial_configs.len()) {
+            for &var in vars.iter() {
+                if config.contains(var) || config.contains(-var) {
+                    continue;
+                }
+
+                config.update_sat_state(sat_solver, root);
+
+                // clone sat state so that we don't change the state that is cached in the config
+                let mut sat_state = config
+                    .get_sat_state()
+                    .cloned()
+                    .expect("sat state should exist after calling update_sat_state()");
+
+                if sat_solver.is_sat_cached(&[var], &mut sat_state) {
+                    config.add(var);
+                } else {
+                    config.add(-var);
+                }
             }
 
-            config.update_sat_state(sat_solver, root);
-
-            // clone sat state so that we don't change the state that is cached in the config
-            let mut sat_state = config
-                .get_sat_state()
-                .cloned()
-                .expect("sat state should exist after calling update_sat_state()");
-
-            if sat_solver.is_sat_cached(&[var], &mut sat_state) {
-                config.add(var);
-            } else {
-                config.add(-var);
-            }
+            self.complete_configs.push(config);
         }
 
-        sample.complete_configs.push(config);
-    }
+        self.partial_configs.shrink_to_fit();
 
-    sample.partial_configs.shrink_to_fit();
-
-    debug_assert!(
-        sample
-            .iter()
-            .all(|config| !config.get_literals().contains(&0))
-    );
-}
-
-pub fn complete_partial_configs_optimal(sample: &mut Sample, ext_ddnnf: &ExtendedDdnnf) {
-    while let Some(config) = sample.partial_configs.pop() {
-        let literals = config.get_decided_literals().collect_vec();
-        let completed_config = ext_ddnnf
-            .calc_best_config(&literals[..])
-            .expect("Config should be exist");
+        assert!(self.partial_configs.is_empty());
 
         debug_assert!(
-            completed_config.config.get_n_decided_literals() == sample.vars.len(),
-            "{:?} != {:?}",
-            completed_config.config.get_n_decided_literals(),
-            sample.vars.len()
-        );
-
-        sample.add(completed_config.config);
-    }
-}
-
-#[inline]
-pub fn trim_and_resample(
-    node_id: usize,
-    sample: Sample,
-    t: usize,
-    number_of_variables: usize,
-    sat_solver: &SatWrapper,
-    literals: Option<&IntSet<i32>>,
-) -> Sample {
-    if sample.is_empty() {
-        return sample;
-    }
-
-    let t = min(sample.get_vars().len(), t);
-    let (ranks, avg_rank) = calc_stats(&sample, t);
-
-    let (mut new_sample, literals_to_resample) = trim_sample(&sample, &ranks, avg_rank);
-
-    let mut literals_to_resample: Vec<i32> = literals_to_resample
-        .into_iter()
-        .filter(|literal| {
-            if let Some(literals) = literals {
-                return literals.contains(literal);
-            }
-
-            true
-        })
-        .collect();
-    literals_to_resample.sort_unstable();
-    literals_to_resample.shuffle(&mut rng());
-
-    let mut iter = TInteractionIter::new(&literals_to_resample, min(t, literals_to_resample.len()));
-    while let Some(interaction) = iter.next() {
-        cover_with_caching(
-            &mut new_sample,
-            interaction,
-            sat_solver,
-            node_id,
-            number_of_variables,
+            self.iter()
+                .all(|config| !config.get_literals().contains(&0))
         );
     }
 
-    if new_sample.len() < sample.len() {
-        new_sample
-    } else {
-        sample
+    pub fn complete_partial_configs_optimal(&mut self, ext_ddnnf: &ExtendedDdnnf) {
+        while let Some(config) = self.partial_configs.pop() {
+            let literals = config.get_decided_literals().collect_vec();
+            let completed_config = ext_ddnnf
+                .calc_best_config(&literals[..])
+                .expect("Config should be exist");
+
+            debug_assert!(
+                completed_config.config.get_n_decided_literals() == self.vars.len(),
+                "{:?} != {:?}",
+                completed_config.config.get_n_decided_literals(),
+                self.vars.len()
+            );
+
+            self.add(completed_config.config);
+        }
+    }
+
+    /// Merges the preset into the computed sample, trims configuration based on their scoring
+    /// and resamples the sample accordingly.
+    pub fn trim_and_resample(
+        &mut self,
+        node_id: usize,
+        t: usize,
+        number_of_variables: usize,
+        sat_solver: &SatWrapper,
+        literals: Option<&IntSet<i32>>,
+        preset: &Sample,
+    ) {
+        // Ensure that the preset is always part of the final sample,
+        // even if it is empty.
+        if self.is_empty() {
+            *self = preset.clone();
+            return;
+        }
+
+        self.extend(preset.clone());
+        let t = min(self.get_vars().len(), t);
+
+        // Trim the sample and collect the literals to resample.
+        let (mut new_sample, literals_to_resample) = trim_sample(self, t, preset);
+
+        // Convert the set of literals to resample into a vector.
+        // In case a restriction on the literals to cover is given, apply it during this conversion.
+        let mut literals_to_resample: Vec<i32> = if let Some(literals) = literals {
+            literals_to_resample
+                .into_iter()
+                .filter(|literal| literals.contains(literal))
+                .collect()
+        } else {
+            literals_to_resample.into_iter().collect()
+        };
+
+        // Sort and then shuffle to allow for deterministic processing if enabled.
+        literals_to_resample.sort_unstable();
+        literals_to_resample.shuffle(&mut rng());
+
+        let mut iter =
+            TInteractionIter::new(&literals_to_resample, min(t, literals_to_resample.len()));
+
+        while let Some(interaction) = iter.next() {
+            cover_with_caching(
+                &mut new_sample,
+                interaction,
+                sat_solver,
+                node_id,
+                number_of_variables,
+            );
+        }
+
+        // Choose the smaller sample of the resampled or the original one.
+        if new_sample.len() <= self.len() {
+            *self = new_sample;
+        }
     }
 }
 
-#[inline]
-fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, IntSet<i32>) {
+/// Removes those configs from the given sample that score below the average.
+/// Does not trim configs that are part of the preset.
+///
+/// Returns the remaining sample as well as the literals to resample.
+fn trim_sample(sample: &Sample, t: usize, preset: &Sample) -> (Sample, IntSet<i32>) {
     let mut literals_to_resample: IntSet<i32> = IntSet::default();
     let mut new_sample = Sample::new_from_samples(&[sample]);
     let complete_len = sample.complete_configs.len();
 
+    let (scores, average) = sample.scores(t, preset);
+
     for (index, config) in sample.iter().enumerate() {
-        if ranks[index] < avg_rank {
+        // Trim those configs that are not preset and score below the average.
+        if !config.preset && scores[index] < average {
             literals_to_resample.extend(config.get_decided_literals());
         } else if index < complete_len {
             new_sample.add_complete(config.clone());
@@ -303,46 +338,48 @@ fn trim_sample(sample: &Sample, ranks: &[f64], avg_rank: f64) -> (Sample, IntSet
             new_sample.add_partial(config.clone());
         }
     }
+
     (new_sample, literals_to_resample)
 }
 
-#[inline]
-fn calc_stats(sample: &Sample, t: usize) -> (Vec<f64>, f64) {
-    let mut unique_coverage = vec![0; sample.len()];
-    let mut iter =
-        TInteractionIter::new(sample.get_literals(), min(sample.get_literals().len(), t));
-    while let Some(interaction) = iter.next() {
-        if let Some(conf_index) = find_unique_covering_conf(sample, interaction) {
-            unique_coverage[conf_index] += 1;
-        }
+impl Sample {
+    /// Calculates the scores of all configurations to be used for trimming and resampling.
+    ///
+    /// Currently calculates one score: Unique interaction coverage.
+    fn scores(&self, t: usize, _preset: &Sample) -> (Vec<f64>, f64) {
+        // Compute the literal coverages once for the scores to re-use them.
+        let coverages = CoverageMap::new(self);
+
+        let scores: Vec<f64> = self.unique_coverage_scores(t, &coverages).collect();
+
+        // Calculate the average score over all configurations.
+        let average = scores.iter().sum::<f64>() / scores.len() as f64;
+
+        (scores, average)
     }
 
-    let mut ranks = vec![0.0; sample.len()];
-    let mut sum: f64 = 0.0;
+    /// Calculates the unique coverage score of each configuration.
+    ///
+    /// The unique coverage score is higher for those configs that cover many unique interactions,
+    /// relative to their size.
+    fn unique_coverage_scores(
+        &self,
+        t: usize,
+        coverages: &CoverageMap,
+    ) -> impl Iterator<Item = f64> {
+        // Calculate how many unique interactions each configuration covers.
+        let mut unique_coverage = vec![0; self.len()];
 
-    for (index, config) in sample.iter().enumerate() {
-        let config_size = config.n_decided_literals;
-        ranks[index] = unique_coverage[index] as f64 / config_size.pow(t as u32) as f64;
-        sum += ranks[index];
+        // For each interaction ...
+        TInteractionIter::new(self.get_literals(), min(self.get_literals().len(), t))
+            // ... check whether there is a config uniquely covering this interaction ...
+            .filter_map(|interaction| coverages.find_unqiuely_covering(interaction))
+            // ... and in case there is, mark the corresponding config as such.
+            .for_each(|config| unique_coverage[*config] += 1);
+
+        // Calculate the rank of each configuration based on its unique coverage.
+        self.iter().enumerate().map(move |(index, config)| {
+            unique_coverage[index] as f64 / config.n_decided_literals.pow(t as u32) as f64
+        })
     }
-
-    let avg_rank = sum / sample.len() as f64;
-    (ranks, avg_rank)
-}
-
-#[inline]
-fn find_unique_covering_conf(sample: &Sample, interaction: &[i32]) -> Option<usize> {
-    let mut result = None;
-
-    for (index, config) in sample.iter().enumerate() {
-        if config.covers(interaction) {
-            if result.is_none() {
-                result = Some(index);
-            } else {
-                return None;
-            }
-        }
-    }
-
-    result
 }
