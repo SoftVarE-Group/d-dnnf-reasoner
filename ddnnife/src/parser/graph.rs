@@ -1,21 +1,21 @@
 use super::{calc_and_count, calc_or_count};
 use crate::c2d_lexer::TId;
+use crate::int_hash::IntMap;
 use crate::{DdnnfKind, Node, NodeType};
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::DfsPostOrder;
 use petgraph::stable_graph::{NodeIndex, StableGraph};
-use std::collections::HashMap;
 
 pub type DdnnfGraph = StableGraph<TId, ()>;
 
 pub fn rebuild_graph(
     graph: DdnnfGraph,
     root: NodeIndex,
-) -> (DdnnfKind, Vec<Node>, HashMap<i32, usize>) {
+) -> (DdnnfKind, Vec<Node>, IntMap<i32, usize>) {
     // Check for special cases where there is a boolean root node.
     match graph[root] {
-        TId::True => return (DdnnfKind::Tautology, Vec::new(), HashMap::new()),
-        TId::False => return (DdnnfKind::Contradiction, Vec::new(), HashMap::new()),
+        TId::True => return (DdnnfKind::Tautology, Vec::new(), IntMap::default()),
+        TId::False => return (DdnnfKind::Contradiction, Vec::new(), IntMap::default()),
         _ => {}
     }
 
@@ -26,10 +26,10 @@ pub fn rebuild_graph(
     // that child nodes are listed before their parents
     // transform that interim representation into a node vector
     let mut dfs = DfsPostOrder::new(&graph, root);
-    let mut nd_to_usize: HashMap<NodeIndex, usize> = HashMap::new();
+    let mut nd_to_usize: IntMap<NodeIndex, usize> = IntMap::default();
 
     let mut parsed_nodes: Vec<Node> = Vec::with_capacity(graph.node_count());
-    let mut literals: HashMap<i32, usize> = HashMap::new();
+    let mut literals: IntMap<i32, usize> = IntMap::default();
 
     while let Some(nx) = dfs.next(&graph) {
         nd_to_usize.insert(nx, parsed_nodes.len());
