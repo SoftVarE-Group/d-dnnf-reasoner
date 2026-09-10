@@ -62,8 +62,38 @@ impl BuildHasher for BuildIntHasher {
 
 #[cfg(test)]
 mod tests {
+    use petgraph::graph::NodeIndex;
+
     use super::{IntHasher, IntMap, IntSet};
     use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn can_hash_u32() {
+        let mut hasher = IntHasher::default();
+        let input: u32 = 42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_i32() {
+        let mut hasher = IntHasher::default();
+        let input: i32 = -42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_usize() {
+        let mut hasher = IntHasher::default();
+        let input: usize = 42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_node_index() {
+        let mut hasher = IntHasher::default();
+        let input: NodeIndex = NodeIndex::new(42);
+        input.hash(&mut hasher);
+    }
 
     #[test]
     fn deterministic_same() {
@@ -116,11 +146,13 @@ mod tests {
         a.insert(3);
         a.insert(1);
         a.insert(2);
+        a.insert(-42);
 
         let mut b = IntSet::default();
         b.insert(3);
         b.insert(1);
         b.insert(2);
+        b.insert(-42);
 
         let a_vec: Vec<i32> = a.into_iter().collect();
         let b_vec: Vec<i32> = b.into_iter().collect();
