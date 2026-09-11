@@ -5,7 +5,10 @@ pub mod graph;
 pub mod persisting;
 pub mod util;
 
-use crate::ddnnf::{Ddnnf, extended_ddnnf::Attribute, node::Node};
+use crate::{
+    ddnnf::{Ddnnf, extended_ddnnf::Attribute, node::Node},
+    int_hash::{IntMap, IntSet},
+};
 use c2d_lexer::{C2DToken, TId, lex_line_c2d};
 use core::panic;
 use csv::ReaderBuilder;
@@ -24,7 +27,7 @@ use std::cell::RefMut;
 use std::{
     cell::RefCell,
     cmp::max,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
@@ -119,7 +122,7 @@ pub fn distribute_building(lines: Vec<String>, total_features: Option<u32>) -> D
 fn build_c2d_ddnnf(lines: Vec<String>, variables: u32) -> Ddnnf {
     let mut ddnnf_graph = DdnnfGraph::new();
     let mut node_indices = Vec::with_capacity(lines.len());
-    let mut literals_nx: HashMap<i32, NodeIndex> = HashMap::new();
+    let mut literals_nx: IntMap<i32, NodeIndex> = IntMap::default();
 
     // opens the file with a BufReader and
     // works off each line of the file data seperatly
@@ -176,7 +179,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
 
     // With the help of the literals node state, we can add the required nodes
     // for the balancing of the or nodes to archieve smoothness
-    let literals_nx: Rc<RefCell<HashMap<i32, NodeIndex>>> = Rc::new(RefCell::new(HashMap::new()));
+    let literals_nx: Rc<RefCell<IntMap<i32, NodeIndex>>> = Rc::new(RefCell::new(IntMap::default()));
 
     // while parsing:
     // remove the weighted edges and substitute it with the corresponding
@@ -311,7 +314,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
     //                                         /  \  /
     //                                       -Lm   Lm
     //
-    let mut literal_diff: HashMap<NodeIndex, HashSet<i32>> = get_literal_diffs(&ddnnf_graph, root);
+    let mut literal_diff: IntMap<NodeIndex, IntSet<i32>> = get_literal_diffs(&ddnnf_graph, root);
     let mut dfs = DfsPostOrder::new(&ddnnf_graph, root);
 
     while let Some(nx) = dfs.next(&ddnnf_graph) {
@@ -323,7 +326,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
                 .map(|c| {
                     (
                         c,
-                        HashSet::from_iter(
+                        IntSet::from_iter(
                             literal_diff
                                 .get(&c)
                                 .unwrap()
@@ -353,7 +356,7 @@ fn build_d4_ddnnf(lines: Vec<String>, total_features_opt: Option<u32>) -> Ddnnf 
 fn get_literal_indices(
     ddnnf_graph: &mut StableGraph<TId, ()>,
     literals: Vec<i32>,
-    lit_nx: &mut RefMut<HashMap<i32, NodeIndex>>,
+    lit_nx: &mut RefMut<IntMap<i32, NodeIndex>>,
 ) -> Vec<NodeIndex> {
     let mut literal_nodes = Vec::new();
 
@@ -404,8 +407,8 @@ fn delete_chain(ddnnf_graph: &mut DdnnfGraph, start: NodeIndex, replacement: TId
 fn balance_or_children(
     ddnnf_graph: &mut DdnnfGraph,
     from: NodeIndex,
-    children: Vec<(NodeIndex, HashSet<u32>)>,
-    lit_nx: &mut RefMut<HashMap<i32, NodeIndex>>,
+    children: Vec<(NodeIndex, IntSet<u32>)>,
+    lit_nx: &mut RefMut<IntMap<i32, NodeIndex>>,
     total_features: u32,
 ) {
     for (child_nx, child_literals) in children {
@@ -426,7 +429,7 @@ fn add_literal_node(
     ddnnf_graph: &mut DdnnfGraph,
     f_u32: u32,
     attach: NodeIndex,
-    lit_nx: &mut RefMut<HashMap<i32, NodeIndex>>,
+    lit_nx: &mut RefMut<IntMap<i32, NodeIndex>>,
     total_features: u32,
 ) {
     let or_triangles: Rc<RefCell<Vec<Option<NodeIndex>>>> =
@@ -451,10 +454,10 @@ fn add_literal_node(
 }
 
 // Computes the difference between the children of a Node
-fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32>)> {
-    let mut res: Vec<(NodeIndex, HashSet<u32>)> = Vec::new();
+fn diff(literals: Vec<(NodeIndex, IntSet<u32>)>) -> Vec<(NodeIndex, IntSet<u32>)> {
+    let mut res: Vec<(NodeIndex, IntSet<u32>)> = Vec::new();
     for i in 0..literals.len() {
-        let mut val: HashSet<u32> = HashSet::default();
+        let mut val: IntSet<u32> = IntSet::default();
         for (j, i_res) in literals.iter().enumerate() {
             if i != j {
                 val.extend(i_res.1.clone());
@@ -469,11 +472,8 @@ fn diff(literals: Vec<(NodeIndex, HashSet<u32>)>) -> Vec<(NodeIndex, HashSet<u32
 }
 
 /// Computes the combined literals used in its children
-pub fn get_literal_diffs(
-    di_graph: &DdnnfGraph,
-    root: NodeIndex,
-) -> HashMap<NodeIndex, HashSet<i32>> {
-    let mut safe: HashMap<NodeIndex, HashSet<i32>> = HashMap::new();
+pub fn get_literal_diffs(di_graph: &DdnnfGraph, root: NodeIndex) -> IntMap<NodeIndex, IntSet<i32>> {
+    let mut safe: IntMap<NodeIndex, IntSet<i32>> = IntMap::default();
     let mut dfs = DfsPostOrder::new(di_graph, root);
     while let Some(nx) = dfs.next(di_graph) {
         get_literals(di_graph, &mut safe, nx);
@@ -484,7 +484,7 @@ pub fn get_literal_diffs(
 /// Computes the combined literals used in its children
 pub fn extend_literal_diffs(
     di_graph: &DdnnfGraph,
-    current_safe: &mut HashMap<NodeIndex, HashSet<i32>>,
+    current_safe: &mut IntMap<NodeIndex, IntSet<i32>>,
     root: NodeIndex,
 ) {
     let mut dfs = DfsPostOrder::new(di_graph, root);
@@ -498,16 +498,16 @@ pub fn extend_literal_diffs(
 // determine what literal-nodes the current node is or which occur in its children
 fn get_literals(
     di_graph: &DdnnfGraph,
-    safe: &mut HashMap<NodeIndex, HashSet<i32>>,
+    safe: &mut IntMap<NodeIndex, IntSet<i32>>,
     deciding_node_child: NodeIndex,
-) -> HashSet<i32> {
+) -> IntSet<i32> {
     let lookup = safe.get(&deciding_node_child);
     if let Some(x) = lookup {
         return x.clone();
     }
 
     use c2d_lexer::TokenIdentifier::*;
-    let mut res = HashSet::new();
+    let mut res = IntSet::default();
     match di_graph[deciding_node_child] {
         And | Or => {
             di_graph
