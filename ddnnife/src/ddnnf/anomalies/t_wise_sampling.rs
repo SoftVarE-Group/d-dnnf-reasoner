@@ -170,13 +170,11 @@ impl ExtendedDdnnf {
 #[cfg(test)]
 mod test {
     use crate::ddnnf::anomalies::t_wise_sampling::Sample;
-    use crate::ddnnf::anomalies::t_wise_sampling::t_iterator::TInteractionIter;
     use crate::ddnnf::extended_ddnnf::optimal_configs::test::build_sandwich_ext_ddnnf_with_objective_function_values;
     use crate::{Ddnnf, parser::build_ddnnf};
     use itertools::Itertools;
     use std::collections::HashSet;
     use std::path::Path;
-    use streaming_iterator::StreamingIterator;
 
     fn check_validity_of_sample(sample: &Sample, ddnnf: &Ddnnf, t: usize) {
         let sample_literals: HashSet<i32> = sample.get_literals().iter().copied().collect();
@@ -188,32 +186,15 @@ mod test {
             );
         });
 
-        sample
-            .iter()
-            .map(|config| config.get_decided_literals().collect_vec())
-            .for_each(|literals| {
-                // every config must be complete and satisfiable
-                assert_eq!(
-                    ddnnf.number_of_variables as usize,
-                    literals.len(),
-                    "config is not complete"
-                );
-                assert!(ddnnf.sat_immutable(&literals[..]));
-            });
-
-        let all_literals = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32)
+        let literals = (-(ddnnf.number_of_variables as i32)..=ddnnf.number_of_variables as i32)
             .filter(|&literal| literal != 0)
             .collect_vec();
 
-        TInteractionIter::new(&all_literals[..], t)
-            .filter(|interaction| ddnnf.sat_immutable(interaction))
-            .for_each(|interaction| {
-                assert!(
-                    sample.covers(interaction),
-                    "Valid interaction {:?} is not covered.",
-                    interaction
-                )
-            });
+        let (covered, total) = sample.covered_literals(ddnnf, &literals, t);
+
+        assert!(sample.all_complete());
+        assert!(sample.all_sat(ddnnf));
+        assert_eq!(covered, total);
     }
 
     #[test]
@@ -244,6 +225,30 @@ mod test {
             &auto1,
             t,
         );
+    }
+
+    /// Covering a subset of literals.
+    #[test]
+    fn partial_literals() {
+        let t = 2;
+        let ddnnf = Ddnnf::from_file(Path::new("tests/data/busybox_c2d.nnf"), None);
+        let literals = (-(ddnnf.number_of_variables as i32 / 3)
+            ..(ddnnf.number_of_variables as i32 / 2))
+            .filter(|&literal| literal != 0)
+            .collect();
+
+        let sample = ddnnf
+            .sample_t_wise(t, Sample::default(), Some(&literals))
+            .get_sample()
+            .unwrap()
+            .clone();
+
+        let (covered, _) =
+            sample.covered_literals(&ddnnf, &literals.iter().copied().collect_vec(), t);
+
+        assert!(sample.all_complete());
+        assert!(sample.all_sat(&ddnnf));
+        assert_eq!(covered, 240059);
     }
 
     #[test]
