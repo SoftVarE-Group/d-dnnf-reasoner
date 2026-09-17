@@ -30,7 +30,7 @@ impl Ddnnf {
     pub fn sat_propagate(
         &self,
         features: &[i32],
-        mark: &mut Vec<bool>,
+        mark: &mut [bool],
         root_index: Option<usize>,
     ) -> bool {
         match self.kind {
