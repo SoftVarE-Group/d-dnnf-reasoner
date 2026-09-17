@@ -1,5 +1,6 @@
 mod config;
 mod covering_strategies;
+mod literal_set;
 mod sample;
 mod sample_merger;
 mod sampling_result;

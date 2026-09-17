@@ -2,9 +2,9 @@ use super::super::SamplingResult;
 use super::super::t_iterator::TInteractionIter;
 use super::{Config, Sample};
 use super::{OrMerger, SampleMerger};
+use crate::ddnnf::anomalies::t_wise_sampling::literal_set::LiteralSet;
 use crate::int_hash::IntSet;
 use crate::rand::rng;
-use crate::util;
 use rand::prelude::SliceRandom;
 use std::cmp::{Ordering, min};
 use streaming_iterator::StreamingIterator;
@@ -26,6 +26,14 @@ impl SampleMerger for SimilarityMerger<'_> {
             return left.clone();
         }
 
+        let n_variables = left
+            .vars
+            .iter()
+            .chain(right.vars.iter())
+            .max()
+            .copied()
+            .unwrap_or_default() as usize;
+
         // init sample
         let mut new_sample = Sample::new_from_samples(&[left, right]);
 
@@ -33,7 +41,7 @@ impl SampleMerger for SimilarityMerger<'_> {
         let mut candidates: Vec<Candidate> = left
             .iter()
             .chain(right.iter())
-            .map(Candidate::new)
+            .map(|config| Candidate::new(config, n_variables))
             .collect();
 
         // (randomly) pick first candidate
@@ -78,6 +86,7 @@ struct Candidate<'a> {
     config: &'a Config,
     /// The literals of the configuration, **sorted**.
     literals: Vec<i32>,
+    literal_set: LiteralSet,
     max_intersect: usize,
     total_intersect: usize,
 }
@@ -103,9 +112,11 @@ impl Ord for Candidate<'_> {
 }
 
 impl<'a> Candidate<'a> {
-    fn new(config: &'a Config) -> Self {
+    fn new(config: &'a Config, n_variables: usize) -> Self {
         let mut literals: Vec<i32> = config.get_decided_literals().collect();
         literals.sort_unstable();
+
+        let literal_set = LiteralSet::new(literals.iter().copied(), n_variables);
 
         debug_assert!(!literals.contains(&0));
         debug_assert!(!literals.is_empty());
@@ -113,13 +124,18 @@ impl<'a> Candidate<'a> {
         Self {
             config,
             literals,
+            literal_set,
             max_intersect: 0,
             total_intersect: 0,
         }
     }
 
     fn update(&mut self, other: &Self) {
-        let intersect = util::intersection_sorted(&self.literals, &other.literals);
+        let intersect = self
+            .literal_set
+            .intersection_length(&other.literal_set)
+            .try_into()
+            .expect("Failed to convert intersection length");
 
         self.total_intersect += intersect;
 
@@ -195,7 +211,7 @@ mod test {
     fn test_is_t_wise_covered() {
         let number_of_variables = 4;
         let candidate_config = Config::from(&[1, 2, 3, 4], number_of_variables);
-        let mut candidate = Candidate::new(&candidate_config);
+        let mut candidate = Candidate::new(&candidate_config, number_of_variables);
 
         let sample = Sample::new_from_configs(vec![
             Config::from(&[1, 2, 3], number_of_variables),
@@ -206,11 +222,11 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&Candidate::new(c)));
+            .for_each(|c| candidate.update(&Candidate::new(c, number_of_variables)));
 
         assert!(candidate.is_t_wise_covered_by(&sample, 2, None));
 
-        let mut candidate = Candidate::new(&candidate_config);
+        let mut candidate = Candidate::new(&candidate_config, number_of_variables);
         let sample = Sample::new_from_configs(vec![
             Config::from(&[1, 2, 3], number_of_variables),
             Config::from(&[1, 4], number_of_variables),
@@ -219,7 +235,7 @@ mod test {
 
         sample
             .iter()
-            .for_each(|c| candidate.update(&Candidate::new(c)));
+            .for_each(|c| candidate.update(&Candidate::new(c, number_of_variables)));
 
         assert!(!candidate.is_t_wise_covered_by(&sample, 2, None));
     }
