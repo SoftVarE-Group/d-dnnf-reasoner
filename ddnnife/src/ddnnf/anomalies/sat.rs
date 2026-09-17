@@ -30,7 +30,7 @@ impl Ddnnf {
     pub fn sat_propagate(
         &self,
         features: &[i32],
-        mark: &mut Vec<bool>,
+        mark: &mut [bool],
         root_index: Option<usize>,
     ) -> bool {
         match self.kind {
@@ -45,46 +45,39 @@ impl Ddnnf {
             return false;
         }
 
-        for feature in features {
-            if let Some(&index) = self.literals.get(&-feature) {
-                self.propagate_mark(index, mark);
-                // if the root is unsatisfiable after any of the literals in the query,
-                // then the whole query must be unsatisfiable too.
-                if mark[root_index] {
-                    return false;
+        let mut to_mark: Vec<usize> = features
+            .iter()
+            .filter_map(|l| self.literals.get(&-l))
+            .copied()
+            .collect();
+
+        while let Some(i) = to_mark.pop() {
+            if mark[i] {
+                continue;
+            }
+
+            if let Or { children } = &self.nodes[i].ntype {
+                // An Or node is only unsatisfiable if all of its children are either marked
+                // or have an count of zero (that handle False nodes).
+                if !children
+                    .iter()
+                    .all(|&c| mark[c] || self.nodes[c].count.is_zero())
+                {
+                    continue;
                 }
             }
+
+            mark[i] = true;
+
+            if mark[root_index] {
+                return false;
+            }
+
+            to_mark.extend(self.nodes[i].parents.iter());
         }
 
         // the result is the marking of the root node
         !mark[root_index]
-    }
-
-    // marks a node and decides whether we have to continue the marking with its parent nodes
-    #[inline]
-    fn propagate_mark(&self, index: usize, mark: &mut Vec<bool>) {
-        // if the node is already marked, we looked at its path and can stop
-        if mark[index] {
-            return;
-        }
-
-        if let Or { children } = &self.nodes[index].ntype {
-            // An Or node is only unsatisfiable if all of its children are either marked
-            // or have an count of zero (that handle False nodes).
-            if !children
-                .iter()
-                .all(|&c| mark[c] || self.nodes[c].count.is_zero())
-            {
-                return;
-            }
-        }
-
-        mark[index] = true;
-        // check the marking for all parents
-        self.nodes[index]
-            .parents
-            .iter()
-            .for_each(|&p| self.propagate_mark(p, mark))
     }
 }
 

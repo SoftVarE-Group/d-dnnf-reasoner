@@ -1,4 +1,4 @@
-use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use ddnnife::Ddnnf;
 use std::{hint::black_box, path::Path};
 
@@ -12,15 +12,13 @@ static BENCHMARKS: [(&str, &str); 6] = [
 ];
 
 fn benchmark(c: &mut Criterion) {
-    let mut group = c.benchmark_group("load");
-    group.sampling_mode(SamplingMode::Flat);
-
+    let mut group = c.benchmark_group("sat");
     let data_dir = Path::new("tests/data");
 
     for (path, name) in BENCHMARKS {
-        let path = &data_dir.join(path);
+        let ddnnf = Ddnnf::from_file(&data_dir.join(path), None);
         group.bench_function(name, |bencher| {
-            bencher.iter(|| Ddnnf::from_file(black_box(path), None))
+            bencher.iter(|| ddnnf.sat_immutable(black_box(&[])))
         });
     }
 

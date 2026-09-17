@@ -33,5 +33,9 @@ name = "load"
 harness = false
 
 [[bench]]
+name = "sat"
+harness = false
+
+[[bench]]
 name = "t_wise"
 harness = false
