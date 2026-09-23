@@ -5,12 +5,13 @@ pub mod multiple_queries;
 pub mod node;
 pub mod statistics;
 
-use self::node::Node;
 use crate::NodeType;
+use crate::int_hash::IntMap;
 use crate::parser::graph::{DdnnfGraph, rebuild_graph};
+use node::Node;
 use num::BigInt;
 use petgraph::stable_graph::NodeIndex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
@@ -34,7 +35,7 @@ pub struct Ddnnf {
     /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
-    pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    pub literals: IntMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     /// The core/dead features of the model corresponding with this ddnnf
     pub core: HashSet<i32>,
     /// An interim save for the marking algorithm
