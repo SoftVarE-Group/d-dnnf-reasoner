@@ -1,7 +1,6 @@
 pub mod anomalies;
 pub mod counting;
 pub mod extended_ddnnf;
-pub mod multiple_queries;
 pub mod node;
 pub mod statistics;
 

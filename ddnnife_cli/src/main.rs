@@ -1,6 +1,6 @@
+mod multi_queries;
 mod stream;
 
-use crate::stream::{Query, handle_query, stream};
 use clap::{Parser, Subcommand};
 use ddnnife::DdnnfKind;
 use ddnnife::config;
@@ -12,10 +12,12 @@ use ddnnife::parser::{self as dparser};
 use ddnnife::util::format_vec;
 use ddnnife_cnf::Cnf;
 use log::{info, warn};
+use multi_queries::compute_queries;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, BufWriter, Error, ErrorKind, Write, stdout};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
+use stream::{Query, handle_query, stream};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -453,12 +455,12 @@ fn main() -> io::Result<()> {
                 &queries_input_file,
                 &mut writer,
                 Ddnnf::execute_query,
-            );
+            )?;
         }
         Operation::Sat {
             queries_input_file, ..
         } => {
-            compute_queries(&mut ddnnf, &queries_input_file, &mut writer, Ddnnf::sat);
+            compute_queries(&mut ddnnf, &queries_input_file, &mut writer, Ddnnf::sat)?;
         }
         Operation::StreamQueries {
             queries_input_file, ..
@@ -521,25 +523,4 @@ fn main() -> io::Result<()> {
     }
 
     Ok(())
-}
-
-fn compute_queries<T: ToString + Ord + Send + 'static>(
-    ddnnf: &mut Ddnnf,
-    queries_file: &Path,
-    output: impl Write,
-    operation: fn(&mut Ddnnf, query: &[i32]) -> T,
-) {
-    let time = Instant::now();
-
-    ddnnf
-        .operate_on_queries(operation, queries_file, output)
-        .unwrap_or_default();
-
-    let elapsed_time = time.elapsed().as_secs_f64();
-
-    info!(
-        "Runtime: {} seconds. That is an average of {} seconds per query.",
-        elapsed_time,
-        elapsed_time / dparser::parse_queries_file(queries_file).len() as f64
-    );
 }
