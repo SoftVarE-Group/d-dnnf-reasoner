@@ -1,8 +1,8 @@
 use super::default_count::Counts;
 use crate::{Ddnnf, NodeType};
-use num::{BigInt, One, Zero};
+use num::{BigUint, One, Zero};
 
-pub type PartialDerivatives = Vec<BigInt>;
+pub type PartialDerivatives = Vec<BigUint>;
 
 impl Ddnnf {
     /// Calculates partial derivatives under the given assumptions.
@@ -12,7 +12,7 @@ impl Ddnnf {
             .operate_on_partial_config_default_external(assumptions, Ddnnf::calc_count_external);
 
         // Initialize all nodes to have partial derivatives of zero.
-        let mut partial_derivatives = vec![BigInt::ZERO; self.nodes.len()];
+        let mut partial_derivatives = vec![BigUint::ZERO; self.nodes.len()];
 
         // By definition, the root has a partial derivative of one.
         if let Some(root) = partial_derivatives.last_mut() {
@@ -65,7 +65,7 @@ impl Ddnnf {
         &mut self,
         feature: i32,
         partial_derivatives: &PartialDerivatives,
-    ) -> BigInt {
+    ) -> BigUint {
         match self.literals.get(&-feature).cloned() {
             //Some(i) => self.rc() - &self.nodes[i].partial_derivative,
             Some(i) => self.rc() - &partial_derivatives[i],
@@ -121,7 +121,11 @@ impl Ddnnf {
 
     #[inline]
     // Computes the cardinality of a feature and partial configurations using the marking algorithm
-    fn operate_on_marker(&mut self, indexes: &[usize], operation: fn(&mut Ddnnf, usize)) -> BigInt {
+    fn operate_on_marker(
+        &mut self,
+        indexes: &[usize],
+        operation: fn(&mut Ddnnf, usize),
+    ) -> BigUint {
         self.mark_assumptions(indexes);
 
         // calc the count for all marked nodes, respectevly all nodes that matter
@@ -147,11 +151,11 @@ impl Ddnnf {
     /// The marking algorithm differs to the standard variation by only reomputing the
     /// marked nodes. Further, the marked nodes use the .temp value of the childs nodes if they
     /// are also marked and the .count value if they are not.
-    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> BigInt {
+    pub(crate) fn card_of_feature_with_marker(&mut self, feature: i32) -> BigUint {
         if self.has_no_effect_on_query(&feature) {
             self.rc()
         } else if self.makes_query_unsat(&feature) {
-            BigInt::ZERO
+            BigUint::ZERO
         } else {
             match self.literals.get(&-feature).cloned() {
                 Some(i) => self.operate_on_marker(&[i], Ddnnf::calc_count_marked_node),
@@ -168,9 +172,9 @@ impl Ddnnf {
         &mut self,
         features: &[i32],
         operation: fn(&mut Ddnnf, usize),
-    ) -> BigInt {
+    ) -> BigUint {
         if self.query_is_not_sat(features) {
-            BigInt::ZERO
+            BigUint::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
             let indexes: Vec<usize> = self.map_features_opposing_indexes(&features);

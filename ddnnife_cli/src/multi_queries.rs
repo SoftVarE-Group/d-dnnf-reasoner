@@ -51,7 +51,7 @@ pub fn compute_queries<T: Display>(
 mod test {
     use super::compute_queries;
     use crate::Ddnnf;
-    use num::BigInt;
+    use num::BigUint;
     use std::{fs, io::BufWriter, path::Path};
 
     fn card_multi_queries(ddnnf: &mut Ddnnf, queries: &Path, expected: &Path) {
@@ -94,7 +94,7 @@ mod test {
             assert_eq!(ddnnf.sat(&query), res);
             assert_eq!(
                 ddnnf.sat(&query),
-                (ddnnf.execute_query(&query) > BigInt::ZERO)
+                (ddnnf.execute_query(&query) > BigUint::ZERO)
             );
         }
     }

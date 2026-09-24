@@ -1,7 +1,8 @@
+use crate::BigUrational;
 use crate::Ddnnf;
 use crate::NodeType::*;
 use itertools::Itertools;
-use num::{BigInt, BigRational, ToPrimitive, Zero};
+use num::{BigUint, ToPrimitive, Zero};
 use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use rand_distr::{Binomial, Distribution, weighted::WeightedAliasIndex};
@@ -38,7 +39,7 @@ impl Ddnnf {
         }
         assumptions.sort_unstable_by_key(|f| f.abs());
 
-        if self.execute_query(assumptions) > BigInt::ZERO {
+        if self.execute_query(assumptions) > BigUint::ZERO {
             let last_stop = match ENUMERATION_CACHE.read().unwrap().get(assumptions) {
                 Some(&x) => x,
                 None => 0,
@@ -46,8 +47,8 @@ impl Ddnnf {
 
             let mut sample_list = self.enumerate_node(
                 (
-                    &BigInt::from(last_stop),
-                    &min(self.rt(), BigInt::from(last_stop + amount)),
+                    &BigUint::from(last_stop),
+                    &min(self.rt(), BigUint::from(last_stop + amount)),
                 ),
                 self.nodes.len() - 1,
             );
@@ -57,7 +58,7 @@ impl Ddnnf {
 
             ENUMERATION_CACHE.write().unwrap().insert(
                 assumptions.to_vec(),
-                (min(self.rt(), BigInt::from(last_stop + amount)) % self.rt())
+                (min(self.rt(), BigUint::from(last_stop + amount)) % self.rt())
                     .to_usize()
                     .expect("Attempt to convert to large integer!"),
             );
@@ -86,7 +87,7 @@ impl Ddnnf {
             return None;
         }
 
-        if self.execute_query(assumptions) > BigInt::ZERO {
+        if self.execute_query(assumptions) > BigUint::ZERO {
             let mut sample_list = self.sample_node(
                 amount,
                 self.nodes.len() - 1,
@@ -127,7 +128,7 @@ impl Ddnnf {
 
     // Handles a node appropiate depending on its kind to produce complete
     // satisfiable configurations
-    fn enumerate_node(&self, range: (&BigInt, &BigInt), index: usize) -> Vec<Vec<i32>> {
+    fn enumerate_node(&self, range: (&BigUint, &BigUint), index: usize) -> Vec<Vec<i32>> {
         let _range2 = (
             range
                 .0
@@ -145,19 +146,18 @@ impl Ddnnf {
 
         match &self.nodes[index].ntype {
             And { children } => {
-                let mut acc_amount = BigInt::from(1);
+                let mut acc_amount = BigUint::ONE;
                 let mut enumeration_child_lists = Vec::new();
 
                 for &child in children {
                     if &acc_amount < range.1 {
-                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_child_lists.push(self.enumerate_node(change, child));
                         acc_amount *= change.1;
                     } else {
                         // restrict the creation of any more configs
                         enumeration_child_lists.push(vec![
-                            self.enumerate_node((&BigInt::ZERO, &BigInt::from(1)), child)[0]
-                                .clone(),
+                            self.enumerate_node((&BigUint::ZERO, &BigUint::ONE), child)[0].clone(),
                         ]);
                     }
                 }
@@ -194,15 +194,15 @@ impl Ddnnf {
                     .collect();
             }
             Or { children } => {
-                let mut acc_amount = BigInt::ZERO;
+                let mut acc_amount = BigUint::ZERO;
 
                 for &child in children {
-                    if self.nodes[child].temp == BigInt::ZERO {
+                    if self.nodes[child].temp == BigUint::ZERO {
                         continue;
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_list.append(&mut self.enumerate_node(change, child));
                         acc_amount += change.1;
                     } else {
@@ -246,17 +246,17 @@ impl Ddnnf {
                 let mut weights = Vec::new();
 
                 // compute the probability of getting a sample of a child node
-                let parent_count_as_float = BigRational::from(self.nodes[index].temp.clone());
+                let parent_count_as_float = BigUrational::from(self.nodes[index].temp.clone());
                 #[allow(clippy::needless_range_loop)]
                 for child_index in 0..children.len() {
                     let child_count_as_float =
-                        BigRational::from(self.nodes[children[child_index]].temp.clone());
+                        BigUrational::from(self.nodes[children[child_index]].temp.clone());
 
                     // can't get a sample of a children with no more valid configuration
                     if !child_count_as_float.is_zero() {
                         let child_amount = (child_count_as_float / &parent_count_as_float)
                             .to_f64()
-                            .expect("Failed to convert BigRational to f64!")
+                            .expect("Failed to convert BigUrational to f64!")
                             * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
@@ -355,11 +355,11 @@ mod test {
         }
         assert_eq!(
             vp9.rt(),
-            BigInt::from(res_all.len()),
+            BigUint::from(res_all.len()),
             "there are duplicates"
         );
 
-        assert_eq!(BigInt::from(80), vp9.execute_query(&assumptions));
+        assert_eq!(BigUint::from(80u32), vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_2.clone() {
             res_assumptions.insert(inter);
