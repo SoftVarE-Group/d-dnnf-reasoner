@@ -1,9 +1,9 @@
 use super::super::node::NodeType::*;
 use crate::{Ddnnf, Node};
-use num::{BigInt, One, Zero};
+use num::{BigUint, One, Zero};
 
 /// Counts for each node in a d-DNNF.
-pub type Counts = Vec<BigInt>;
+pub type Counts = Vec<BigUint>;
 
 impl Ddnnf {
     #[inline]
@@ -29,11 +29,11 @@ impl Ddnnf {
     /// Calculates the cardinality of a node.
     ///
     /// Uses an external data structure for tracking node counts.
-    pub fn calc_count_external(&self, node: &Node, counts: &Counts) -> BigInt {
+    pub fn calc_count_external(&self, node: &Node, counts: &Counts) -> BigUint {
         match &node.ntype {
             And { children } => children.iter().map(|&child| &counts[child]).product(),
             Or { children } => children.iter().map(|&child| &counts[child]).sum(),
-            _ => BigInt::one(),
+            _ => BigUint::one(),
         }
     }
 
@@ -46,11 +46,11 @@ impl Ddnnf {
         &mut self,
         feature: i32,
         operation: fn(&mut Ddnnf, usize),
-    ) -> BigInt {
+    ) -> BigUint {
         if self.has_no_effect_on_query(&feature) {
             self.rc()
         } else if self.makes_query_unsat(&feature) {
-            BigInt::ZERO
+            BigUint::ZERO
         } else {
             for i in 0..self.nodes.len() {
                 match &mut self.nodes[i].ntype {
@@ -79,9 +79,9 @@ impl Ddnnf {
         &mut self,
         features: &[i32],
         operation: fn(&mut Ddnnf, usize),
-    ) -> BigInt {
+    ) -> BigUint {
         if self.query_is_not_sat(features) {
-            BigInt::ZERO
+            BigUint::ZERO
         } else {
             let features: Vec<i32> = self.reduce_query(features);
             for i in 0..self.nodes.len() {
@@ -108,11 +108,11 @@ impl Ddnnf {
     pub(crate) fn operate_on_partial_config_default_external(
         &self,
         assumptions: &[i32],
-        operation: fn(&Ddnnf, &Node, &Counts) -> BigInt,
-    ) -> (BigInt, Counts) {
+        operation: fn(&Ddnnf, &Node, &Counts) -> BigUint,
+    ) -> (BigUint, Counts) {
         // Exit early in case of invalid d-DNNF or assumptions.
         if self.nodes.is_empty() || self.query_is_not_sat(assumptions) {
-            return (BigInt::ZERO, vec![BigInt::ZERO; self.nodes.len()]);
+            return (BigUint::ZERO, vec![BigUint::ZERO; self.nodes.len()]);
         }
 
         // Simplify the assumptions by using knowledge about core variables.
@@ -127,7 +127,7 @@ impl Ddnnf {
             counts.push(match node.ntype {
                 Literal { literal } => {
                     if assumptions.contains(&-literal) {
-                        BigInt::ZERO
+                        BigUint::ZERO
                     } else {
                         operation(self, node, &counts)
                     }

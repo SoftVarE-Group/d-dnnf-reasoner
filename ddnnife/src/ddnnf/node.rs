@@ -1,4 +1,4 @@
-use num::BigInt;
+use num::BigUint;
 use std::fmt::{Display, Formatter};
 
 /// Represents all types of Nodes with its different parts
@@ -6,9 +6,9 @@ use std::fmt::{Display, Formatter};
 pub struct Node {
     pub(crate) marker: bool,
     /// The cardinality of the node for the cardinality of a feature model
-    pub count: BigInt,
+    pub count: BigUint,
     /// The cardinality during the different queries
-    pub temp: BigInt,
+    pub temp: BigUint,
     /// Every node excpet the root has (multiple) parent nodes
     pub(crate) parents: Vec<usize>,
     /// the different kinds of nodes with its additional fields
@@ -29,11 +29,11 @@ pub enum NodeType {
 impl Node {
     #[inline]
     /// Creates a new node
-    fn new_node(count: BigInt, ntype: NodeType) -> Node {
+    fn new_node(count: BigUint, ntype: NodeType) -> Node {
         Node {
             marker: false,
             count,
-            temp: BigInt::ZERO,
+            temp: BigUint::ZERO,
             parents: Vec::new(),
             ntype,
         }
@@ -41,20 +41,20 @@ impl Node {
 
     #[inline]
     /// Creates a new And node
-    pub fn new_and(count: BigInt, children: Vec<usize>) -> Node {
+    pub fn new_and(count: BigUint, children: Vec<usize>) -> Node {
         Node::new_node(count, NodeType::And { children })
     }
 
     #[inline]
     /// Creates a new Or node
-    pub fn new_or(count: BigInt, children: Vec<usize>) -> Node {
+    pub fn new_or(count: BigUint, children: Vec<usize>) -> Node {
         Node::new_node(count, NodeType::Or { children })
     }
 
     #[inline]
     /// Creates a new Literal node
     pub fn new_literal(literal: i32) -> Node {
-        Node::new_node(BigInt::from(1), NodeType::Literal { literal })
+        Node::new_node(BigUint::ONE, NodeType::Literal { literal })
     }
 }
 
@@ -94,11 +94,11 @@ mod test {
     #[test]
     fn build_nodes() {
         assert_eq!(
-            Node::new_and(BigInt::from(42), vec![1, 5, 10]),
+            Node::new_and(BigUint::from(42u32), vec![1, 5, 10]),
             Node {
                 marker: false,
-                count: BigInt::from(42),
-                temp: BigInt::ZERO,
+                count: BigUint::from(42u32),
+                temp: BigUint::ZERO,
                 parents: vec![],
                 ntype: NodeType::And {
                     children: vec![1, 5, 10]
@@ -107,15 +107,15 @@ mod test {
         );
         assert_eq!(
             Node::new_node(
-                BigInt::from(42),
+                BigUint::from(42u32),
                 NodeType::And {
                     children: vec![1, 5, 10]
                 }
             ),
             Node {
                 marker: false,
-                count: BigInt::from(42),
-                temp: BigInt::ZERO,
+                count: BigUint::from(42u32),
+                temp: BigUint::ZERO,
                 parents: vec![],
                 ntype: NodeType::And {
                     children: vec![1, 5, 10]
@@ -123,11 +123,11 @@ mod test {
             }
         );
         assert_eq!(
-            Node::new_or(BigInt::from(42), vec![1, 5, 10]),
+            Node::new_or(BigUint::from(42u32), vec![1, 5, 10]),
             Node {
                 marker: false,
-                count: BigInt::from(42),
-                temp: BigInt::ZERO,
+                count: BigUint::from(42u32),
+                temp: BigUint::ZERO,
                 parents: vec![],
                 ntype: NodeType::Or {
                     children: vec![1, 5, 10]
@@ -138,8 +138,8 @@ mod test {
             Node::new_literal(42),
             Node {
                 marker: false,
-                count: BigInt::from(1),
-                temp: BigInt::ZERO,
+                count: BigUint::from(1u32),
+                temp: BigUint::ZERO,
                 parents: vec![],
                 ntype: NodeType::Literal { literal: 42 }
             }

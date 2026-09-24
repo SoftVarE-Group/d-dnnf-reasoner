@@ -1,7 +1,7 @@
 use crate::DdnnfMut;
 use ddnnife::ddnnf;
 use ddnnife::util;
-use num::BigInt;
+use num::BigUint;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
@@ -50,13 +50,13 @@ impl Ddnnf {
     ///
     /// This value is the same during all computations.
     #[uniffi::method]
-    pub fn rc(&self) -> BigInt {
+    pub fn rc(&self) -> BigUint {
         self.0.rc()
     }
 
     /// Computes the cardinality of this d-DNNF for multiple iterables.
     #[uniffi::method]
-    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigUint> {
         self.0.count_iterables(assumptions, iterables)
     }
 

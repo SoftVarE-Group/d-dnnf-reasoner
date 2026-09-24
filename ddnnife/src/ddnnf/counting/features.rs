@@ -1,6 +1,7 @@
 use super::super::Ddnnf;
+use crate::BigUrational;
 use log::info;
-use num::{BigInt, BigRational, ToPrimitive};
+use num::{BigUint, ToPrimitive};
 use std::error::Error;
 use std::path::Path;
 
@@ -9,7 +10,7 @@ impl Ddnnf {
     /// Results in one count per iterable, each valid under the given assumptions together with the iterable.
     ///
     /// Uses partial derivatives and therefore does not involve re-counting.
-    pub fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+    pub fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigUint> {
         // Calculate the original count under the given assumptions.
         let (original, _counts) = self
             .operate_on_partial_config_default_external(assumptions, Ddnnf::calc_count_external);
@@ -39,13 +40,13 @@ impl Ddnnf {
             .collect()
     }
 
-    pub fn card_of_each_feature(&mut self) -> impl Iterator<Item = (i32, BigInt, f64)> + '_ {
+    pub fn card_of_each_feature(&mut self) -> impl Iterator<Item = (i32, BigUint, f64)> + '_ {
         let partial_derivatives = self.partial_derivatives_assumptions(&[]);
         let rc = self.rc();
         (1_i32..=self.number_of_variables as i32).map(move |variable| {
             let cardinality =
                 self.card_of_feature_with_partial_derivatives(variable, &partial_derivatives);
-            let ratio = BigRational::from((cardinality.clone(), rc.clone()))
+            let ratio = BigUrational::from((cardinality.clone(), rc.clone()))
                 .to_f64()
                 .unwrap();
             (variable, cardinality, ratio)
@@ -110,10 +111,10 @@ mod test {
         let ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
         let result = ddnnf.count_iterables(&[], &[3, 5]);
         let expected = vec![
-            BigInt::from_str(
+            BigUint::from_str(
                 "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000",
             ).unwrap(),
-            BigInt::from_str(
+            BigUint::from_str(
                 "19558927176703111970630256604805514155483434271585300434767867070716031103221451966433957821099471645560819328082732687237237092292630699169456731901173780106030980101589212366582299152026173440000000000000000000000000",
             ).unwrap(),
         ];
@@ -125,14 +126,14 @@ mod test {
         let ddnnf = build_ddnnf(Path::new("./tests/data/auto1_c2d.nnf"), None);
         let result = ddnnf.count_iterables(&[1, -2, 3], &[6, 7, 42, -42]);
         let expected = vec![
-            BigInt::from_str(
+            BigUint::from_str(
                 "384036445892876423001158498633581630304377700405713169569644761117385361664929390339942080733590146400289868636317852176378625909465473907063530151791820800000000000000000000000",
             ).unwrap(),
-            BigInt::from_str(
+            BigUint::from_str(
                 "19365940433914281159887479845625056570904516516184828136213103529095442189043204367066948281569355315080124708098083707795934801510156013623320772608000000000000000000000000000",
             ).unwrap(),
-            BigInt::ZERO,
-            BigInt::from_str(
+            BigUint::ZERO,
+            BigUint::from_str(
                 "387318808678285623197749596912501131418090330323710718027504972750867287833005709915497141252680660472087217940901765442843400489888255735329030409499443200000000000000000000000",
             ).unwrap(),
         ];
