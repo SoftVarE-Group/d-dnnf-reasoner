@@ -16,7 +16,7 @@ use d4_lexer::{D4Token, lex_line_d4};
 use graph::DdnnfGraph;
 use itertools::Itertools;
 use log::{error, warn};
-use num::BigInt;
+use num::BigUint;
 use petgraph::{
     Direction::{Incoming, Outgoing},
     graph::{EdgeIndex, NodeIndex},
@@ -525,13 +525,13 @@ fn get_literals(
 
 // multiplies the count of all child Nodes of an And Node
 #[inline]
-fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
+fn calc_and_count(nodes: &mut [Node], indices: &[usize]) -> BigUint {
     indices.iter().map(|&index| &nodes[index].count).product()
 }
 
 // adds up the count of all child Nodes of an And Node
 #[inline]
-fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigInt {
+fn calc_or_count(nodes: &mut [Node], indices: &[usize]) -> BigUint {
     indices.iter().map(|&index| &nodes[index].count).sum()
 }
 

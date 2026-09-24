@@ -1,5 +1,5 @@
 use crate::Ddnnf;
-use num::BigInt;
+use num::BigUint;
 use std::sync::Mutex;
 
 /// A mutable version of a d-DNNF, required for some computations.
@@ -20,7 +20,7 @@ impl DdnnfMut {
 
     /// Computes the cardinality of this d-DNNF.
     #[uniffi::method]
-    fn count(&self, assumptions: &[i32]) -> BigInt {
+    fn count(&self, assumptions: &[i32]) -> BigUint {
         self.0.lock().unwrap().0.execute_query(assumptions)
     }
 
