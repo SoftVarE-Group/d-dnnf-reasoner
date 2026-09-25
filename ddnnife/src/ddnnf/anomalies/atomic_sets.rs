@@ -1,7 +1,7 @@
 use crate::Ddnnf;
 use bitvec::prelude::*;
 use itertools::Itertools;
-use num::BigInt;
+use num::BigUint;
 use std::{collections::HashMap, hash::Hash};
 
 /// A quite basic union-find implementation that uses ranks and path compression
@@ -151,7 +151,7 @@ impl Ddnnf {
             return vec![];
         }
 
-        let mut combinations: Vec<(BigInt, i32)> = self
+        let mut combinations: Vec<(BigUint, i32)> = self
             .count_iterables(assumptions, &considered)
             .into_iter()
             .zip(considered)
@@ -235,7 +235,7 @@ impl Ddnnf {
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
     fn incremental_subset_check(
         &mut self,
-        control: BigInt,
+        control: BigUint,
         pot_atomic_set: &[i32],
         signed_excludes: &[BitArray<[u64; 8]>],
         assumptions: &[i32],
@@ -467,15 +467,15 @@ mod test {
 
         // atomic set property holds for all possibilities
         for subset in atomic_sets.iter() {
-            let mut compare_value = BigInt::from(-1);
+            let mut compare_value = None;
             for feature in subset.iter() {
                 let mut query_slice = assumptions.clone();
                 query_slice.push(*feature);
 
-                if compare_value == BigInt::from(-1) {
-                    compare_value = auto1.execute_query(&query_slice);
+                if let Some(count) = compare_value.clone() {
+                    assert_eq!(count, auto1.execute_query(&query_slice));
                 } else {
-                    assert_eq!(compare_value, auto1.execute_query(&query_slice));
+                    compare_value = Some(auto1.execute_query(&query_slice));
                 }
             }
         }

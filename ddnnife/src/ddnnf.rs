@@ -5,12 +5,13 @@ pub mod multiple_queries;
 pub mod node;
 pub mod statistics;
 
-use self::node::Node;
 use crate::NodeType;
+use crate::int_hash::IntMap;
 use crate::parser::graph::{DdnnfGraph, rebuild_graph};
-use num::BigInt;
+use node::Node;
+use num::BigUint;
 use petgraph::stable_graph::NodeIndex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
@@ -34,7 +35,7 @@ pub struct Ddnnf {
     /// The actual nodes of the d-DNNF in postorder
     pub nodes: Vec<Node>,
     /// Literals for upwards propagation
-    pub literals: HashMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
+    pub literals: IntMap<i32, usize>, // <var_number of the Literal, and the corresponding indize>
     /// The core/dead features of the model corresponding with this ddnnf
     pub core: HashSet<i32>,
     /// An interim save for the marking algorithm
@@ -78,11 +79,11 @@ impl Ddnnf {
     /// Returns the current count of the root node in the d-DNNF.
     ///
     /// This value is the same during all computations.
-    pub fn rc(&self) -> BigInt {
+    pub fn rc(&self) -> BigUint {
         match self.kind {
             DdnnfKind::NonTrivial => self.nodes[self.nodes.len() - 1].count.clone(),
-            DdnnfKind::Tautology => BigInt::from(2).pow(self.number_of_variables),
-            DdnnfKind::Contradiction => BigInt::ZERO,
+            DdnnfKind::Tautology => BigUint::from(2u32).pow(self.number_of_variables),
+            DdnnfKind::Contradiction => BigUint::ZERO,
         }
     }
 
@@ -95,7 +96,7 @@ impl Ddnnf {
 
     // Returns the current temp count of the root node in the ddnnf.
     // That value is changed during computations
-    fn rt(&self) -> BigInt {
+    fn rt(&self) -> BigUint {
         self.nodes[self.nodes.len() - 1].temp.clone()
     }
 
@@ -155,15 +156,16 @@ impl Ddnnf {
     /// use std::path::Path;
     /// use ddnnife::Ddnnf;
     /// use ddnnife::parser::*;
-    /// use num::BigInt;
+    /// use num::BigUint;
     ///
     /// // create a ddnnf
     /// let file_path = Path::new("./tests/data/small_ex_c2d.nnf");
     /// let mut ddnnf: Ddnnf = build_ddnnf(file_path, None);
     ///
-    /// assert_eq!(BigInt::from(1), ddnnf.execute_query(&vec![3,4]));
-    /// assert_eq!(BigInt::from(2), ddnnf.execute_query(&vec![3]));
-    pub fn execute_query(&mut self, features: &[i32]) -> BigInt {
+    /// assert_eq!(BigUint::from(1u32), ddnnf.execute_query(&vec![3,4]));
+    /// assert_eq!(BigUint::from(2u32), ddnnf.execute_query(&vec![3]));
+    /// ```
+    pub fn execute_query(&mut self, features: &[i32]) -> BigUint {
         match features.len() {
             0 => self.rc(),
             1 => self.card_of_feature_with_marker(features[0]),

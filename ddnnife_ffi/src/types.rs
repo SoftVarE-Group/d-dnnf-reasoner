@@ -1,5 +1,5 @@
 use ddnnife::int_hash::IntSet;
-use num::BigInt;
+use num::BigUint;
 use std::collections::HashSet;
 
 uniffi::custom_type!(usize, u64, {
@@ -14,10 +14,10 @@ uniffi::custom_type!(isize, i64, {
     try_lift: |builtin| Ok(builtin as isize),
 });
 
-uniffi::custom_type!(BigInt, Vec<u8>, {
+uniffi::custom_type!(BigUint, Vec<u8>, {
     remote,
-    lower: |bigint| bigint.to_signed_bytes_be(),
-    try_lift: |vec| Ok(BigInt::from_signed_bytes_be(&vec)),
+    lower: |bigint| bigint.to_bytes_be(),
+    try_lift: |vec| Ok(BigUint::from_bytes_be(&vec)),
 });
 
 type IntSetu32 = IntSet<u32>;

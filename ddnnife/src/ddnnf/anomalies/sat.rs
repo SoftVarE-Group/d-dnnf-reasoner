@@ -97,7 +97,7 @@ pub fn new_sat_mark_state(number_of_nodes: usize) -> Vec<bool> {
 #[cfg(test)]
 mod test {
     use crate::parser::build_ddnnf;
-    use num::BigInt;
+    use num::BigUint;
     use std::path::Path;
 
     use super::*;
@@ -124,10 +124,10 @@ mod test {
         // If the count is greater than zero, there has to be at least on satisfiable configuration.
         // Vice versa, if the count is equal to zero, the query should be identified as unsatisfiable.
         for i in 1..=vp9.number_of_variables as i32 {
-            assert_eq!(vp9.execute_query(&[i]) > BigInt::ZERO, vp9.sat(&[i]));
+            assert_eq!(vp9.execute_query(&[i]) > BigUint::ZERO, vp9.sat(&[i]));
         }
         for i in 1..=auto1.number_of_variables as i32 {
-            assert_eq!(auto1.execute_query(&[i]) > BigInt::ZERO, auto1.sat(&[i]));
+            assert_eq!(auto1.execute_query(&[i]) > BigUint::ZERO, auto1.sat(&[i]));
         }
     }
 }
