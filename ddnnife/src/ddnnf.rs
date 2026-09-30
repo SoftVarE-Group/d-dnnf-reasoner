@@ -175,6 +175,32 @@ impl Ddnnf {
             _ => self.operate_on_partial_config_default(features, Ddnnf::calc_count),
         }
     }
+
+    /// Calculates the count under the given assumptions.
+    ///
+    /// # Example
+    /// ```
+    /// use std::path::Path;
+    /// use ddnnife::Ddnnf;
+    /// use num::BigUint;
+    ///
+    /// let file_path = Path::new("./tests/data/small_ex_c2d.nnf");
+    /// let mut ddnnf: Ddnnf = Ddnnf::from_file(file_path, None);
+    ///
+    /// assert_eq!(BigUint::from(1u32), ddnnf.count(&vec![3,4]));
+    /// assert_eq!(BigUint::from(2u32), ddnnf.count(&vec![3]));
+    pub fn count(&self, assumptions: &[i32]) -> BigUint {
+        match assumptions.len() {
+            0 => self.rc(),
+            _ => {
+                self.operate_on_partial_config_default_external(
+                    assumptions,
+                    Ddnnf::calc_count_external,
+                )
+                .0
+            }
+        }
+    }
 }
 
 impl Display for Ddnnf {
