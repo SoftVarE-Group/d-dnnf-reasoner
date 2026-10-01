@@ -192,6 +192,10 @@ impl Ddnnf {
     pub fn count(&self, assumptions: &[i32]) -> BigUint {
         match assumptions.len() {
             0 => self.rc(),
+            2..=20 => self.operate_on_partial_config_marker_external(
+                assumptions,
+                Ddnnf::calc_count_marked_external,
+            ),
             _ => {
                 self.operate_on_partial_config_default_external(
                     assumptions,
