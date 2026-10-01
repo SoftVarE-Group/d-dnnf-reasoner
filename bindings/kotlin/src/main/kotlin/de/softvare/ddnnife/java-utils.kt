@@ -24,7 +24,7 @@ fun toUInt(i: Int): UInt {
   return i.toUInt()
 }
 
-fun enumerate(ddnnf: DdnnfMut, assumptions: List<Int>, amount: Int): List<List<Int>> {
+fun enumerate(ddnnf: Ddnnf, assumptions: List<Int>, amount: Int): List<List<Int>> {
   require(amount >= 0) { "Amount must be positive." }
   return ddnnf.enumerate(assumptions, amount.toULong())
 }
