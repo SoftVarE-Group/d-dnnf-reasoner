@@ -41,33 +41,4 @@ impl DdnnfMut {
             .enumerate(&mut assumptions, amount)
             .unwrap_or_default()
     }
-
-    /// Generates random satisfiable configurations for this d-DNNF.
-    #[uniffi::method]
-    fn random(&self, assumptions: &[i32], amount: usize, seed: u64) -> Vec<Vec<i32>> {
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .uniform_random_sampling(assumptions, amount, seed)
-            .unwrap_or_default()
-    }
-
-    /// Compute all atomic sets.
-    ///
-    /// A group forms an atomic set iff every valid configuration either includes
-    /// or excludes all members of that atomic set.
-    #[uniffi::method]
-    fn atomic_sets(
-        &self,
-        candidates: Option<Vec<u32>>,
-        assumptions: &[i32],
-        cross: bool,
-    ) -> Vec<Vec<i16>> {
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .get_atomic_sets(candidates, assumptions, cross)
-    }
 }

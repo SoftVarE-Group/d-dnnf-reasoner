@@ -44,13 +44,13 @@ def test_enumerate():
 
 
 def test_random():
-    configs = ddnnf.as_mut().random([], 2, 42)
+    configs = ddnnf.random([], 2, 42)
     assert len(configs) == 2
     assert len(configs[0]) == features
 
 
 def test_atomic_sets():
-    atomic_sets = ddnnf.as_mut().atomic_sets(None, [1], True)
+    atomic_sets = ddnnf.atomic_sets(None, [1], True)
     assert len(atomic_sets[0]) == features
 
 
