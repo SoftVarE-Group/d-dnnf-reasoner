@@ -29,13 +29,13 @@ fun enumerate(ddnnf: DdnnfMut, assumptions: List<Int>, amount: Int): List<List<I
   return ddnnf.enumerate(assumptions, amount.toULong())
 }
 
-fun random(ddnnf: DdnnfMut, assumptions: List<Int>, amount: Int, seed: Int): List<List<Int>> {
+fun random(ddnnf: Ddnnf, assumptions: List<Int>, amount: Int, seed: Int): List<List<Int>> {
   require(amount >= 0) { "Amount must be positive." }
   return ddnnf.random(assumptions, amount.toULong(), seed.toULong())
 }
 
 fun atomicSets(
-    ddnnf: DdnnfMut,
+    ddnnf: Ddnnf,
     candidates: List<Int>?,
     assumptions: List<Int>,
     cross: Boolean,

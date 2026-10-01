@@ -65,14 +65,14 @@ internal class DdnnfTest {
 
   @Test
   fun random() {
-    val configs = ddnnf.asMut().random(emptyList(), 2u, 42u)
+    val configs = ddnnf.random(emptyList(), 2u, 42u)
     assertEquals(2, configs.size)
     assertEquals(features, configs[0].size)
   }
 
   @Test
   fun atomicSets() {
-    val atomicSets = ddnnf.asMut().atomicSets(null, listOf(1), true)
+    val atomicSets = ddnnf.atomicSets(null, listOf(1), true)
     assertEquals(features, atomicSets[0].size)
   }
 
