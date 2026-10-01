@@ -193,7 +193,7 @@ mod test {
     use ddnnife::Ddnnf;
     use ddnnife::parser::build_ddnnf;
     use ddnnife::util::format_vec;
-    use num::{BigInt, One};
+    use num::{BigUint, One};
     use std::collections::HashSet;
     use std::io::{Error, Result};
     use std::path::Path;
@@ -324,7 +324,7 @@ mod test {
         );
 
         assert_eq!(
-            (auto1.rc() > BigInt::ZERO).to_string(),
+            (auto1.rc() > BigUint::ZERO).to_string(),
             handle_string_query(&mut auto1, "sat").unwrap()
         );
 
@@ -428,7 +428,7 @@ mod test {
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
 
-        assert_eq!(BigInt::from(1), vp9.execute_query(&res));
+        assert_eq!(BigUint::ONE, vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());
 
         binding = handle_string_query(&mut vp9, "random").unwrap();
@@ -437,7 +437,7 @@ mod test {
             .map(|v| v.parse::<i32>().unwrap())
             .collect::<Vec<i32>>();
 
-        assert_eq!(BigInt::from(1), vp9.execute_query(&res));
+        assert_eq!(BigUint::ONE, vp9.execute_query(&res));
         assert_eq!(vp9.number_of_variables as usize, res.len());
 
         binding = handle_string_query(

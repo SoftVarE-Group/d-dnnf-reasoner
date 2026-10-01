@@ -33,7 +33,7 @@ mod test {
     use crate::parser::build_ddnnf;
     use file_diff::diff_files;
     use itertools::Itertools;
-    use num::BigInt;
+    use num::BigUint;
     use std::{
         fs::{self, File},
         io::{BufRead, BufReader, BufWriter},
@@ -97,7 +97,7 @@ mod test {
             assert_eq!(ddnnf.sat(&query), res);
             assert_eq!(
                 ddnnf.sat(&query),
-                (ddnnf.execute_query(&query) > BigInt::ZERO)
+                (ddnnf.execute_query(&query) > BigUint::ZERO)
             );
         }
 

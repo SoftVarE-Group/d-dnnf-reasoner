@@ -1,7 +1,9 @@
+use crate::BigUrational;
 use crate::Ddnnf;
 use crate::NodeType::*;
+use crate::ddnnf::counting::default_count::Counts;
 use itertools::Itertools;
-use num::{BigInt, BigRational, ToPrimitive, Zero};
+use num::{BigUint, ToPrimitive, Zero};
 use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use rand_distr::{Binomial, Distribution, weighted::WeightedAliasIndex};
@@ -38,7 +40,7 @@ impl Ddnnf {
         }
         assumptions.sort_unstable_by_key(|f| f.abs());
 
-        if self.execute_query(assumptions) > BigInt::ZERO {
+        if self.execute_query(assumptions) > BigUint::ZERO {
             let last_stop = match ENUMERATION_CACHE.read().unwrap().get(assumptions) {
                 Some(&x) => x,
                 None => 0,
@@ -46,8 +48,8 @@ impl Ddnnf {
 
             let mut sample_list = self.enumerate_node(
                 (
-                    &BigInt::from(last_stop),
-                    &min(self.rt(), BigInt::from(last_stop + amount)),
+                    &BigUint::from(last_stop),
+                    &min(self.rt(), BigUint::from(last_stop + amount)),
                 ),
                 self.nodes.len() - 1,
             );
@@ -57,7 +59,7 @@ impl Ddnnf {
 
             ENUMERATION_CACHE.write().unwrap().insert(
                 assumptions.to_vec(),
-                (min(self.rt(), BigInt::from(last_stop + amount)) % self.rt())
+                (min(self.rt(), BigUint::from(last_stop + amount)) % self.rt())
                     .to_usize()
                     .expect("Attempt to convert to large integer!"),
             );
@@ -73,31 +75,44 @@ impl Ddnnf {
     /// Returns `None` if the d-DNNF itself or with the assumptions represents a tautology or
     /// contradiction.
     pub fn uniform_random_sampling(
-        &mut self,
+        &self,
         assumptions: &[i32],
         amount: usize,
         seed: u64,
     ) -> Option<Vec<Vec<i32>>> {
-        if self.is_trivial() {
+        if self.is_trivial() || !self.check_assumptions(assumptions) {
             return None;
         }
 
-        if !self.preprocess_config_creation(assumptions) {
+        let (root_count, counts) =
+            self.operate_on_partial_config_default_external(assumptions, Self::calc_count_external);
+
+        if root_count.is_zero() {
             return None;
         }
 
-        if self.execute_query(assumptions) > BigInt::ZERO {
-            let mut sample_list = self.sample_node(
-                amount,
-                self.nodes.len() - 1,
-                &mut Pcg32::seed_from_u64(seed),
-            );
-            for sample in sample_list.iter_mut() {
-                sample.sort_unstable_by_key(|f| f.abs());
-            }
-            return Some(sample_list);
+        let mut sample_list = self.sample_node(
+            amount,
+            self.nodes.len() - 1,
+            &mut Pcg32::seed_from_u64(seed),
+            &counts,
+        );
+
+        for sample in sample_list.iter_mut() {
+            sample.sort_unstable_by_key(|f| f.abs());
         }
-        None
+
+        Some(sample_list)
+    }
+
+    /// Checks whether the given assumptions are valid.
+    ///
+    /// Assumptions are invalid if they contain a literal out of the variable bounds.
+    fn check_assumptions(&self, assumptions: &[i32]) -> bool {
+        !assumptions
+            .iter()
+            .map(|literal| literal.unsigned_abs())
+            .any(|variable| variable > self.number_of_variables)
     }
 
     // resets the temp count of each node to the cached count,
@@ -127,7 +142,7 @@ impl Ddnnf {
 
     // Handles a node appropiate depending on its kind to produce complete
     // satisfiable configurations
-    fn enumerate_node(&self, range: (&BigInt, &BigInt), index: usize) -> Vec<Vec<i32>> {
+    fn enumerate_node(&self, range: (&BigUint, &BigUint), index: usize) -> Vec<Vec<i32>> {
         let _range2 = (
             range
                 .0
@@ -145,19 +160,18 @@ impl Ddnnf {
 
         match &self.nodes[index].ntype {
             And { children } => {
-                let mut acc_amount = BigInt::from(1);
+                let mut acc_amount = BigUint::ONE;
                 let mut enumeration_child_lists = Vec::new();
 
                 for &child in children {
                     if &acc_amount < range.1 {
-                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_child_lists.push(self.enumerate_node(change, child));
                         acc_amount *= change.1;
                     } else {
                         // restrict the creation of any more configs
                         enumeration_child_lists.push(vec![
-                            self.enumerate_node((&BigInt::ZERO, &BigInt::from(1)), child)[0]
-                                .clone(),
+                            self.enumerate_node((&BigUint::ZERO, &BigUint::ONE), child)[0].clone(),
                         ]);
                     }
                 }
@@ -194,15 +208,15 @@ impl Ddnnf {
                     .collect();
             }
             Or { children } => {
-                let mut acc_amount = BigInt::ZERO;
+                let mut acc_amount = BigUint::ZERO;
 
                 for &child in children {
-                    if self.nodes[child].temp == BigInt::ZERO {
+                    if self.nodes[child].temp == BigUint::ZERO {
                         continue;
                     }
 
                     if &acc_amount < range.1 {
-                        let change = (&BigInt::ZERO, min(range.1, &self.nodes[child].temp));
+                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
                         enumeration_list.append(&mut self.enumerate_node(change, child));
                         acc_amount += change.1;
                     } else {
@@ -219,7 +233,13 @@ impl Ddnnf {
 
     // Performs the operations needed to generate random samples.
     // The algorithm is based upon KUS's uniform random sampling algorithm.
-    fn sample_node(&self, amount: usize, index: usize, rng: &mut Lcg64Xsh32) -> Vec<Vec<i32>> {
+    fn sample_node(
+        &self,
+        amount: usize,
+        index: usize,
+        rng: &mut Lcg64Xsh32,
+        counts: &Counts,
+    ) -> Vec<Vec<i32>> {
         let mut sample_list = Vec::new();
         if amount == 0 {
             return sample_list;
@@ -230,7 +250,7 @@ impl Ddnnf {
                     sample_list.push(Vec::new());
                 }
                 for &child in children {
-                    let mut child_sample_list = self.sample_node(amount, child, rng);
+                    let mut child_sample_list = self.sample_node(amount, child, rng, counts);
                     // shuffle operation from KUS algorithm
                     child_sample_list.shuffle(rng);
 
@@ -246,17 +266,17 @@ impl Ddnnf {
                 let mut weights = Vec::new();
 
                 // compute the probability of getting a sample of a child node
-                let parent_count_as_float = BigRational::from(self.nodes[index].temp.clone());
+                let parent_count_as_float = BigUrational::from(counts[index].clone());
                 #[allow(clippy::needless_range_loop)]
                 for child_index in 0..children.len() {
                     let child_count_as_float =
-                        BigRational::from(self.nodes[children[child_index]].temp.clone());
+                        BigUrational::from(counts[children[child_index]].clone());
 
                     // can't get a sample of a children with no more valid configuration
                     if !child_count_as_float.is_zero() {
                         let child_amount = (child_count_as_float / &parent_count_as_float)
                             .to_f64()
-                            .expect("Failed to convert BigRational to f64!")
+                            .expect("Failed to convert BigUrational to f64!")
                             * amount as f64;
                         choices.push(child_index);
                         weights.push(child_amount);
@@ -286,6 +306,7 @@ impl Ddnnf {
                         pick_amount[choice],
                         children[choice],
                         rng,
+                        counts,
                     ));
                 }
 
@@ -309,14 +330,13 @@ impl Ddnnf {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::build_ddnnf;
     use rand::rng;
     use std::collections::HashSet;
     use std::path::Path;
 
     #[test]
     fn enumeration_small_ddnnf() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let mut res_all = HashSet::new();
         let mut res_assumptions = HashSet::new();
@@ -355,11 +375,11 @@ mod test {
         }
         assert_eq!(
             vp9.rt(),
-            BigInt::from(res_all.len()),
+            BigUint::from(res_all.len()),
             "there are duplicates"
         );
 
-        assert_eq!(BigInt::from(80), vp9.execute_query(&assumptions));
+        assert_eq!(BigUint::from(80u32), vp9.execute_query(&assumptions));
         let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
         for inter in inter_res_assumptions_2.clone() {
             res_assumptions.insert(inter);
@@ -382,7 +402,7 @@ mod test {
 
     #[test]
     fn enumeration_big_ddnnf() {
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![
@@ -403,7 +423,7 @@ mod test {
 
     #[test]
     fn enumeration_step_by_step() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![-35, 42];
@@ -457,8 +477,8 @@ mod test {
 
     #[test]
     fn enumeration_is_not_possible() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
         assert!(
@@ -478,8 +498,8 @@ mod test {
 
     #[test]
     fn sampling_validity() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let mut auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         let vp9_assumptions = vec![38, 2, -14];
         let vp9_samples = vp9
@@ -501,8 +521,8 @@ mod test {
 
     #[test]
     fn sampling_seeding() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         // same seeding should yield same results, different seeding should (normally) yield different results
         assert_eq!(
@@ -542,8 +562,8 @@ mod test {
 
     #[test]
     fn sampling_is_not_possible() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.uniform_random_sampling(&[1, -1], 1, 42).is_none());
         assert!(
