@@ -4,12 +4,12 @@ package_name = "de.softvare.ddnnife"
 [bindings.python]
 cdylib_name = "ddnnife"
 
-[bindings.kotlin.custom_types.BigInt]
+[bindings.kotlin.custom_types.BigUint]
 type_name = "BigInteger"
 imports = ["java.math.BigInteger"]
 into_custom = "BigInteger({})"
 from_custom = "{}.toByteArray()"
 
-[bindings.python.custom_types.BigInt]
+[bindings.python.custom_types.BigUint]
 into_custom = "int.from_bytes({}, 'big')"
 from_custom = "{}.to_bytes()"

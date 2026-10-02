@@ -1,5 +1,5 @@
 use crate::Ddnnf;
-use num::BigInt;
+use num::BigUint;
 use std::sync::Mutex;
 
 /// A mutable version of a d-DNNF, required for some computations.
@@ -20,7 +20,7 @@ impl DdnnfMut {
 
     /// Computes the cardinality of this d-DNNF.
     #[uniffi::method]
-    fn count(&self, assumptions: &[i32]) -> BigInt {
+    fn count(&self, assumptions: &[i32]) -> BigUint {
         self.0.lock().unwrap().0.execute_query(assumptions)
     }
 
@@ -28,46 +28,5 @@ impl DdnnfMut {
     #[uniffi::method]
     fn is_sat(&self, assumptions: &[i32]) -> bool {
         self.0.lock().unwrap().0.sat(assumptions)
-    }
-
-    /// Generates satisfiable configurations for this d-DNNF.
-    #[uniffi::method]
-    fn enumerate(&self, assumptions: &[i32], amount: usize) -> Vec<Vec<i32>> {
-        let mut assumptions = assumptions.to_vec();
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .enumerate(&mut assumptions, amount)
-            .unwrap_or_default()
-    }
-
-    /// Generates random satisfiable configurations for this d-DNNF.
-    #[uniffi::method]
-    fn random(&self, assumptions: &[i32], amount: usize, seed: u64) -> Vec<Vec<i32>> {
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .uniform_random_sampling(assumptions, amount, seed)
-            .unwrap_or_default()
-    }
-
-    /// Compute all atomic sets.
-    ///
-    /// A group forms an atomic set iff every valid configuration either includes
-    /// or excludes all members of that atomic set.
-    #[uniffi::method]
-    fn atomic_sets(
-        &self,
-        candidates: Option<Vec<u32>>,
-        assumptions: &[i32],
-        cross: bool,
-    ) -> Vec<Vec<i16>> {
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .get_atomic_sets(candidates, assumptions, cross)
     }
 }

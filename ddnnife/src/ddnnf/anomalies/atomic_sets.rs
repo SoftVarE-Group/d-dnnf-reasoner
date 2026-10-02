@@ -1,7 +1,7 @@
 use crate::Ddnnf;
 use bitvec::prelude::*;
 use itertools::Itertools;
-use num::BigInt;
+use num::BigUint;
 use std::{collections::HashMap, hash::Hash};
 
 /// A quite basic union-find implementation that uses ranks and path compression
@@ -127,7 +127,7 @@ impl Ddnnf {
     /// A group forms an atomic set iff every valid configuration either includes
     /// or excludes all members of that atomic set
     pub fn get_atomic_sets(
-        &mut self,
+        &self,
         candidates: Option<Vec<u32>>,
         assumptions: &[i32],
         cross: bool,
@@ -151,7 +151,7 @@ impl Ddnnf {
             return vec![];
         }
 
-        let mut combinations: Vec<(BigInt, i32)> = self
+        let mut combinations: Vec<(BigUint, i32)> = self
             .count_iterables(assumptions, &considered)
             .into_iter()
             .zip(considered)
@@ -203,7 +203,7 @@ impl Ddnnf {
     /// Computes the signs of the features in multiple uniform random samples.
     /// Each of the features is represented by an BitArray holds as many entries as random samples
     /// with a 0 indicating that the feature occurs negated and a 1 indicating the feature occurs affirmed.
-    fn get_signed_excludes(&mut self, assumptions: &[i32]) -> Vec<BitArray<[u64; 8]>> {
+    fn get_signed_excludes(&self, assumptions: &[i32]) -> Vec<BitArray<[u64; 8]>> {
         const SAMPLE_AMOUNT: usize = 512;
 
         let mut signed_excludes = Vec::with_capacity(self.number_of_variables as usize);
@@ -234,8 +234,8 @@ impl Ddnnf {
     /// First naive approach to compute atomic sets by incrementally add a feature one by one
     /// while checking if the atomic set property (i.e. the count stays the same) still holds
     fn incremental_subset_check(
-        &mut self,
-        control: BigInt,
+        &self,
+        control: BigUint,
         pot_atomic_set: &[i32],
         signed_excludes: &[BitArray<[u64; 8]>],
         assumptions: &[i32],
@@ -266,7 +266,7 @@ impl Ddnnf {
             }
 
             // we identify a pair of values to be in the same atomic set, then we union them
-            if self.execute_query(&[&pair, assumptions].concat()) == control {
+            if self.count(&[&pair, assumptions].concat()) == control {
                 atomic_sets.union(x, y);
             }
         }
@@ -334,7 +334,7 @@ mod test {
 
     #[test]
     fn atomic_sets_vp9() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         // make sure that the results are reproducible
         for _ in 0..3 {
@@ -359,7 +359,7 @@ mod test {
 
     #[test]
     fn atomic_sets_auto1() {
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         // ensure reproducible
         for _ in 0..3 {
@@ -404,8 +404,8 @@ mod test {
 
     #[test]
     fn empty_candidates() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let auto1: Ddnnf = build_ddnnf(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         assert!(vp9.get_atomic_sets(Some(vec![]), &[], false).is_empty());
         assert!(auto1.get_atomic_sets(Some(vec![]), &[], false).is_empty());
@@ -413,7 +413,7 @@ mod test {
 
     #[test]
     fn candidates_and_assumptions_for_core() {
-        let mut vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let vp9: Ddnnf = build_ddnnf(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let vp9_default_as = vp9.get_atomic_sets(None, &[], false);
         let vp9_core = vp9.core.clone().into_iter().collect_vec();
@@ -467,15 +467,15 @@ mod test {
 
         // atomic set property holds for all possibilities
         for subset in atomic_sets.iter() {
-            let mut compare_value = BigInt::from(-1);
+            let mut compare_value = None;
             for feature in subset.iter() {
                 let mut query_slice = assumptions.clone();
                 query_slice.push(*feature);
 
-                if compare_value == BigInt::from(-1) {
-                    compare_value = auto1.execute_query(&query_slice);
+                if let Some(count) = compare_value.clone() {
+                    assert_eq!(count, auto1.execute_query(&query_slice));
                 } else {
-                    assert_eq!(compare_value, auto1.execute_query(&query_slice));
+                    compare_value = Some(auto1.execute_query(&query_slice));
                 }
             }
         }

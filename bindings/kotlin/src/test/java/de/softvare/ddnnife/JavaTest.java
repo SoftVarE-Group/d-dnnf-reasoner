@@ -64,14 +64,14 @@ class JavaTest {
 
     @Test
     void enumerateTest() {
-        List<List<Integer>> configs = enumerate(ddnnf.asMut(), emptyList(), 1);
+        List<List<Integer>> configs = enumerate(ddnnf, emptyList(), 1, 0);
         assertEquals(1, configs.size());
         assertEquals(features, configs.getFirst().size());
     }
 
     @Test
     void randomTest() {
-        List<List<Integer>> configs = random(ddnnf.asMut(), emptyList(), 2, 42);
+        List<List<Integer>> configs = random(ddnnf, emptyList(), 2, 42);
         assertEquals(2, configs.size());
         assertEquals(features, configs.getFirst().size());
     }
@@ -79,7 +79,7 @@ class JavaTest {
     @Test
     void atomicSetsTest() {
         List<List<Short>> atomicSets = atomicSets(
-            ddnnf.asMut(),
+            ddnnf,
             null,
             List.of(1),
             true

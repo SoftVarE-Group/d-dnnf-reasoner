@@ -1,7 +1,7 @@
 use crate::DdnnfMut;
 use ddnnife::ddnnf;
 use ddnnife::util;
-use num::BigInt;
+use num::BigUint;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
@@ -50,13 +50,13 @@ impl Ddnnf {
     ///
     /// This value is the same during all computations.
     #[uniffi::method]
-    pub fn rc(&self) -> BigInt {
+    pub fn rc(&self) -> BigUint {
         self.0.rc()
     }
 
     /// Computes the cardinality of this d-DNNF for multiple iterables.
     #[uniffi::method]
-    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigInt> {
+    fn count_iterables(&self, assumptions: &[i32], iterables: &[i32]) -> Vec<BigUint> {
         self.0.count_iterables(assumptions, iterables)
     }
 
@@ -102,6 +102,36 @@ impl Ddnnf {
         dead.sort();
         dead.dedup();
         dead
+    }
+
+    /// Generates satisfiable configurations for this d-DNNF.
+    #[uniffi::method]
+    fn enumerate(&self, assumptions: &[i32], amount: usize, offset: usize) -> Vec<Vec<i32>> {
+        self.0
+            .enumerate(assumptions, amount, offset)
+            .unwrap_or_default()
+    }
+
+    /// Generates random satisfiable configurations for this d-DNNF.
+    #[uniffi::method]
+    fn random(&self, assumptions: &[i32], amount: usize, seed: u64) -> Vec<Vec<i32>> {
+        self.0
+            .uniform_random_sampling(assumptions, amount, seed)
+            .unwrap_or_default()
+    }
+
+    /// Compute all atomic sets.
+    ///
+    /// A group forms an atomic set iff every valid configuration either includes
+    /// or excludes all members of that atomic set.
+    #[uniffi::method]
+    fn atomic_sets(
+        &self,
+        candidates: Option<Vec<u32>>,
+        assumptions: &[i32],
+        cross: bool,
+    ) -> Vec<Vec<i16>> {
+        self.0.get_atomic_sets(candidates, assumptions, cross)
     }
 
     /// Generates the c2d format representation of this d-DNNF.
