@@ -29,16 +29,4 @@ impl DdnnfMut {
     fn is_sat(&self, assumptions: &[i32]) -> bool {
         self.0.lock().unwrap().0.sat(assumptions)
     }
-
-    /// Generates satisfiable configurations for this d-DNNF.
-    #[uniffi::method]
-    fn enumerate(&self, assumptions: &[i32], amount: usize) -> Vec<Vec<i32>> {
-        let mut assumptions = assumptions.to_vec();
-        self.0
-            .lock()
-            .unwrap()
-            .0
-            .enumerate(&mut assumptions, amount)
-            .unwrap_or_default()
-    }
 }

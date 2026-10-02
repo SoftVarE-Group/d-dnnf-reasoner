@@ -102,10 +102,7 @@ pub fn handle_query(query: Query, ddnnf: &mut Ddnnf) -> Result<String> {
             &mut assumptions,
             &variables,
         )),
-        Query::Enumerate {
-            limit,
-            mut assumptions,
-        } => match ddnnf.enumerate(&mut assumptions, limit) {
+        Query::Enumerate { limit, assumptions } => match ddnnf.enumerate(&assumptions, limit, 0) {
             Some(samples) => Ok(format_vec_vec(samples.iter())),
             None => Err(Error::other(ERROR_UNSAT)),
         },

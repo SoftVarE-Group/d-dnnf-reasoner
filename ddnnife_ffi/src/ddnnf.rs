@@ -104,6 +104,14 @@ impl Ddnnf {
         dead
     }
 
+    /// Generates satisfiable configurations for this d-DNNF.
+    #[uniffi::method]
+    fn enumerate(&self, assumptions: &[i32], amount: usize, offset: usize) -> Vec<Vec<i32>> {
+        self.0
+            .enumerate(assumptions, amount, offset)
+            .unwrap_or_default()
+    }
+
     /// Generates random satisfiable configurations for this d-DNNF.
     #[uniffi::method]
     fn random(&self, assumptions: &[i32], amount: usize, seed: u64) -> Vec<Vec<i32>> {

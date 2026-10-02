@@ -64,7 +64,7 @@ class JavaTest {
 
     @Test
     void enumerateTest() {
-        List<List<Integer>> configs = enumerate(ddnnf.asMut(), emptyList(), 1);
+        List<List<Integer>> configs = enumerate(ddnnf, emptyList(), 1, 0);
         assertEquals(1, configs.size());
         assertEquals(features, configs.getFirst().size());
     }

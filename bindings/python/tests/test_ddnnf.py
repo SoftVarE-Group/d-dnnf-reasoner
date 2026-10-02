@@ -38,7 +38,7 @@ def test_core():
 
 
 def test_enumerate():
-    configs = ddnnf.as_mut().enumerate([], 1)
+    configs = ddnnf.enumerate([], 1, 0)
     assert len(configs) == 1
     assert len(configs[0]) == features
 
