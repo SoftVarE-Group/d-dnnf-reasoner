@@ -58,7 +58,7 @@ internal class DdnnfTest {
 
   @Test
   fun enumerate() {
-    val configs = ddnnf.asMut().enumerate(emptyList(), 1u)
+    val configs = ddnnf.enumerate(emptyList(), 1u, 0u)
     assertEquals(1, configs.size)
     assertEquals(features, configs[0].size)
   }

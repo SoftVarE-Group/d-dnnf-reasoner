@@ -528,7 +528,7 @@ pub(crate) mod test {
             .unwrap();
         let best_config_values_brute_force = ext_ddnnf
             .ddnnf
-            .enumerate(&mut vec![], n_config)
+            .enumerate(&[], n_config, 0)
             .unwrap()
             .into_iter()
             .map(|literals| OptimalConfig::from(&literals[..], &ext_ddnnf))
@@ -558,7 +558,7 @@ pub(crate) mod test {
             .unwrap();
         let best_config_values_brute_force = ext_ddnnf
             .ddnnf
-            .enumerate(&mut assumptions.to_vec(), n_config)
+            .enumerate(&assumptions, n_config, 0)
             .unwrap()
             .into_iter()
             .map(|literals| OptimalConfig::from(&literals[..], &ext_ddnnf))

@@ -1,33 +1,41 @@
 use crate::BigUrational;
 use crate::Ddnnf;
-use crate::NodeType::*;
+use crate::NodeType;
 use crate::ddnnf::counting::default_count::Counts;
 use itertools::Itertools;
+use log::warn;
 use num::{BigUint, ToPrimitive, Zero};
 use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use rand_distr::{Binomial, Distribution, weighted::WeightedAliasIndex};
 use rand_pcg::{Lcg64Xsh32, Pcg32};
-use std::{
-    cmp::min,
-    collections::HashMap,
-    sync::{LazyLock, RwLock},
-};
-
-static ENUMERATION_CACHE: LazyLock<RwLock<HashMap<Vec<i32>, usize>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+use std::range::Range;
 
 impl Ddnnf {
     /// Creates satisfiable complete configurations for a d-DNNF and given assumptions.
     ///
     /// Returns `None` if the d-DNNF itself or with the assumptions represents a tautology or
     /// contradiction.
+    ///
+    /// # Note
+    ///
+    /// `offset` can cause the enumeration to wrap around, i.e. when it becomes larger than
+    /// the possible number of enumerations, it will become `offset % n` where `n` is the number of possible
+    /// enumerations.
+    ///
+    /// Additionally `offset + amount` can be larger than the possible number of enumeration.
+    /// In this case the enumeration will stop after the last configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `amount + offset` is outside the range of [usize].
     pub fn enumerate(
-        &mut self,
-        assumptions: &mut Vec<i32>,
+        &self,
+        assumptions: &[i32],
         amount: usize,
+        offset: usize,
     ) -> Option<Vec<Vec<i32>>> {
-        if self.is_trivial() {
+        if self.is_trivial() || !self.check_assumptions(assumptions) {
             return None;
         }
 
@@ -35,37 +43,36 @@ impl Ddnnf {
             return Some(Vec::new());
         }
 
-        if !self.preprocess_config_creation(assumptions) {
+        let (root_count, counts) =
+            self.operate_on_partial_config_default_external(assumptions, Self::calc_count_external);
+
+        if root_count.is_zero() {
             return None;
         }
-        assumptions.sort_unstable_by_key(|f| f.abs());
 
-        if self.execute_query(assumptions) > BigUint::ZERO {
-            let last_stop = match ENUMERATION_CACHE.read().unwrap().get(assumptions) {
-                Some(&x) => x,
-                None => 0,
-            };
+        let mut offset = offset;
 
-            let mut sample_list = self.enumerate_node(
-                (
-                    &BigUint::from(last_stop),
-                    &min(self.rt(), BigUint::from(last_stop + amount)),
-                ),
-                self.nodes.len() - 1,
+        if BigUint::from(offset) >= root_count {
+            warn!(
+                "`offset` is larger than the possible number of enumerations: {offset} >= {root_count}, wrapping around."
             );
-            for sample in sample_list.iter_mut() {
-                sample.sort_unstable_by_key(|f| f.abs());
-            }
 
-            ENUMERATION_CACHE.write().unwrap().insert(
-                assumptions.to_vec(),
-                (min(self.rt(), BigUint::from(last_stop + amount)) % self.rt())
-                    .to_usize()
-                    .expect("Attempt to convert to large integer!"),
-            );
-            return Some(sample_list);
+            offset %= &root_count;
         }
-        None
+
+        let root_index = self.nodes.len() - 1;
+
+        let mut samples = self.enumerate_node(
+            Range::from(offset..min_mixed(offset + amount, &root_count)),
+            root_index,
+            &counts,
+        );
+
+        samples
+            .iter_mut()
+            .for_each(|sample| sample.sort_unstable_by_key(|literal| literal.abs()));
+
+        Some(samples)
     }
 
     /// Generates amount many uniform random samples under a given set of assumptions and a seed.
@@ -115,66 +122,41 @@ impl Ddnnf {
             .any(|variable| variable > self.number_of_variables)
     }
 
-    // resets the temp count of each node to the cached count,
-    // computes the count under the assumptions to set some of the temp values,
-    // and handle the literals properly.
-    fn preprocess_config_creation(&mut self, assumptions: &[i32]) -> bool {
-        // if any of the assumptions isn't valid by being in the range of +-#variables, then we return false
-        if assumptions
-            .iter()
-            .any(|f| f.abs() > self.number_of_variables as i32)
-        {
-            return false;
+    fn enumerate_node(
+        &self,
+        range: Range<usize>,
+        node_index: usize,
+        counts: &Counts,
+    ) -> Vec<Vec<i32>> {
+        if range.is_empty() || counts[node_index].is_zero() {
+            return Vec::new();
         }
 
-        for node in self.nodes.iter_mut() {
-            node.temp.clone_from(&node.count);
-        }
+        match &self.nodes[node_index].ntype {
+            NodeType::And { children } => {
+                let mut enumerations_count = 1;
 
-        for literal in assumptions.iter() {
-            if let Some(&x) = self.literals.get(&-literal) {
-                self.nodes[x].temp.set_zero();
-            }
-        }
+                let enumeration_child_lists: Vec<Vec<Vec<i32>>> = children
+                    .iter()
+                    .map(|&child_index| {
+                        if enumerations_count >= range.end {
+                            // restrict the creation of any more configs
+                            return vec![
+                                self.enumerate_node(Range::from(0..1), child_index, counts)[0]
+                                    .clone(),
+                            ];
+                        }
 
-        true
-    }
+                        // Range for this child enumeration.
+                        // Enumerate not more than either we want globally or the child can provide.
+                        let child_range =
+                            Range::from(0..min_mixed(range.end, &counts[child_index]));
 
-    // Handles a node appropiate depending on its kind to produce complete
-    // satisfiable configurations
-    fn enumerate_node(&self, range: (&BigUint, &BigUint), index: usize) -> Vec<Vec<i32>> {
-        let _range2 = (
-            range
-                .0
-                .to_usize()
-                .expect("Attempt to convert to large integer!"),
-            range
-                .1
-                .to_usize()
-                .expect("Attempt to convert to large integer!"),
-        );
-        let mut enumeration_list = Vec::new();
-        if range.1.is_zero() || self.nodes[index].temp.is_zero() {
-            return enumeration_list;
-        }
+                        enumerations_count *= child_range.end;
 
-        match &self.nodes[index].ntype {
-            And { children } => {
-                let mut acc_amount = BigUint::ONE;
-                let mut enumeration_child_lists = Vec::new();
-
-                for &child in children {
-                    if &acc_amount < range.1 {
-                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
-                        enumeration_child_lists.push(self.enumerate_node(change, child));
-                        acc_amount *= change.1;
-                    } else {
-                        // restrict the creation of any more configs
-                        enumeration_child_lists.push(vec![
-                            self.enumerate_node((&BigUint::ZERO, &BigUint::ONE), child)[0].clone(),
-                        ]);
-                    }
-                }
+                        self.enumerate_node(child_range, child_index, counts)
+                    })
+                    .collect();
 
                 // cartesian product of  all combinations of children
                 // example:
@@ -184,51 +166,42 @@ impl Ddnnf {
                 //          [[1,2,-3,4],[1,2,-3,5],[1,2,-3,-5],[3,4],[3,5],[3,-5]]
                 //
                 // reverse is important to ensure a total order with additions of configs at the end
-                enumeration_child_lists.reverse();
-                enumeration_list = enumeration_child_lists
+                enumeration_child_lists
                     .into_iter()
+                    .rev()
                     .multi_cartesian_product()
-                    .map(|elem| elem.into_iter().flatten().collect())
-                    .skip(
-                        range
-                            .0
-                            .to_usize()
-                            .expect("Attempt to convert to large integer!"),
-                    )
-                    .take(
-                        range
-                            .1
-                            .to_usize()
-                            .expect("Attempt to convert to large integer!")
-                            - range
-                                .0
-                                .to_usize()
-                                .expect("Attempt to convert to large integer!"),
-                    ) // stop after we got our required amount of configs
-                    .collect();
+                    .map(|product| product.concat())
+                    .skip(range.start)
+                    .take(range.end - range.start)
+                    .collect()
             }
-            Or { children } => {
-                let mut acc_amount = BigUint::ZERO;
+            NodeType::Or { children } => {
+                // Generated enumerations of the child nodes.
+                let mut enumerations = Vec::new();
 
-                for &child in children {
-                    if self.nodes[child].temp == BigUint::ZERO {
-                        continue;
-                    }
+                // The total count of all generated configurations.
+                let mut enumerations_count = 0;
 
-                    if &acc_amount < range.1 {
-                        let change = (&BigUint::ZERO, min(range.1, &self.nodes[child].temp));
-                        enumeration_list.append(&mut self.enumerate_node(change, child));
-                        acc_amount += change.1;
-                    } else {
+                for &child_index in children
+                    .iter()
+                    .filter(|&&child_index| !counts[child_index].is_zero())
+                {
+                    if enumerations_count >= range.end {
                         break;
                     }
+
+                    // Range for this child enumeration.
+                    // Enumerate not more than either we want globally or the child can provide.
+                    let child_range = Range::from(0..min_mixed(range.end, &counts[child_index]));
+                    enumerations_count += child_range.end;
+
+                    enumerations.append(&mut self.enumerate_node(child_range, child_index, counts));
                 }
+
+                enumerations
             }
-            Literal { literal } => {
-                enumeration_list.push(vec![*literal]);
-            }
+            NodeType::Literal { literal } => vec![vec![*literal]],
         }
-        enumeration_list
     }
 
     // Performs the operations needed to generate random samples.
@@ -245,7 +218,7 @@ impl Ddnnf {
             return sample_list;
         }
         match &self.nodes[index].ntype {
-            And { children } => {
+            NodeType::And { children } => {
                 for _ in 0..amount {
                     sample_list.push(Vec::new());
                 }
@@ -260,7 +233,7 @@ impl Ddnnf {
                     }
                 }
             }
-            Or { children } => {
+            NodeType::Or { children } => {
                 let mut pick_amount = vec![0; children.len()];
                 let mut choices = Vec::new();
                 let mut weights = Vec::new();
@@ -317,7 +290,7 @@ impl Ddnnf {
 
                 sample_list.shuffle(rng);
             }
-            Literal { literal } => {
+            NodeType::Literal { literal } => {
                 for _ in 0..amount {
                     sample_list.push(vec![*literal]);
                 }
@@ -327,10 +300,24 @@ impl Ddnnf {
     }
 }
 
+/// Returns the smaller value of a [usize] and a [BigUint].
+///
+/// This should never fail as the [BigUint] must be smaller than the largest possible [usize]
+/// in case it is smaller than the provided [usize].
+fn min_mixed(a: usize, b: &BigUint) -> usize {
+    if &BigUint::from(a) < b {
+        return a;
+    }
+
+    b.to_usize()
+        .expect("Failed to convert arbitrary length integer")
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use rand::rng;
+    use std::cmp::min;
     use std::collections::HashSet;
     use std::path::Path;
 
@@ -341,10 +328,10 @@ mod test {
         let mut res_all = HashSet::new();
         let mut res_assumptions = HashSet::new();
 
-        let mut assumptions = vec![
+        let assumptions = [
             1, 2, 3, -4, -5, 6, 7, -8, -9, 10, 11, -12, -13, -14, 15, 16, -17, -18, 19, 20, 27,
         ];
-        let inter_res_assumptions_1 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        let inter_res_assumptions_1 = vp9.enumerate(&assumptions, 40, 0).unwrap();
         for inter in inter_res_assumptions_1 {
             assert!(vp9.sat(&inter));
             assert_eq!(
@@ -360,34 +347,43 @@ mod test {
             "we did not get as many configs as we requested"
         );
 
+        let amount = 50000;
+        let mut offset = 0;
         for i in 1..=4 {
-            let inter_res_all = vp9.enumerate(&mut vec![], 50000).unwrap();
+            let inter_res_all = vp9.enumerate(&[], amount, offset).unwrap();
+            offset += amount;
+
             assert_eq!(50000, inter_res_all.len());
             for inter in inter_res_all {
                 res_all.insert(inter);
             }
             assert_eq!(i * 50000, res_all.len(), "there are duplicates");
         }
-        let inter_res = vp9.enumerate(&mut vec![], 50000).unwrap();
+        let inter_res = vp9.enumerate(&[], amount, offset).unwrap();
         assert_eq!(16000, inter_res.len(), "there are only 16000 configs left");
         for inter in inter_res {
             res_all.insert(inter);
         }
         assert_eq!(
-            vp9.rt(),
+            vp9.rc(),
             BigUint::from(res_all.len()),
             "there are duplicates"
         );
 
         assert_eq!(BigUint::from(80u32), vp9.execute_query(&assumptions));
-        let inter_res_assumptions_2 = vp9.enumerate(&mut assumptions, 40).unwrap();
+
+        let amount = 40;
+        let mut offset = 40;
+        let inter_res_assumptions_2 = vp9.enumerate(&assumptions, amount, offset).unwrap();
+        offset += amount;
+
         for inter in inter_res_assumptions_2.clone() {
             res_assumptions.insert(inter);
         }
         assert_eq!(40, inter_res_assumptions_2.len());
 
         // the cycle for that set of assumptions starts again
-        let inter_res_assumptions_3 = vp9.enumerate(&mut assumptions, 40).unwrap();
+        let inter_res_assumptions_3 = vp9.enumerate(&assumptions, amount, offset).unwrap();
         for inter in inter_res_assumptions_3.clone() {
             res_assumptions.insert(inter);
         }
@@ -402,15 +398,19 @@ mod test {
 
     #[test]
     fn enumeration_big_ddnnf() {
-        let mut auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
         let mut res_all = HashSet::new();
         let mut assumptions = vec![
             1, -2, -3, 4, -5, 6, 7, 8, -9, -10, 11, -12, -13, 100, -101, 102,
         ];
 
+        let amount = 1_000;
+        let mut offset = 0;
         for i in (1_000..=10_000).step_by(1_000) {
-            let configs = auto1.enumerate(&mut assumptions, 1_000).unwrap();
+            let configs = auto1.enumerate(&assumptions, amount, offset).unwrap();
+            offset += amount;
+
             for inter in configs {
                 res_all.insert(inter);
             }
@@ -426,10 +426,13 @@ mod test {
         let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
 
         let mut res_all = HashSet::new();
-        let mut assumptions = vec![-35, 42];
+        let mut assumptions = [-35, 42];
 
+        let amount = 1;
+        let mut offset = 0;
         for i in 1..=1_000 {
-            let configs = vp9.enumerate(&mut assumptions, 1).unwrap();
+            let configs = vp9.enumerate(&assumptions, amount, offset).unwrap();
+            offset += amount;
             for inter in configs {
                 assert!(vp9.sat(&inter));
                 assert_eq!(
@@ -448,11 +451,13 @@ mod test {
         }
 
         // changing the order of the assumptions. This should have no effect on the position
-        assumptions = vec![42, -35];
+        assumptions = [42, -35];
 
         // vp9.rt() under the assumptions is 86400. Hence, we should never get more than 86400 different configs
+        let amount = 2_000;
         for i in (1_000..=100_000).step_by(2_000) {
-            let configs = vp9.enumerate(&mut assumptions, 2_000).unwrap();
+            let configs = vp9.enumerate(&assumptions, 2_000, offset).unwrap();
+            offset += amount;
             for inter in configs {
                 assert!(vp9.sat(&inter));
                 assert_eq!(
@@ -477,23 +482,23 @@ mod test {
 
     #[test]
     fn enumeration_is_not_possible() {
-        let mut vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
-        let mut auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
+        let vp9: Ddnnf = Ddnnf::from_file(Path::new("tests/data/VP9_d4.nnf"), Some(42));
+        let auto1: Ddnnf = Ddnnf::from_file(Path::new("tests/data/auto1_d4.nnf"), Some(2513));
 
-        assert!(vp9.enumerate(&mut vec![1, -1], 1).is_none());
+        assert!(vp9.enumerate(&[1, -1], 1, 0).is_none());
         assert!(
-            vp9.enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
+            vp9.enumerate(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 0)
                 .is_none()
         );
-        assert!(vp9.enumerate(&mut vec![100], 1).is_none());
+        assert!(vp9.enumerate(&[100], 1, 0).is_none());
 
-        assert!(auto1.enumerate(&mut vec![1, -1], 1).is_none());
+        assert!(auto1.enumerate(&[1, -1], 1, 0).is_none());
         assert!(
             auto1
-                .enumerate(&mut vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1)
+                .enumerate(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 1, 0)
                 .is_none()
         );
-        assert!(auto1.enumerate(&mut vec![-10_000], 1).is_none());
+        assert!(auto1.enumerate(&[-10_000], 1, 0).is_none());
     }
 
     #[test]
