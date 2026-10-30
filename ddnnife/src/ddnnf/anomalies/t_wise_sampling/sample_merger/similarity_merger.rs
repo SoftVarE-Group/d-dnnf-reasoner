@@ -138,18 +138,6 @@ impl<'a> Candidate<'a> {
             return true;
         }
 
-        /*
-        If the largest intersect between the candidate and the samples configs is smaller than
-        t, then no interactions of the candidate are covered by the sample.
-        Example:
-        Sample = [[1,2],[1,-2]], Candidate = [-1,2], t = 2
-        Max intersect is [2] and has len < t.
-        => No interaction of the candidate is covered.
-         */
-        if self.literals.len() >= t && self.max_intersect < t {
-            return false;
-        }
-
         let mut literals: Vec<i32> = self
             .literals
             .iter()
@@ -165,6 +153,18 @@ impl<'a> Candidate<'a> {
 
         literals.shuffle(&mut rng());
         debug_assert!(!literals.contains(&0));
+
+        /*
+        If the largest intersect between the candidate and the samples configs is smaller than
+        t, then no interactions of the candidate are covered by the sample.
+        Example:
+        Sample = [[1,2],[1,-2]], Candidate = [-1,2], t = 2
+        Max intersect is [2] and has len < t.
+        => No interaction of the candidate is covered.
+         */
+        if literals.len() >= t && self.max_intersect < t {
+            return false;
+        }
 
         TInteractionIter::new(&literals, min(t, literals.len()))
             .all(|interaction| sample.covers(interaction))

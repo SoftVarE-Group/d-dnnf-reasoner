@@ -384,9 +384,10 @@ fn main() -> io::Result<()> {
                 sample.covered_variables(&ddnnf, &variables, t)
             };
 
-            let coverage = (covered as f64 / total as f64) * 100.0;
-
-            info!("Literal coverage of sample: {:.2}%", coverage);
+            if total != 0 {
+                let coverage = (covered as f64 / total as f64) * 100.0;
+                info!("Literal coverage of sample: {:.2}%", coverage);
+            }
 
             if total != covered {
                 warn!("Some interactions are not covered.");
