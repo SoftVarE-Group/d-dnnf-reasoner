@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hash, Hasher};
 
+static SEED: u64 = 0x9E3779B97F4A7C15;
+
 /// Creates a new `IntMap` with capacity reserved for the given number of elements.
 pub fn map_with_capacity<K, V>(capacity: usize) -> IntMap<K, V>
 where
@@ -11,19 +13,27 @@ where
     map
 }
 
-/// A `HashMap` not doing any hashing but using keys as-is.
+/// A `HashMap` using deterministic hashing.
 pub type IntMap<K, V> = HashMap<K, V, BuildIntHasher>;
 
-/// A `HashSet` not doing any hashing but using keys as-is.
+/// A `HashSet` using deterministic hashing.
 pub type IntSet<K> = HashSet<K, BuildIntHasher>;
 
 /// A hasher for integer maps and sets.
 ///
-/// Does not do any hashing but instead returns input values as-is.
+/// Does not actually do any hashing, but spreads the inputs using a fixed seed.
 /// Currently only accepts `usize`, `u32` and `i32`.
 #[derive(Default)]
 pub struct IntHasher {
     hash: u64,
+}
+
+impl IntHasher {
+    /// Spreads inputs using a fixed seed in order to avoid hash collisions
+    /// when using many sequential inputs.
+    fn hash(&mut self, input: u64) {
+        self.hash = input ^ SEED;
+    }
 }
 
 impl Hasher for IntHasher {
@@ -32,15 +42,15 @@ impl Hasher for IntHasher {
     }
 
     fn write_usize(&mut self, input: usize) {
-        self.hash = input as u64;
+        self.hash(input as u64);
     }
 
     fn write_u32(&mut self, input: u32) {
-        self.hash = input as u64;
+        self.hash(input as u64);
     }
 
     fn write_i32(&mut self, input: i32) {
-        self.hash = input as u64;
+        self.hash(input as u64);
     }
 
     fn finish(&self) -> u64 {
@@ -62,8 +72,38 @@ impl BuildHasher for BuildIntHasher {
 
 #[cfg(test)]
 mod tests {
+    use petgraph::graph::NodeIndex;
+
     use super::{IntHasher, IntMap, IntSet};
     use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn can_hash_u32() {
+        let mut hasher = IntHasher::default();
+        let input: u32 = 42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_i32() {
+        let mut hasher = IntHasher::default();
+        let input: i32 = -42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_usize() {
+        let mut hasher = IntHasher::default();
+        let input: usize = 42;
+        input.hash(&mut hasher);
+    }
+
+    #[test]
+    fn can_hash_node_index() {
+        let mut hasher = IntHasher::default();
+        let input: NodeIndex = NodeIndex::new(42);
+        input.hash(&mut hasher);
+    }
 
     #[test]
     fn deterministic_same() {
@@ -116,11 +156,13 @@ mod tests {
         a.insert(3);
         a.insert(1);
         a.insert(2);
+        a.insert(-42);
 
         let mut b = IntSet::default();
         b.insert(3);
         b.insert(1);
         b.insert(2);
+        b.insert(-42);
 
         let a_vec: Vec<i32> = a.into_iter().collect();
         let b_vec: Vec<i32> = b.into_iter().collect();
