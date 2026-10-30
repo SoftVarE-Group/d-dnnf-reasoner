@@ -3,7 +3,7 @@ use super::t_iterator::TInteractionIter;
 use crate::Ddnnf;
 use crate::ddnnf::anomalies::t_wise_sampling::sat_wrapper::SatWrapper;
 use crate::int_hash::IntSet;
-use log::debug;
+use log::{debug, warn};
 use std::cmp::{Ordering, min};
 use std::fmt::{Display, Formatter};
 use std::iter;
@@ -320,6 +320,11 @@ impl Sample {
     /// **Note:** `literals` are expected to be unique.
     pub fn covered_literals(&self, ddnnf: &Ddnnf, literals: &[i32], t: usize) -> (usize, usize) {
         let sat = SatWrapper::new(ddnnf);
+
+        if literals.len() < t {
+            warn!("There are no possible {t}-wise interactions with the given literals.");
+            return (0, 0);
+        }
 
         // Generate all possible t-wise interactions between the given literals.
         TInteractionIter::new(literals, t)
