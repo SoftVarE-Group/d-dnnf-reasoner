@@ -304,9 +304,9 @@ jobs:
         with:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Test
+        run: nix develop --command cargo publish --dry-run -p ddnnife -p ddnnife_cli
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          nix develop --command cargo publish -p ddnnife
-          nix develop --command cargo publish -p ddnnife_cli
+        run: nix develop --command cargo publish -p ddnnife -p ddnnife_cli
