@@ -34,9 +34,6 @@ jobs:
           - double: aarch64-darwin
             runner: macos-26
             flake: ddnnife
-          - double: x86_64-darwin
-            runner: macos-26-intel
-            flake: ddnnife
           - double: x86_64-windows
             runner: ubuntu-24.04
             flake: ddnnife-windows
@@ -137,13 +134,6 @@ jobs:
               kotlin: kotlin
               library: libddnnife
           - double:
-              nix: x86_64-darwin
-              jvm: darwin-x86-64
-            runner: macos-26-intel
-            flake:
-              kotlin: kotlin
-              library: libddnnife
-          - double:
               nix: x86_64-windows
               jvm: win32-x86-64
             runner: ubuntu-24.04
@@ -234,10 +224,6 @@ jobs:
           - double: x86_64-windows
             runner: ubuntu-24.04
             flake: python-windows
-          # - double: x86_64-darwin
-          #   runner: macos-26-intel
-          #   flake: python
-          #   test: true
           # - double: aarch64-darwin
           #   runner: macos-26
           #   flake: python
