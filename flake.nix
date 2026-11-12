@@ -1,5 +1,5 @@
 {
-  description = "Packages and development environments for ddnnife";
+  description = "A d-DNNF reasoner.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -142,8 +142,8 @@
             config = {
               Entrypoint = [ "/bin/ddnnife" ];
               Labels = {
-                "org.opencontainers.image.source" = "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
-                "org.opencontainers.image.description" = "A d-DNNF reasoner";
+                "org.opencontainers.image.source" = "https://github.com/practical-kc/ddnnife";
+                "org.opencontainers.image.description" = "A d-DNNF reasoner.";
                 "org.opencontainers.image.licenses" = "LGPL-3.0-or-later";
               };
             };
@@ -167,4 +167,10 @@
         }
       );
     };
+  nixConfig = {
+    extra-substituters = [ "https://practical-kc.cachix.org" ];
+    extra-trusted-public-keys = [
+      "practical-kc.cachix.org-1:r0VJPyDYXfnCN++jErOaBvTqkyLTxaW0AsfW+axbfek="
+    ];
+  };
 }

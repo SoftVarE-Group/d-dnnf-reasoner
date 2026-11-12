@@ -1,7 +1,8 @@
 [package]
 name = "ddnnife_cli"
-description = "d-DNNF toolkit"
+description = "A d-DNNF reasoner."
 version = "0.11.0"
+repository = "https://github.com/practical-kc/ddnnife"
 edition = "2024"
 license = "LGPL-3.0-or-later"
 readme = "../README.md"

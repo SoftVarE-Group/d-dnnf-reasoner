@@ -31,7 +31,7 @@ The result will be at `result`.
 To build without the need to clone the repository, use:
 
 ```
-nix build github:SoftVarE-Group/d-dnnf-reasoner
+nix build github:practical-kc/ddnnife
 ```
 
 The following flake outputs are available:
@@ -56,7 +56,7 @@ There is a tag for each branch and for each tagged release.
 To pull the container, use:
 
 ```
-docker pull ghcr.io/softvare-group/ddnnife:latest-amd64
+docker pull ghcr.io/practical-kc/ddnnife:latest-amd64
 ```
 
 There is also an `-arm64` image available.
@@ -302,12 +302,12 @@ Specifying a seed will make the operation deterministic while not providing one 
 
 [crate]: https://crates.io/crates/ddnnife
 [pypi]: https://pypi.org/project/ddnnife
-[releases]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/releases
+[releases]: https://github.com/practical-kc/ddnnife/releases
 [c2d]: http://reasoning.cs.ucla.edu/c2d
-[d4]: https://github.com/SoftVarE-Group/d4v2
+[d4]: https://github.com/practical-kc/d4v2
 [rust]: https://rust-lang.org
 [nix]: https://nixos.org
 [flake]: https://wiki.nixos.org/wiki/Flakes
 [docker]: https://docker.com
 [podman]: https://podman.io
-[container]: https://github.com/SoftVarE-Group/d-dnnf-reasoner/pkgs/container/ddnnife
+[container]: https://github.com/practical-kc/ddnnife/pkgs/container/ddnnife
