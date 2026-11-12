@@ -2,7 +2,7 @@
 name = "ddnnife_ffi"
 description = "ddnnife FFI bindings"
 version = "0.11.0"
-repository = "https://github.com/SoftVarE-Group/d-dnnf-reasoner"
+repository = "https://github.com/practical-kc/ddnnife"
 edition = "2024"
 license = "LGPL-3.0-or-later"
 workspace = ".."

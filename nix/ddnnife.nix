@@ -85,7 +85,7 @@ let
     meta = {
       mainProgram = "ddnnife";
       description = "A d-DNNF reasoner.";
-      homepage = "https://github.com/SoftVarE-Group/d-dnnf-reasoner";
+      homepage = "https://github.com/practical-kc/ddnnife";
       license = lib.licenses.lgpl3Plus;
       platforms = lib.platforms.unix ++ lib.platforms.windows;
     };

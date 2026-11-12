@@ -14,7 +14,7 @@ jobs:
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
-          name: softvare-group
+          name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Check
         run: nix flake check -L
@@ -46,7 +46,7 @@ jobs:
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
-          name: softvare-group
+          name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Build
         run: nix build -L .#${{ matrix.target.flake }}
@@ -57,6 +57,7 @@ jobs:
           path: result
 
   Container:
+    if: ${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
     needs: [Check]
     strategy:
       matrix:
@@ -71,6 +72,8 @@ jobs:
       REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
       IMAGE_NAME: ${{ vars.CONTAINER_IMAGE }}
       TAG: ${{ github.ref_name }}
+    permissions:
+      packages: write
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
@@ -280,6 +283,8 @@ jobs:
     needs:
       - Check
       - Build
+    permissions:
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -292,7 +297,10 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Test
         run: nix develop --command cargo publish --dry-run -p ddnnife -p ddnnife_cli
+      - name: Authenticate
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: Publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: nix develop --command cargo publish -p ddnnife -p ddnnife_cli
