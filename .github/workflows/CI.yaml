@@ -5,12 +5,12 @@ on:
 
 jobs:
   Check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -29,20 +29,20 @@ jobs:
             runner: ubuntu-24.04-arm
             flake: ddnnife-static
           - double: x86_64-linux
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake: ddnnife-static
           - double: aarch64-darwin
-            runner: macos-26
+            runner: macos-latest
             flake: ddnnife
           - double: x86_64-windows
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake: ddnnife-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -51,7 +51,7 @@ jobs:
       - name: Build
         run: nix build -L .#${{ matrix.target.flake }}
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ddnnife-${{ matrix.target.double }}
           path: result
@@ -67,7 +67,7 @@ jobs:
             runner: ubuntu-24.04-arm
           - double: x86_64-linux
             architecture: amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
     env:
       REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
       IMAGE_NAME: ${{ vars.CONTAINER_IMAGE }}
@@ -77,9 +77,9 @@ jobs:
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -111,7 +111,7 @@ jobs:
           - double:
               nix: x86_64-linux
               jvm: linux-x86-64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake:
               kotlin: kotlin
               library: libddnnife
@@ -126,29 +126,29 @@ jobs:
             suffix: -musl
             double:
               nix: x86_64-linux
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake:
               kotlin: kotlin-musl
           - double:
               nix: aarch64-darwin
               jvm: darwin-aarch64
-            runner: macos-26
+            runner: macos-latest
             flake:
               kotlin: kotlin
               library: libddnnife
           - double:
               nix: x86_64-windows
               jvm: win32-x86-64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake:
               kotlin: kotlin-windows
               library: libddnnife-windows
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -164,32 +164,32 @@ jobs:
           cp -rL result/lib ${{ runner.temp }}/libddnnife/${{ matrix.target.double.jvm }}
       - name: Upload
         if: ${{ !matrix.target.standalone }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: libddnnife-${{ matrix.target.double.nix }}
           path: ${{ runner.temp }}/libddnnife
       - name: Upload
         if: matrix.target.standalone
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ddnnife-kotlin-${{ matrix.target.double.nix }}${{ matrix.target.suffix }}
           path: result
 
   Kotlin-Package:
     needs: [Kotlin]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
           name: ${{ vars.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Download
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           path: nix/libddnnife
           pattern: libddnnife-*
@@ -199,7 +199,7 @@ jobs:
           git add nix/libddnnife
           nix build -L .#kotlin-bundled
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ddnnife-kotlin
           path: result
@@ -218,25 +218,25 @@ jobs:
             runner: ubuntu-24.04-arm
             flake: python-static
           - double: x86_64-linux
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake: python
             test: true
           - double: x86_64-linux-musl
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake: python-static
           - double: x86_64-windows
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             flake: python-windows
           # - double: aarch64-darwin
-          #   runner: macos-26
+          #   runner: macos-latest
           #   flake: python
           #   test: true
     runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -252,22 +252,22 @@ jobs:
           pip install pytest
           pytest --verbose
       - name: Upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: ddnnife-python-${{ matrix.target.double }}
           path: result
 
   Python-Publish:
     needs: [Python]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Download
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v8.0.2
         with:
           path: ${{ runner.temp }}/wheels
           pattern: ddnnife-python-*
@@ -278,7 +278,7 @@ jobs:
         run: uv publish ${{ runner.temp }}/wheels/*
 
   Publish:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     needs:
       - Check
@@ -287,9 +287,9 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6.1.0
       - name: Nix
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@v31.11.5
       - name: Cache
         uses: cachix/cachix-action@v17
         with:
@@ -298,7 +298,7 @@ jobs:
       - name: Test
         run: nix develop --command cargo publish --dry-run -p ddnnife -p ddnnife_cli
       - name: Authenticate
-        uses: rust-lang/crates-io-auth-action@v1
+        uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
       - name: Publish
         env:
