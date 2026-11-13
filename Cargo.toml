@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "ddnnife",
-    "ddnnife_bindgen",
-    "ddnnife_cli",
-    "ddnnife_cnf",
-    "ddnnife_dhone",
-    "ddnnife_ffi",
+  "ddnnife",
+  "ddnnife_bindgen",
+  "ddnnife_cli",
+  "ddnnife_cnf",
+  "ddnnife_dhone",
+  "ddnnife_ffi",
 ]
 
 resolver = "2"
