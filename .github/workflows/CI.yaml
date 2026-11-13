@@ -58,7 +58,7 @@ jobs:
 
   Container:
     if: ${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
-    needs: [Check]
+    needs: [Build]
     strategy:
       matrix:
         target:
@@ -176,6 +176,7 @@ jobs:
           path: result
 
   Kotlin-Package:
+    if: ${{ github.ref == 'refs/heads/main' || github.ref_type == 'tag' }}
     needs: [Kotlin]
     runs-on: ubuntu-latest
     steps:
