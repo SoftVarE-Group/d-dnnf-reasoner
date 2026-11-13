@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["on the first day of the month"],
+  "minimumReleaseAge": "1 week",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "automerge": true,
+    "automergeType": "branch",
+    "minimumReleaseAge": "1 week"
+  },
+  "nix": {
+    "enabled": true
+  },
+  "gradle": {
+    "enabled": false
+  }
+}
