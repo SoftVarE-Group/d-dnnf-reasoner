@@ -12,5 +12,8 @@
   },
   "nix": {
     "enabled": true
+  },
+  "gradle": {
+    "enabled": false
   }
 }
