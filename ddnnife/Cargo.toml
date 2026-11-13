@@ -8,25 +8,25 @@ license = "LGPL-3.0-or-later"
 workspace = ".."
 
 [dependencies]
-bimap = "0.6"
-bitvec = "1"
+bimap = { workspace = true }
+bitvec = { workspace = true }
 csv = { workspace = true }
 ddnnife_cnf = { workspace = true }
-itertools = "0.15"
+itertools = { workspace = true }
 log = { workspace = true }
-nom = "8"
+nom = { workspace = true }
 num = { workspace = true }
-petgraph = "0.8"
-rand = "0.10"
-rand_distr = "0.6"
-rand_pcg = "0.10"
-regex = "1"
-serde = { version = "1", features = ["derive"] }
-streaming-iterator = "0.1"
+petgraph = { workspace = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }
+rand_pcg = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+streaming-iterator = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.8"
-file_diff = "1"
+criterion = { workspace = true }
+file_diff = { workspace = true }
 
 [[bench]]
 name = "load"
