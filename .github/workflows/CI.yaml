@@ -88,12 +88,12 @@ jobs:
       - name: Build
         run: nix build -L .#container
       - name: Login
-        run: skopeo login $REGISTRY --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
+        run: skopeo login "${REGISTRY}" --username ${{ github.actor }} --password ${{ secrets.GITHUB_TOKEN }}
       - name: Push
-        run: skopeo copy docker-archive:result docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }}
+        run: skopeo copy docker-archive:result "docker://${REGISTRY}/${IMAGE_NAME}:${TAG}-${{ matrix.target.architecture }}"
       - name: Push latest tag
         if: github.ref_type == 'tag'
-        run: skopeo copy docker://$REGISTRY/$IMAGE_NAME:$TAG-${{ matrix.target.architecture }} docker://$REGISTRY/$IMAGE_NAME:latest-${{ matrix.target.architecture }}
+        run: skopeo copy "docker://${REGISTRY}/${IMAGE_NAME}:${TAG}-${{ matrix.target.architecture }}" "docker://${REGISTRY}/${IMAGE_NAME}:latest-${{ matrix.target.architecture }}"
 
   Kotlin:
     needs: [Check]
