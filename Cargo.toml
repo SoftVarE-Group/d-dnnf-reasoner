@@ -11,13 +11,29 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
+bimap = "0.6"
+bitvec = "1"
 clap = { version = "4", features = ["derive"] }
+criterion = "0.8"
 csv = "1"
 ddnnife = { path = "ddnnife", version = "0.11" }
 ddnnife_cnf = { path = "ddnnife_cnf", version = "0.1" }
+file_diff = "1"
+itertools = "0.15"
 log = "0.4"
 mimalloc = "0.1"
+nom = "8"
+nom_permutation = "1"
 num = "0.4"
+petgraph = "0.8"
+pretty_env_logger = "0.5"
+rand = "0.10"
+rand_distr = "0.6"
+rand_pcg = "0.10"
+regex = "1"
+serde = "1"
+serde_json = "1"
+streaming-iterator = "0.1"
 uniffi = { version = "0.31" }
 
 [profile.release]
